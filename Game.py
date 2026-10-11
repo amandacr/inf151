@@ -22,7 +22,7 @@ class Game:
         NOTE: This game is still a PROTOTYPE. For now, all of your options will be text-based, with no graphical or GUI elements.
         This will soon be changed. In the meantime, please use the numerical options when provided for your convenience.
         """)
-        self.player = Player(f"Dr {input("What would you like your name to be? Dr ")}")
+        self.player = Player(f"Dr {input('What would you like your name to be? Dr ')}")
 
         self.patients = [
             Patient("Zorpa Voidwalker",
