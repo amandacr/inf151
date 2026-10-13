@@ -10,13 +10,25 @@ class Patient:
     Test_results = dictionary in the form test_name (str) : test_result (str)
 
     """
-    def __init__(self, name, card_front, card_back, symptoms, diagnosis, test_results):
+    def __init__(
+            self,
+            name,
+            card_front,
+            card_back,
+            symptoms,
+            diagnosis,
+            test_results,
+            profile=None,
+            medical_info=None,
+    ):
         self.name = name
         self.card_front = card_front
         self.card_back = card_back
         self.symptoms = symptoms
         self.diagnosis = diagnosis
         self.test_results = test_results
+        self.profile = profile or {}
+        self.medical_info = medical_info or {}
 
     def intro(self):
         print(f"Your next patient is: {self.name}")

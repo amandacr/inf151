@@ -1,8 +1,7 @@
 from operator import truediv
 
 from Deck import Deck
-from Diagnosis import DIAGNOSES
-from Patient import Patient
+from PatientData import create_zorpa
 from Player import Player, display_hand
 from Tests.AllergyTest import AllergyTest
 from Tests.TemperatureTest import TemperatureTest
@@ -24,19 +23,7 @@ class Game:
         """)
         self.player = Player(f"Dr {input('What would you like your name to be? Dr ')}")
 
-        self.patients = [
-            Patient("Zorpa Voidwalker",
-                    None, None,
-                    "shivering, confusion, pale skin, and slurred speech",
-                    DIAGNOSES["hypothermia"],
-                    {
-                        "TEMPERATURE": "Current temperature: 1700°F\nTypical body temperature: 2000°F",
-                        "X-RAY": "Nothing remarkable.",
-                        "ULTRASOUND": "Nothing remarkable.",
-                        "ALLERGY": "Nothing remarkable."
-                    }
-                    )
-        ]
+        self.patients = [create_zorpa()]
 
         self.deck = Deck()
         self.deck.populate([AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()])
