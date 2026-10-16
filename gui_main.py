@@ -69,7 +69,11 @@ class AlienDoctorGUI:
         self.selected_card_index = None
         self.card_message = ""
         self.run_test_button = None
+        self.discard_pile = []
+        self.last_test_name = ""
+        self.last_test_result = ""
         self.start_button = pygame.Rect(410, 380, 280, 58)
+        self.continue_button = pygame.Rect(410, 430, 280, 52)
         self.layout = {
             "status_bar": pygame.Rect(30, 100, 1040, 50),
             "draw_deck": pygame.Rect(45, 180, 125, 175),
@@ -118,11 +122,15 @@ class AlienDoctorGUI:
                     self.state = GameState.PATIENT
                 elif self.state == GameState.PATIENT:
                     self.handle_patient_click(event.pos)
+                elif self.state == GameState.TEST_RESULT:
+                    self.handle_test_result_click(event.pos)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
                 elif event.key == pygame.K_RETURN and self.state == GameState.TITLE:
                     self.state = GameState.PATIENT
+                elif event.key == pygame.K_RETURN and self.state == GameState.TEST_RESULT:
+                    self.handle_test_result_click(self.continue_button.center)
                 elif event.key in state_keys:
                     self.state = state_keys[event.key]
 
@@ -142,6 +150,10 @@ class AlienDoctorGUI:
         card_height = 118
         gap = 18
         card_count = len(self.player.test_hand)
+
+        if card_count == 0:
+            return []
+
         total_width = (card_width * card_count) + (gap * (card_count - 1))
         start_x = panel.centerx - total_width // 2
 
@@ -163,10 +175,7 @@ class AlienDoctorGUI:
             run_button = self.get_run_test_button(selected_rect)
 
             if run_button.collidepoint(position):
-                test = self.player.test_hand[self.selected_card_index].value
-                self.card_message = (
-                    test.name + " ready - test results will be connected later"
-                )
+                self.run_selected_test()
                 return
 
             if selected_rect.collidepoint(position):
@@ -183,6 +192,31 @@ class AlienDoctorGUI:
         if self.selected_card_index is not None:
             self.selected_card_index = None
             self.card_message = ""
+
+    def run_selected_test(self):
+        """Play the selected test card and open its patient-specific result screen."""
+
+        if self.selected_card_index is None:
+            return
+
+        card = self.player.test_hand[self.selected_card_index]
+        self.last_test_name = card.value.name
+        result = self.patient.perform_test(self.last_test_name)
+        self.last_test_result = result.replace("RESULTS: ", "", 1)
+
+        self.player.play(card)
+        self.discard_pile.append(card)
+        self.selected_card_index = None
+        self.run_test_button = None
+        self.card_rects = self.build_card_rects()
+        self.card_message = self.last_test_name + " test complete"
+        self.state = GameState.TEST_RESULT
+
+    def handle_test_result_click(self, position):
+        """Return to the patient workspace when the result screen is continued."""
+
+        if self.continue_button.collidepoint(position):
+            self.state = GameState.PATIENT
 
     def get_selected_card_rect(self, index):
         """Return the larger rectangle used to display a selected test card."""
@@ -223,6 +257,8 @@ class AlienDoctorGUI:
             self.draw_title_screen()
         elif self.state == GameState.PATIENT:
             self.draw_patient_screen()
+        elif self.state == GameState.TEST_RESULT:
+            self.draw_test_result_screen()
         else:
             self.draw_placeholder_screen()
 
@@ -277,6 +313,70 @@ class AlienDoctorGUI:
         self.draw_notebook()
         self.draw_active_hand()
         self.draw_diagnosis_cards()
+
+    def draw_test_result_screen(self):
+        """Draw the completed test report and a button back to the patient screen."""
+
+        panel = pygame.Rect(180, 125, 740, 405)
+        self.draw_panel(panel)
+
+        test_name = self.last_test_name or "TEST"
+        heading = self.heading_font.render(
+            test_name + " RESULTS", True, COLORS["text"]
+        )
+        self.screen.blit(heading, heading.get_rect(center=(panel.centerx, 175)))
+
+        patient = self.small_font.render(
+            "PATIENT: " + self.patient.name, True, COLORS["muted"]
+        )
+        self.screen.blit(patient, patient.get_rect(center=(panel.centerx, 205)))
+
+        report = pygame.Rect(255, 230, 590, 145)
+        pygame.draw.rect(self.screen, COLORS["card"], report, border_radius=8)
+        pygame.draw.rect(
+            self.screen,
+            COLORS["panel_border"],
+            report,
+            width=3,
+            border_radius=8,
+        )
+
+        report_title = self.small_font.render(
+            "MEDICAL TEST REPORT", True, COLORS["card_text"]
+        )
+        self.screen.blit(
+            report_title,
+            report_title.get_rect(center=(report.centerx, report.y + 25)),
+        )
+
+        result_text = self.last_test_result or "No test has been run yet."
+        result_y = report.y + 57
+        for line in result_text.splitlines():
+            result_line = self.body_font.render(line, True, COLORS["card_text"])
+            self.screen.blit(
+                result_line,
+                result_line.get_rect(center=(report.centerx, result_y)),
+            )
+            result_y += 32
+
+        note = self.small_font.render(
+            "The used card was moved to the throwaway pile.",
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(note, note.get_rect(center=(panel.centerx, 402)))
+
+        hovered = self.continue_button.collidepoint(pygame.mouse.get_pos())
+        button_color = COLORS["accent"] if hovered else COLORS["panel_border"]
+        pygame.draw.rect(
+            self.screen, button_color, self.continue_button, border_radius=8
+        )
+        button_text = self.body_font.render(
+            "CONTINUE", True, COLORS["background"]
+        )
+        self.screen.blit(
+            button_text, button_text.get_rect(center=self.continue_button.center)
+        )
 
     def draw_status_bar(self):
         """Draw the current patient, shift message, and player balance."""
@@ -377,19 +477,33 @@ class AlienDoctorGUI:
         )
 
     def draw_throwaway_deck(self):
-        """Draw the placeholder pile for discarded test cards."""
+        """Draw the pile of test cards that the player has already used."""
 
         panel = self.layout["throwaway"]
         self.draw_panel(panel)
         self.draw_centered_label("THROWAWAY", panel, panel.y + 22)
 
+        if not self.discard_pile:
+            empty = self.small_font.render("EMPTY", True, COLORS["muted"])
+            self.screen.blit(empty, empty.get_rect(center=(panel.centerx, panel.y + 72)))
+            return
+
         card = pygame.Rect(panel.centerx - 30, panel.y + 48, 60, 48)
-        for offset in (7, 3, 0):
+        offsets = (7, 3, 0)[-min(3, len(self.discard_pile)):]
+        for offset in offsets:
             shifted = card.move(offset, -offset)
             pygame.draw.rect(self.screen, COLORS["muted"], shifted, border_radius=4)
             pygame.draw.rect(
                 self.screen, COLORS["background"], shifted, width=2, border_radius=4
             )
+
+        last_test = self.discard_pile[-1].value.name[0]
+        initial = self.body_font.render(last_test, True, COLORS["background"])
+        self.screen.blit(initial, initial.get_rect(center=card.center))
+        used = self.card_font.render(
+            "USED: " + str(len(self.discard_pile)), True, COLORS["muted"]
+        )
+        self.screen.blit(used, used.get_rect(center=(panel.centerx, panel.bottom - 10)))
 
     def draw_notebook(self):
         """Draw the placeholder notebook in the lower-left corner."""
@@ -414,6 +528,11 @@ class AlienDoctorGUI:
         panel = self.layout["active_hand"]
         self.draw_panel(panel)
         self.draw_centered_label("ACTIVE TEST HAND", panel, panel.y + 22)
+
+        if not self.player.test_hand:
+            empty = self.body_font.render("NO TEST CARDS", True, COLORS["muted"])
+            self.screen.blit(empty, empty.get_rect(center=panel.center))
+            return
 
         mouse_position = pygame.mouse.get_pos()
 
