@@ -9,6 +9,7 @@ import pygame
 
 from PatientData import create_zorpa
 from Player import Player
+from Notebook import Notebook
 
 
 WINDOW_SIZE = (1100, 650)
@@ -40,6 +41,7 @@ class GameState(Enum):
     TEST_RESULT = auto()
     DIAGNOSIS = auto()
     OUTCOME = auto()
+    NOTEBOOK = auto()
 
 
 STATE_LABELS = {
@@ -65,6 +67,10 @@ class AlienDoctorGUI:
         self.state = GameState.TITLE
         self.patient = create_zorpa()
         self.player = Player("Dr GUI")
+        self.notebook = Notebook()
+        self.notebook.add_patient(self.patient)
+        self.notebook_columns = []
+        self.notebook_spread = 0
         self.showing_health_id = False
         self.selected_card_index = None
         self.card_message = ""
@@ -85,12 +91,15 @@ class AlienDoctorGUI:
             "diagnosis": pygame.Rect(885, 400, 175, 160),
         }
         self.card_rects = self.build_card_rects()
+        self.notebook_layout = self.build_notebook_rects()
 
         self.title_font = pygame.font.Font(None, 64)
         self.heading_font = pygame.font.Font(None, 38)
         self.body_font = pygame.font.Font(None, 26)
         self.small_font = pygame.font.Font(None, 20)
         self.card_font = pygame.font.Font(None, 17)
+        self.notebook_title_font = pygame.font.Font(None, 28)
+        self.notebook_body_font = pygame.font.Font(None, 22)
 
     def run(self):
         """Run the GUI loop until the player closes the window."""
@@ -124,6 +133,8 @@ class AlienDoctorGUI:
                     self.handle_patient_click(event.pos)
                 elif self.state == GameState.TEST_RESULT:
                     self.handle_test_result_click(event.pos)
+                elif self.state == GameState.NOTEBOOK:
+                    self.handle_notebook_click(event.pos)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
@@ -133,12 +144,19 @@ class AlienDoctorGUI:
                     self.handle_test_result_click(self.continue_button.center)
                 elif event.key in state_keys:
                     self.state = state_keys[event.key]
+                elif event.key == pygame.K_LEFT and self.state == GameState.NOTEBOOK:
+                    self.flip_notebook(-1)
+                elif event.key == pygame.K_RIGHT and self.state == GameState.NOTEBOOK:
+                    self.flip_notebook(1)
 
     def handle_patient_click(self, position):
         """Handle ID-card and test-card clicks on the patient screen."""
 
         if self.layout["id_card"].collidepoint(position):
             self.showing_health_id = not self.showing_health_id
+        if self.layout["notebook"].collidepoint(position):
+            self.open_notebook()
+            return
 
         self.handle_card_click(position)
 
@@ -211,6 +229,7 @@ class AlienDoctorGUI:
         self.card_rects = self.build_card_rects()
         self.card_message = self.last_test_name + " test complete"
         self.state = GameState.TEST_RESULT
+        self.notebook.add_test(self.patient, self.last_test_name, self.last_test_result)
 
     def handle_test_result_click(self, position):
         """Return to the patient workspace when the result screen is continued."""
@@ -259,9 +278,11 @@ class AlienDoctorGUI:
             self.draw_patient_screen()
         elif self.state == GameState.TEST_RESULT:
             self.draw_test_result_screen()
+        elif self.state == GameState.NOTEBOOK:
+            self.draw_patient_screen()
+            self.draw_notebook_screen()
         else:
             self.draw_placeholder_screen()
-
         controls = self.small_font.render(
             "Preview screens: 1 Title  |  2 Patient  |  3 Result  |  4 Diagnosis  |  5 Outcome",
             True,
@@ -377,6 +398,24 @@ class AlienDoctorGUI:
         self.screen.blit(
             button_text, button_text.get_rect(center=self.continue_button.center)
         )
+
+    def build_notebook_rects(self):
+        """Builds the rectangles that position the notebook's pages and buttons."""
+
+        book = pygame.Rect(130, 100, 840, 490)
+        page_width = book.width // 2 - 60
+        page_height = book.height - 90
+        button_y = book.bottom - 48
+
+        return {
+            "book": book,
+            "left": pygame.Rect(book.x + 30, book.y + 30, page_width, page_height),
+            "right": pygame.Rect(book.centerx + 30, book.y + 30, page_width, page_height),
+            "prev": pygame.Rect(book.x + 30, button_y, 100, 30),
+            "next": pygame.Rect(book.right - 130, button_y, 100, 30),
+            "close": pygame.Rect(book.centerx - 50, button_y, 100, 30),
+        }
+
 
     def draw_status_bar(self):
         """Draw the current patient, shift message, and player balance."""
@@ -705,6 +744,168 @@ class AlienDoctorGUI:
                 break
             self.screen.blit(surface, (rect.x, y))
             y += surface.get_height() + line_spacing
+
+    def draw_notebook_screen(self):
+        """Dim the workspace and draw the open notebook spread."""
+        dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        dim.fill((0, 0, 0, 170))
+        self.screen.blit(dim, (0, 0))
+
+        layout = self.notebook_layout
+        book = layout["book"]
+        pygame.draw.rect(self.screen, (40, 62, 52), book, border_radius=12)
+        pygame.draw.rect(self.screen, COLORS["panel_border"], book, width=2, border_radius=12)
+
+        for page in (pygame.Rect(book.x + 12, book.y + 12, book.width // 2 - 12, book.height - 24),
+                     pygame.Rect(book.centerx, book.y + 12, book.width // 2 - 12, book.height - 24)):
+            pygame.draw.rect(self.screen, COLORS["card"], page, border_radius=6)
+        pygame.draw.line(self.screen, COLORS["card_text"],
+                         (book.centerx, book.y + 12), (book.centerx, book.bottom - 12), 2)
+
+        left, right = self.get_spread_columns(self.notebook_spread)
+        if left is None:
+            self.draw_notebook_id_page(layout["left"])
+        else:
+            self.draw_notebook_column(left, layout["left"])
+        self.draw_notebook_column(right, layout["right"])
+
+        # Page numbers
+        left_num = self.notebook_spread * 2 + 1
+        for num, key in ((left_num, "left"), (left_num + 1, "right")):
+            label = self.card_font.render(str(num), True, COLORS["card_text"])
+            self.screen.blit(label, label.get_rect(center=(layout[key].centerx, book.bottom - 22)))
+
+        # Buttons
+        mouse = pygame.mouse.get_pos()
+        buttons = [("CLOSE", layout["close"], True),
+                   ("< PREV", layout["prev"], self.notebook_spread > 0),
+                   ("NEXT >", layout["next"],
+                    self.notebook_spread < self.notebook_spread_count() - 1)]
+        for text, rect, enabled in buttons:
+            if not enabled:
+                continue
+            color = COLORS["accent"] if rect.collidepoint(mouse) else COLORS["panel_border"]
+            pygame.draw.rect(self.screen, color, rect, border_radius=6)
+            label = self.small_font.render(text, True, COLORS["background"])
+            self.screen.blit(label, label.get_rect(center=rect.center))
+
+    def draw_notebook_column(self, column, rect):
+        """Draw one column of test titles and result lines."""
+        for kind, text, y in column:
+            if kind == "title":
+                surface = self.notebook_title_font.render(text, True, COLORS["card_text"])
+            else:
+                surface = self.notebook_body_font.render(text, True, (72, 101, 91))
+            self.screen.blit(surface, (rect.x, rect.y + y))
+
+    def draw_notebook_id_page(self, rect):
+        """Draw the patient's name and both ID cards as a single column."""
+        y = rect.y
+        name = self.heading_font.render(self.patient.name, True, COLORS["card_text"])
+        self.screen.blit(name, (rect.x, y))
+        y += name.get_height() + 12
+
+        sections = [
+            ("INTERGALACTIC ID", self.patient.profile.items()),
+            ("HEALTH ID", self.patient.medical_info.items()),
+        ]
+        body_h = self.notebook_body_font.get_linesize()
+        for heading, items in sections:
+            title = self.notebook_title_font.render(heading, True, COLORS["card_text"])
+            self.screen.blit(title, (rect.x, y))
+            y += self.notebook_title_font.get_linesize()
+            for label, value in items:
+                for line in self.wrap_text(f"{label}: {value}", self.notebook_body_font, rect.width):
+                    surface = self.notebook_body_font.render(line, True, (72, 101, 91))
+                    self.screen.blit(surface, (rect.x, y))
+                    y += body_h
+            y += body_h
+
+    def wrap_text(self, text, font, width):
+        """Return a list of lines that fit within width pixels."""
+        lines = []
+        for paragraph in text.splitlines() or [""]:
+            line = []
+            for word in paragraph.split():
+                if font.size(" ".join(line + [word]))[0] <= width:
+                    line.append(word)
+                else:
+                    if line:
+                        lines.append(" ".join(line))
+                    line = [word]
+            lines.append(" ".join(line))
+        return lines
+
+    def build_notebook_columns(self):
+        """Split the patient's test entries into page-sized columns.
+
+        Each column is a list of (kind, text, y_offset) tuples.
+        """
+        width = self.notebook_layout["right"].width
+        height = self.notebook_layout["right"].height
+        title_h = self.notebook_title_font.get_linesize()
+        body_h = self.notebook_body_font.get_linesize()
+        gap = body_h
+
+        blocks = []
+        for test_name, result in self.notebook.get_entries(self.patient).items():
+            block = [("title", test_name.upper(), title_h)]
+            for line in self.wrap_text(result, self.notebook_body_font, width):
+                block.append(("body", line, body_h))
+            blocks.append(block)
+
+        columns = [[]]
+        used = 0
+        for block in blocks:
+            if columns[-1]:
+                # Keep a title together with at least its first body line
+                start_needed = block[0][2] + (block[1][2] if len(block) > 1 else 0)
+                if used + gap + start_needed > height:
+                    columns.append([])
+                    used = 0
+                else:
+                    used += gap
+
+            for kind, text, item_h in block:
+                if used + item_h > height and columns[-1]:
+                    columns.append([])  # runoff continues on the next page
+                    used = 0
+                columns[-1].append((kind, text, used))
+                used += item_h
+
+        self.notebook_columns = columns
+
+    def notebook_spread_count(self):
+        extra = max(0, len(self.notebook_columns) - 1)
+        return 1 + (extra + 1) // 2  # ceil(extra / 2)
+
+    def get_spread_columns(self, spread):
+        """Return (left, right) for a spread; left is None for the ID page."""
+        cols = self.notebook_columns
+        if spread == 0:
+            return None, cols[0]
+        left_i, right_i = 2 * spread - 1, 2 * spread
+        left = cols[left_i] if left_i < len(cols) else []
+        right = cols[right_i] if right_i < len(cols) else []
+        return left, right
+
+    def open_notebook(self):
+        self.build_notebook_columns()  # rebuild so new results appear
+        self.notebook_spread = 0
+        self.state = GameState.NOTEBOOK
+
+    def flip_notebook(self, direction):
+        new_spread = self.notebook_spread + direction
+        if 0 <= new_spread < self.notebook_spread_count():
+            self.notebook_spread = new_spread
+
+    def handle_notebook_click(self, position):
+        if self.notebook_layout["close"].collidepoint(position):
+            self.state = GameState.PATIENT
+        elif self.notebook_layout["prev"].collidepoint(position):
+            self.flip_notebook(-1)
+        elif self.notebook_layout["next"].collidepoint(position):
+            self.flip_notebook(1)
 
 def main():
     """Create and start the game"""
