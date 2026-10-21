@@ -77,6 +77,9 @@ class AlienDoctorGUI:
         self.notebook.add_patient(self.patient)
         self.notebook_columns = []
         self.notebook_spread = 0
+        self.notebook_preview_progress = 0.0
+        self.notebook_preview_last_tick = pygame.time.get_ticks()
+        self.notebook_preview_duration = 220
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
         self.selected_card_index = None
@@ -535,6 +538,8 @@ class AlienDoctorGUI:
         self.notebook.add_patient(self.patient)
         self.notebook_columns = []
         self.notebook_spread = 0
+        self.notebook_preview_progress = 0.0
+        self.notebook_preview_last_tick = pygame.time.get_ticks()
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
         self.selected_card_index = None
@@ -2731,50 +2736,291 @@ class AlienDoctorGUI:
         if progress >= 1.0:
             self.discard_animation = None
 
+    def update_notebook_preview_animation(self, hovered):
+        """Open or close the miniature notebook smoothly based on the mouse position."""
+
+        now = pygame.time.get_ticks()
+        elapsed = max(0, min(50, now - self.notebook_preview_last_tick))
+        self.notebook_preview_last_tick = now
+        direction = 1 if hovered else -1
+        step = elapsed / self.notebook_preview_duration
+        self.notebook_preview_progress = max(
+            0.0,
+            min(1.0, self.notebook_preview_progress + direction * step),
+        )
+        progress = self.notebook_preview_progress
+        return 1 - (1 - progress) ** 3
+
+    def get_notebook_preview_lines(self):
+        """Turn the current notebook entries into short notes that fit the tiny pages."""
+
+        entries = self.notebook.get_entries(self.patient)
+        if not entries or "No tests" in entries:
+            return ["NO TESTS YET", "AWAITING RESULTS"]
+
+        preview_lines = []
+        for test_name, result in entries.items():
+            result_lines = [line.strip() for line in result.splitlines() if line.strip()]
+            if test_name.upper() == "TEMPERATURE":
+                current = next(
+                    (line.split(":", 1)[1].strip() for line in result_lines
+                     if line.lower().startswith("current temperature:")),
+                    "RECORDED",
+                )
+                typical = next(
+                    (line.split(":", 1)[1].strip() for line in result_lines
+                     if line.lower().startswith("typical body temperature:")),
+                    None,
+                )
+                preview_lines.append(f"TEMP: {current}")
+                if typical:
+                    preview_lines.append(f"NORM: {typical}")
+            else:
+                summary = "NORMAL" if result_lines and result_lines[0].lower().startswith(
+                    "nothing remarkable"
+                ) else "RECORDED"
+                preview_lines.append(f"{test_name.upper()}: {summary}")
+
+        return preview_lines[:4]
+
     def draw_notebook(self):
-        """Draw the clickable notebook resting directly on the clinic counter."""
+        """Draw a portrait notebook whose front cover swings open on hover."""
 
         panel = self.layout["notebook"]
-        label = self.small_font.render("PATIENT NOTES", True, COLORS["muted"])
-        self.screen.blit(label, label.get_rect(center=(panel.centerx, panel.y + 23)))
+        hovered = panel.collidepoint(pygame.mouse.get_pos())
+        progress = self.update_notebook_preview_animation(hovered)
+        lift = round(7 * progress)
 
-        book = pygame.Rect(panel.x + 19, panel.y + 47, panel.width - 38, 80)
+        # Cover the cabinet handle before drawing the heading so no line crosses it.
+        label = self.small_font.render("PATIENT NOTES", True, COLORS["muted"])
+        label_rect = label.get_rect(center=(panel.centerx, panel.y + 20))
         pygame.draw.rect(
             self.screen,
-            (5, 12, 18),
-            book.move(6, 7),
+            (57, 62, 84),
+            label_rect.inflate(16, 8),
+            border_radius=5,
+        )
+        self.screen.blit(label, label_rect)
+
+        page_width = 54
+        book_height = round(88 - 6 * progress)
+        closed_spine_x = panel.centerx - page_width // 2
+        spine_x = round(closed_spine_x + (panel.centerx - closed_spine_x) * progress)
+        book_y = panel.y + 38 - lift
+        book_bottom = book_y + book_height
+        left_extent = round(page_width * progress)
+
+        cover_color = (82, 58, 112)
+        cover_dark = (54, 39, 78)
+        cover_highlight = (171, 123, 203)
+        page_color = (240, 237, 211)
+        page_edge = (174, 160, 176)
+        rule_color = (188, 196, 174)
+
+        full_book = pygame.Rect(
+            spine_x - left_extent - 2,
+            book_y - 2,
+            page_width + left_extent + 4,
+            book_height + 4,
+        )
+        pygame.draw.rect(
+            self.screen,
+            (4, 9, 16),
+            full_book.move(5, 7),
+            border_radius=7,
+        )
+        pygame.draw.rect(self.screen, cover_color, full_book, border_radius=6)
+        pygame.draw.rect(
+            self.screen,
+            cover_highlight,
+            full_book,
+            width=2,
             border_radius=6,
         )
-        pygame.draw.rect(self.screen, COLORS["card"], book, border_radius=5)
+
+        right_page = pygame.Rect(spine_x, book_y, page_width, book_height)
         pygame.draw.rect(
             self.screen,
-            (121, 105, 139),
-            book,
+            page_color,
+            right_page,
+            border_top_right_radius=5,
+            border_bottom_right_radius=5,
+        )
+        pygame.draw.rect(
+            self.screen,
+            page_edge,
+            right_page,
+            width=1,
+            border_top_right_radius=5,
+            border_bottom_right_radius=5,
+        )
+
+        # Past the halfway point, the underside of the cover becomes the left page.
+        flipped_progress = max(0.0, (progress - 0.5) / 0.5)
+        flipped_width = round(page_width * flipped_progress)
+        left_page = pygame.Rect(
+            spine_x - flipped_width,
+            book_y,
+            flipped_width,
+            book_height,
+        )
+        if flipped_width > 0:
+            pygame.draw.rect(
+                self.screen,
+                page_color,
+                left_page,
+                border_top_left_radius=5,
+                border_bottom_left_radius=5,
+            )
+            pygame.draw.rect(
+                self.screen,
+                page_edge,
+                left_page,
+                width=1,
+                border_top_left_radius=5,
+                border_bottom_left_radius=5,
+            )
+
+        # Ruled paper appears gradually as the purple cover moves out of the way.
+        if progress > 0.18:
+            for line_y in range(book_y + 18, book_bottom - 8, 12):
+                if flipped_width > 13:
+                    pygame.draw.line(
+                        self.screen,
+                        rule_color,
+                        (left_page.x + 7, line_y),
+                        (spine_x - 6, line_y),
+                    )
+                pygame.draw.line(
+                    self.screen,
+                    rule_color,
+                    (spine_x + 6, line_y),
+                    (right_page.right - 7, line_y),
+                )
+
+        # During the first half, the purple front cover narrows toward its spine.
+        if progress < 0.5:
+            cover_width = max(2, round(page_width * (1 - progress / 0.5)))
+            perspective = round(4 * (progress / 0.5))
+            front_cover = (
+                (spine_x, book_y),
+                (spine_x + cover_width, book_y + perspective),
+                (spine_x + cover_width, book_bottom - perspective),
+                (spine_x, book_bottom),
+            )
+            pygame.draw.polygon(self.screen, cover_color, front_cover)
+            pygame.draw.polygon(self.screen, cover_highlight, front_cover, width=2)
+
+            title_alpha = max(0, min(255, round(255 * (1 - progress / 0.32))))
+            if title_alpha > 0:
+                cover_surface = pygame.Surface(
+                    (page_width, book_height),
+                    pygame.SRCALPHA,
+                )
+                title = self.pile_font.render("PATIENT", True, (245, 225, 255))
+                subtitle = self.pile_font.render("NOTES", True, (245, 225, 255))
+                title.set_alpha(title_alpha)
+                subtitle.set_alpha(title_alpha)
+                cover_surface.blit(
+                    title,
+                    title.get_rect(center=(page_width // 2, 30)),
+                )
+                cover_surface.blit(
+                    subtitle,
+                    subtitle.get_rect(center=(page_width // 2, 46)),
+                )
+                self.screen.blit(cover_surface, (spine_x, book_y))
+
+        pygame.draw.line(
+            self.screen,
+            cover_dark,
+            (spine_x, book_y + 4),
+            (spine_x, book_bottom - 4),
             width=2,
-            border_radius=5,
+        )
+
+        fold_size = 9
+        pygame.draw.polygon(
+            self.screen,
+            (206, 198, 184),
+            [
+                (right_page.right - fold_size, right_page.y),
+                (right_page.right, right_page.y),
+                (right_page.right, right_page.y + fold_size),
+            ],
         )
         pygame.draw.line(
             self.screen,
-            COLORS["card_text"],
-            (book.centerx, book.y + 5),
-            (book.centerx, book.bottom - 5),
-            width=2,
+            page_edge,
+            (right_page.right - fold_size, right_page.y),
+            (right_page.right, right_page.y + fold_size),
         )
 
-        for line_y in range(book.y + 16, book.bottom - 9, 13):
-            pygame.draw.line(
-                self.screen,
-                (176, 192, 169),
-                (book.x + 9, line_y),
-                (book.centerx - 7, line_y),
-                width=1,
+        bookmark_x = spine_x + round(page_width * 0.48)
+        pygame.draw.polygon(
+            self.screen,
+            (228, 90, 113),
+            [
+                (bookmark_x - 4, book_bottom - 3),
+                (bookmark_x + 4, book_bottom - 3),
+                (bookmark_x + 4, book_bottom + 10),
+                (bookmark_x, book_bottom + 6),
+                (bookmark_x - 4, book_bottom + 10),
+            ],
+        )
+
+        if progress > 0.62:
+            note_alpha = max(0, min(255, round(255 * (progress - 0.62) / 0.38)))
+            for index, note in enumerate(self.get_notebook_preview_lines()):
+                page = 0 if index < 2 else 1
+                row = index if index < 2 else index - 2
+                page_center_x = spine_x + page_width // 2
+                if page == 0:
+                    page_center_x = spine_x - page_width // 2
+                note_surface = self.tiny_font.render(note, True, COLORS["card_text"])
+                note_surface.set_alpha(note_alpha)
+                note_rect = note_surface.get_rect(
+                    center=(page_center_x, book_y + 23 + row * 17)
+                )
+                self.screen.blit(note_surface, note_rect)
+
+            pencil_surface = pygame.Surface((24, 67), pygame.SRCALPHA)
+            pygame.draw.polygon(
+                pencil_surface,
+                (247, 183, 69, note_alpha),
+                [(8, 7), (14, 7), (14, 57), (8, 57)],
             )
-            pygame.draw.line(
-                self.screen,
-                (176, 192, 169),
-                (book.centerx + 7, line_y),
-                (book.right - 9, line_y),
-                width=1,
+            pygame.draw.rect(
+                pencil_surface,
+                (235, 105, 127, note_alpha),
+                pygame.Rect(8, 4, 6, 7),
+                border_radius=2,
+            )
+            pygame.draw.polygon(
+                pencil_surface,
+                (222, 203, 164, note_alpha),
+                [(8, 57), (14, 57), (11, 65)],
+            )
+            pygame.draw.polygon(
+                pencil_surface,
+                (50, 45, 54, note_alpha),
+                [(10, 62), (12, 62), (11, 66)],
+            )
+            rotated_pencil = pygame.transform.rotate(pencil_surface, -13)
+            self.screen.blit(
+                rotated_pencil,
+                (right_page.right - 3, book_y + 8),
+            )
+
+        if hovered:
+            hover_label = self.pile_font.render(
+                "OPEN NOTEBOOK",
+                True,
+                COLORS["accent"],
+            )
+            self.screen.blit(
+                hover_label,
+                hover_label.get_rect(center=(panel.centerx, panel.bottom - 5)),
             )
 
     def draw_active_hand(self):
