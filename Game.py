@@ -2,7 +2,7 @@ from operator import truediv
 
 from Deck import Deck
 from PatientData import create_zorpa
-from Player import Player, display_hand
+from Player import DIAGNOSIS_REWARD, Player, display_hand
 from Tests.AllergyTest import AllergyTest
 from Tests.TemperatureTest import TemperatureTest
 from Tests.UltrasoundTest import UltrasoundTest
@@ -16,7 +16,7 @@ class Game:
     """
     def __init__(self):
         print("""
-        WELCOME NEW   A L I E N   D O C T O R ! 
+        WELCOME TO   T H E   C O S M I C   C L I N I C !
         
         NOTE: This game is still a PROTOTYPE. For now, all of your options will be text-based, with no graphical or GUI elements.
         This will soon be changed. In the meantime, please use the numerical options when provided for your convenience.
@@ -33,29 +33,29 @@ class Game:
         if len(hand) == 0:
             if len(self.deck.contents) == 0:
                 print("You have no cards left, and there are no cards left to draw. You must diagnose the patient now!")
-                self.card_selection_loop(self.player.diagnosis_hand)
+                return self.card_selection_loop(self.player.diagnosis_hand)
             print("You have no cards left! Drawing a new card.")
-            self.draw()
+            self.player.draw(self.deck.draw())
         while True:
             display_hand(hand)
             selection = input("\nEnter the number of the card you would like to select: ")
             try:
                 selection = int(selection)
-                if selection <= len(hand):
-                    print(hand[selection - 1])
-                    play = True
-                    while play:
-                        play = input("\nWould you like to play this card? (Y / N): ")
-                        if play.upper() == "Y":
-                            return hand[selection - 1]
-                        elif play.upper() == "N":
-                            play = False
-                        else:
-                            print("Invalid selection.")
-                            play = True
-                elif selection > len(hand):
-                    print("Invalid selection.")
-            except TypeError:
+            except ValueError:
+                print("Invalid selection.")
+                continue
+
+            if not 1 <= selection <= len(hand):
+                print("Invalid selection.")
+                continue
+
+            print(hand[selection - 1])
+            while True:
+                play = input("\nWould you like to play this card? (Y / N): ")
+                if play.upper() == "Y":
+                    return hand[selection - 1]
+                if play.upper() == "N":
+                    break
                 print("Invalid selection.")
 
     def play_test_card(self, card):
@@ -79,7 +79,9 @@ class Game:
         self.player.play(card)
         success = self.curr_patient.receive_diagnosis(card.value)
         if success:
-            print("\n\nTHANK YOU for playing the DEMO of A L I E N   D O C T O R! This concludes our demo prototype. We hope you enjoyed!")
+            self.player.earn(DIAGNOSIS_REWARD)
+            print(f"You earned ${DIAGNOSIS_REWARD}! Your balance is now ${self.player.balance}.")
+            print("\n\nTHANK YOU for playing the DEMO of THE COSMIC CLINIC! This concludes our demo prototype. We hope you enjoyed!")
 
         else:
             while True:

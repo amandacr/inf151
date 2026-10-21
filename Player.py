@@ -6,6 +6,9 @@ from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
 
 
+DIAGNOSIS_REWARD = 100
+
+
 def display_hand(hand):
     for i in range(1, len(hand) + 1):
         print(f"{i}. {hand[i - 1].value.name}")

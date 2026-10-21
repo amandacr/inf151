@@ -1,7 +1,4 @@
-"""Patient data shared by the text and GUI prototypes.
-    I moved patient data out of main and into here, so it can be shared between the 2 for now.
-    This isnt being used in the GUI yet, except for the name
-"""
+"""Patient data shared by both the text-based and GUI versions of the game."""
 
 from Diagnosis import DIAGNOSES
 from Patient import Patient
@@ -12,7 +9,7 @@ def create_zorpa():
         "Zorpa Voidwalker",
         None,
         None,
-        "shivering, confusion, pale skin, and slurred speech",
+        "uncontrollable shaking",
         DIAGNOSES["hypothermia"],
         {
             "TEMPERATURE": "Current temperature: 1700°F\nTypical body temperature: 2000°F",

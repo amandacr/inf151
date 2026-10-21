@@ -7,11 +7,25 @@ class Diagnosis:
         self.treatment = treatment
 
     def __str__(self):
-        return f"{self.name}\n\nPatient appears to be {self.description}! Recommended treatment: {self.treatment}."
+        return (
+            f"{self.name}\n\n{self.description}\n"
+            f"Recommended treatment: {self.treatment}"
+        )
 
 DIAGNOSES = {
-    "hypothermia": Diagnosis("Hypothermia", "suffering from hypothermia, or a critically low body temperature", "Heated blankets, hot foods/beverages, and removal of any wet or cold clothing"),
-    "missing_intestine": Diagnosis("Missing Intestine", "missing their intestine", "Transplant surgery")
+    "hypothermia": Diagnosis(
+        "Hypothermia",
+        "The patient is suffering from hypothermia, a critically low body "
+        "temperature that requires prompt treatment.",
+        "Apply heated blankets, provide warm food or beverages, and remove any "
+        "wet or cold clothing.",
+    ),
+    "missing_intestine": Diagnosis(
+        "Missing Intestine",
+        "The patient's intestine appears to be missing, preventing normal "
+        "digestion and nutrient absorption.",
+        "Perform an intestinal transplant.",
+    ),
 }
 
 
