@@ -58,7 +58,6 @@ class GameState(Enum):
     OUTCOME = auto()
     NOTEBOOK = auto()
     SHOP = auto()
-    CELEBRATION = auto()
 
 
 class AlienDoctorGUI:
@@ -111,9 +110,6 @@ class AlienDoctorGUI:
         self.test_result_reveal_duration = 1400
         self.last_diagnosis = None
         self.diagnosis_correct = None
-        self.celebration_started_at = None
-        self.celebration_duration = 2400
-        self.firework_particles = []
         self.reception_transition_started_at = None
         self.reception_transition_duration = 3350
         self.reception_fade_duration = 650
@@ -145,6 +141,7 @@ class AlienDoctorGUI:
         self.card_font = pygame.font.Font(None, 17)
         self.pile_font = pygame.font.Font(None, 14)
         self.tiny_font = pygame.font.Font(None, 10)
+        self.notebook_preview_font = pygame.font.Font(None, 14)
         self.diagnosis_name_font = pygame.font.SysFont("Arial", 21, bold=True)
         self.diagnosis_card_font = pygame.font.SysFont("Arial", 13, bold=True)
         self.notebook_title_font = pygame.font.Font(None, 28)
@@ -186,8 +183,6 @@ class AlienDoctorGUI:
                     self.handle_outcome_click(event.pos)
                 elif self.state == GameState.SHOP:
                     self.handle_shop_click(event.pos)
-                elif self.state == GameState.CELEBRATION:
-                    self.finish_celebration()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     if self.state == GameState.PATIENT and self.diagnosis_confirmation_open:
@@ -210,8 +205,6 @@ class AlienDoctorGUI:
                     self.handle_outcome_click(self.outcome_button.center)
                 elif event.key == pygame.K_RETURN and self.state == GameState.SHOP:
                     self.handle_shop_click(self.shop_button.center)
-                elif event.key == pygame.K_RETURN and self.state == GameState.CELEBRATION:
-                    self.finish_celebration()
                 elif event.key == pygame.K_LEFT and self.state == GameState.NOTEBOOK:
                     self.flip_notebook(-1)
                 elif event.key == pygame.K_RIGHT and self.state == GameState.NOTEBOOK:
@@ -466,61 +459,10 @@ class AlienDoctorGUI:
 
         if self.outcome_button.collidepoint(position):
             if self.diagnosis_correct:
-                self.start_celebration()
+                self.state = GameState.SHOP
             else:
                 self.switch_active_hand(False)
                 self.state = GameState.PATIENT
-
-    def start_celebration(self):
-        """Start a short multicolored firework animation before opening the shop."""
-
-        self.celebration_started_at = pygame.time.get_ticks()
-        self.firework_particles = []
-        firework_colors = (
-            (255, 82, 95),
-            (70, 150, 255),
-            (177, 92, 255),
-            (255, 198, 75),
-            (70, 235, 205),
-        )
-        bursts = (
-            ((220, 245), 0),
-            ((875, 255), 250),
-            ((350, 390), 500),
-            ((745, 385), 750),
-            ((550, 220), 1000),
-        )
-
-        for burst_number, (origin, delay) in enumerate(bursts):
-            color = firework_colors[burst_number % len(firework_colors)]
-            for particle_number in range(28):
-                angle = (
-                    2 * math.pi * particle_number / 28
-                    + random.uniform(-0.06, 0.06)
-                )
-                speed = random.uniform(75, 145)
-                self.firework_particles.append(
-                    {
-                        "origin": origin,
-                        "delay": delay,
-                        "velocity": (
-                            math.cos(angle) * speed,
-                            math.sin(angle) * speed,
-                        ),
-                        "color": color,
-                        "size": random.randint(2, 4),
-                        "lifetime": random.uniform(0.9, 1.25),
-                    }
-                )
-
-        self.state = GameState.CELEBRATION
-
-    def finish_celebration(self):
-        """Skip or finish the celebration and open the shop."""
-
-        self.firework_particles = []
-        self.celebration_started_at = None
-        self.state = GameState.SHOP
 
     def update(self):
         """Advance timed GUI transitions without pausing the event loop."""
@@ -543,17 +485,6 @@ class AlienDoctorGUI:
             elapsed = pygame.time.get_ticks() - self.patient_fade_started_at
             if elapsed >= self.patient_fade_duration:
                 self.patient_fade_started_at = None
-            return
-
-        if self.state != GameState.CELEBRATION:
-            return
-        if self.celebration_started_at is None:
-            self.start_celebration()
-            return
-
-        elapsed = pygame.time.get_ticks() - self.celebration_started_at
-        if elapsed >= self.celebration_duration:
-            self.finish_celebration()
 
     def handle_shop_click(self, position):
         """Return to the main screen when the player continues from the shop."""
@@ -590,8 +521,6 @@ class AlienDoctorGUI:
         self.test_result_started_at = None
         self.last_diagnosis = None
         self.diagnosis_correct = None
-        self.celebration_started_at = None
-        self.firework_particles = []
         self.reception_transition_started_at = None
         self.patient_fade_started_at = None
         self.refresh_hand_layout()
@@ -649,8 +578,6 @@ class AlienDoctorGUI:
             self.draw_diagnosis_outcome()
         elif self.state == GameState.SHOP:
             self.draw_shop_screen()
-        elif self.state == GameState.CELEBRATION:
-            self.draw_celebration_screen()
 
         footer_text = (
             "Press Esc to go back"
@@ -2156,113 +2083,6 @@ class AlienDoctorGUI:
             button_text.get_rect(center=self.shop_button.center),
         )
 
-    def draw_celebration_screen(self):
-        """Draw the correct-diagnosis message and animated firework particles."""
-
-        panel = pygame.Rect(190, 145, 720, 360)
-        self.draw_panel(panel)
-        self.draw_fireworks()
-
-        heading = self.title_font.render(
-            "D I A G N O S I S   C O R R E C T!",
-            True,
-            COLORS["accent"],
-        )
-        self.screen.blit(heading, heading.get_rect(center=(panel.centerx, 230)))
-
-        patient_message = self.heading_font.render(
-            self.patient.name + " is going to be okay!",
-            True,
-            COLORS["text"],
-        )
-        self.screen.blit(
-            patient_message,
-            patient_message.get_rect(center=(panel.centerx, 290)),
-        )
-
-        shop_message = self.body_font.render(
-            "Opening the Intergalactic Supply Shop...",
-            True,
-            COLORS["muted"],
-        )
-        self.screen.blit(
-            shop_message,
-            shop_message.get_rect(center=(panel.centerx, 340)),
-        )
-
-        elapsed = pygame.time.get_ticks() - (self.celebration_started_at or 0)
-        progress = min(1.0, elapsed / self.celebration_duration)
-        progress_back = pygame.Rect(panel.x + 150, 385, panel.width - 300, 12)
-        progress_fill = progress_back.copy()
-        progress_fill.width = round(progress_back.width * progress)
-        pygame.draw.rect(
-            self.screen,
-            COLORS["background"],
-            progress_back,
-            border_radius=6,
-        )
-        pygame.draw.rect(
-            self.screen,
-            COLORS["accent"],
-            progress_fill,
-            border_radius=6,
-        )
-
-        skip = self.small_font.render(
-            "Click or press Enter to skip",
-            True,
-            COLORS["muted"],
-        )
-        self.screen.blit(skip, skip.get_rect(center=(panel.centerx, 435)))
-
-    def draw_fireworks(self):
-        """Draw every currently visible firework particle with a fading trail."""
-
-        if self.celebration_started_at is None:
-            return
-
-        elapsed_ms = pygame.time.get_ticks() - self.celebration_started_at
-        gravity = 85
-        for particle in self.firework_particles:
-            age = (elapsed_ms - particle["delay"]) / 1000
-            if age < 0 or age > particle["lifetime"]:
-                continue
-
-            origin_x, origin_y = particle["origin"]
-            velocity_x, velocity_y = particle["velocity"]
-            x = origin_x + velocity_x * age
-            y = origin_y + velocity_y * age + gravity * age * age / 2
-            previous_age = max(0, age - 0.045)
-            previous_x = origin_x + velocity_x * previous_age
-            previous_y = (
-                origin_y
-                + velocity_y * previous_age
-                + gravity * previous_age * previous_age / 2
-            )
-
-            fade = max(0, 1 - age / particle["lifetime"])
-            color = tuple(
-                round(
-                    COLORS["panel"][channel]
-                    + (particle["color"][channel] - COLORS["panel"][channel])
-                    * fade
-                )
-                for channel in range(3)
-            )
-            pygame.draw.line(
-                self.screen,
-                color,
-                (round(previous_x), round(previous_y)),
-                (round(x), round(y)),
-                width=max(1, particle["size"] - 1),
-            )
-            pygame.draw.circle(
-                self.screen,
-                color,
-                (round(x), round(y)),
-                particle["size"],
-            )
-
     def draw_shop_shelf(self, label, shelf):
         """Draw one locked and currently empty upgrade shelf."""
 
@@ -3409,37 +3229,16 @@ class AlienDoctorGUI:
         progress = self.notebook_preview_progress
         return 1 - (1 - progress) ** 3
 
-    def get_notebook_preview_lines(self):
-        """Turn the current notebook entries into short notes that fit the tiny pages."""
+    def get_notebook_test_count_label(self):
+        """Return a compact test count that fits on the miniature notebook page."""
 
         entries = self.notebook.get_entries(self.patient)
-        if not entries or "No tests" in entries:
-            return ["NO TESTS YET", "AWAITING RESULTS"]
-
-        preview_lines = []
-        for test_name, result in entries.items():
-            result_lines = [line.strip() for line in result.splitlines() if line.strip()]
-            if test_name.upper() == "TEMPERATURE":
-                current = next(
-                    (line.split(":", 1)[1].strip() for line in result_lines
-                     if line.lower().startswith("current temperature:")),
-                    "RECORDED",
-                )
-                typical = next(
-                    (line.split(":", 1)[1].strip() for line in result_lines
-                     if line.lower().startswith("typical body temperature:")),
-                    None,
-                )
-                preview_lines.append(f"TEMP: {current}")
-                if typical:
-                    preview_lines.append(f"NORM: {typical}")
-            else:
-                summary = "NORMAL" if result_lines and result_lines[0].lower().startswith(
-                    "nothing remarkable"
-                ) else "RECORDED"
-                preview_lines.append(f"{test_name.upper()}: {summary}")
-
-        return preview_lines[:4]
+        test_count = sum(test_name != "No tests" for test_name in entries)
+        if test_count == 0:
+            return "NO TESTS"
+        if test_count == 1:
+            return "1 TEST"
+        return f"{test_count} TESTS"
 
     def draw_notebook(self):
         """Draw a portrait notebook whose front cover swings open on hover."""
@@ -3449,11 +3248,11 @@ class AlienDoctorGUI:
         progress = self.update_notebook_preview_animation(hovered)
         lift = round(7 * progress)
 
-        page_width = 54
-        book_height = round(88 - 6 * progress)
+        page_width = 64
+        book_height = round(100 - 6 * progress)
         closed_spine_x = panel.centerx - page_width // 2
         spine_x = round(closed_spine_x + (panel.centerx - closed_spine_x) * progress)
-        book_y = panel.y + 25 - lift
+        book_y = panel.y + 15 - lift
         book_bottom = book_y + book_height
         left_extent = round(page_width * progress)
 
@@ -3618,18 +3417,17 @@ class AlienDoctorGUI:
 
         if progress > 0.62:
             note_alpha = max(0, min(255, round(255 * (progress - 0.62) / 0.38)))
-            for index, note in enumerate(self.get_notebook_preview_lines()):
-                page = 0 if index < 2 else 1
-                row = index if index < 2 else index - 2
-                page_center_x = spine_x + page_width // 2
-                if page == 0:
-                    page_center_x = spine_x - page_width // 2
-                note_surface = self.tiny_font.render(note, True, COLORS["card_text"])
-                note_surface.set_alpha(note_alpha)
-                note_rect = note_surface.get_rect(
-                    center=(page_center_x, book_y + 23 + row * 17)
-                )
-                self.screen.blit(note_surface, note_rect)
+            count_label = self.get_notebook_test_count_label()
+            note_surface = self.notebook_preview_font.render(
+                count_label,
+                True,
+                COLORS["card_text"],
+            )
+            note_surface.set_alpha(note_alpha)
+            note_rect = note_surface.get_rect(
+                center=(right_page.centerx, book_y + 24)
+            )
+            self.screen.blit(note_surface, note_rect)
 
             pencil_surface = pygame.Surface((24, 67), pygame.SRCALPHA)
             pygame.draw.polygon(
@@ -3656,7 +3454,7 @@ class AlienDoctorGUI:
             rotated_pencil = pygame.transform.rotate(pencil_surface, -13)
             self.screen.blit(
                 rotated_pencil,
-                (right_page.right - 3, book_y + 8),
+                (right_page.right - 12, book_y + 14),
             )
 
         if hovered:
@@ -3923,8 +3721,8 @@ class AlienDoctorGUI:
         pygame.draw.rect(self.screen, diagnosis_color, icon, width=2, border_radius=6)
         self.draw_diagnosis_file_icon(icon, diagnosis_color)
 
-        subtitle = self.tiny_font.render(
-            "CONDITION FILE",
+        subtitle = self.card_font.render(
+            "CASE FILE",
             True,
             COLORS["card_text"],
         )

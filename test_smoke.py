@@ -108,8 +108,6 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game.draw()
         self.game.handle_outcome_click(self.game.outcome_button.center)
-        self.assertEqual(self.game.state, GameState.CELEBRATION)
-        self.game.finish_celebration()
         self.assertEqual(self.game.state, GameState.SHOP)
 
         earned_balance = self.game.player.balance
@@ -135,6 +133,16 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_outcome_click(self.game.outcome_button.center)
         self.assertEqual(self.game.state, GameState.PATIENT)
         self.assertFalse(self.game.showing_diagnosis_hand)
+
+    def test_miniature_notebook_uses_a_compact_test_count(self):
+        """The notebook preview should show a short count instead of overflowing notes."""
+
+        self.assertEqual(self.game.get_notebook_test_count_label(), "NO TESTS")
+        result = self.game.patient.perform_test("TEMPERATURE").removeprefix("RESULTS: ")
+        self.game.notebook.add_test(self.game.patient, "TEMPERATURE", result)
+        self.assertEqual(self.game.get_notebook_test_count_label(), "1 TEST")
+        self.game.notebook.add_test(self.game.patient, "X-RAY", "No damage found.")
+        self.assertEqual(self.game.get_notebook_test_count_label(), "2 TESTS")
 
 
 if __name__ == "__main__":
