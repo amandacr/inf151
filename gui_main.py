@@ -34,6 +34,19 @@ RARITY_COLORS = {
     "Rare": (205, 100, 235),
 }
 
+RARITY_CARD_COLORS = {
+    "Common": (225, 235, 214),
+    "Uncommon": (218, 230, 239),
+    "Rare": (235, 220, 239),
+}
+
+TEST_SUBTITLES = {
+    "TEMPERATURE": "VITAL SCAN",
+    "ULTRASOUND": "SONIC IMAGING",
+    "X-RAY": "BONE IMAGING",
+    "ALLERGY": "REACTION SCAN",
+}
+
 
 class GameState(Enum):
     """Screens planned for the GUI version of the prototype."""
@@ -121,7 +134,7 @@ class AlienDoctorGUI:
             "active_hand": pygame.Rect(225, 390, 625, 170),
             "diagnosis": pygame.Rect(885, 400, 175, 160),
         }
-        self.card_rects = self.build_card_rects()
+        self.refresh_hand_layout()
         self.notebook_layout = self.build_notebook_rects()
 
         self.title_font = pygame.font.Font(None, 64)
@@ -238,32 +251,53 @@ class AlienDoctorGUI:
             pygame.time.get_ticks() if show_diagnoses else None
         )
         self.card_message = ""
-        self.card_rects = self.build_card_rects()
+        self.refresh_hand_layout()
 
-    def build_card_rects(self):
-        """Create the rectangles that position the currently displayed cards."""
+    def calculate_hand_layout(self, card_count):
+        """Calculate a centered fan for any number of cards without changing game data."""
 
         panel = self.layout["active_hand"]
         card_width = 96
         card_height = 118
-        gap = 18
-        card_count = len(self.get_active_hand())
 
         if card_count == 0:
             return []
 
-        total_width = (card_width * card_count) + (gap * (card_count - 1))
+        usable_width = panel.width - 28
+        if card_count == 1:
+            card_step = 0
+            total_width = card_width
+        else:
+            available_step = (usable_width - card_width) / (card_count - 1)
+            card_step = min(card_width - 4, available_step)
+            total_width = card_width + card_step * (card_count - 1)
         start_x = panel.centerx - total_width // 2
+        hand_center = (card_count - 1) / 2
 
         return [
             pygame.Rect(
-                start_x + index * (card_width + gap),
-                panel.y + 43,
+                round(start_x + index * card_step),
+                panel.y + 43 + min(9, round(abs(index - hand_center) * 3)),
                 card_width,
                 card_height,
             )
             for index in range(card_count)
         ]
+
+    def refresh_hand_layout(self):
+        """Recalculate positions after player.draw, play, discard, or a hand switch."""
+
+        self.card_rects = self.calculate_hand_layout(len(self.get_active_hand()))
+        if (
+            self.selected_card_index is not None
+            and self.selected_card_index >= len(self.card_rects)
+        ):
+            self.selected_card_index = None
+
+    def build_card_rects(self):
+        """Return the current hand layout for compatibility with earlier GUI code."""
+
+        return self.calculate_hand_layout(len(self.get_active_hand()))
 
     def handle_card_click(self, position):
         """Select or dismiss a card and run it when it belongs to the test hand."""
@@ -315,7 +349,7 @@ class AlienDoctorGUI:
         self.discard_pile.append(card)
         self.selected_card_index = None
         self.run_test_button = None
-        self.card_rects = self.build_card_rects()
+        self.refresh_hand_layout()
         self.card_message = self.last_test_name + " test complete"
         self.state = GameState.TEST_RESULT
         self.notebook.add_test(self.patient, self.last_test_name, self.last_test_result)
@@ -337,7 +371,7 @@ class AlienDoctorGUI:
         self.selected_card_index = None
         self.run_test_button = None
         self.discard_button = None
-        self.card_rects = self.build_card_rects()
+        self.refresh_hand_layout()
         self.card_message = card.value.name + " discarded"
 
     def handle_test_result_click(self, position):
@@ -559,7 +593,7 @@ class AlienDoctorGUI:
         self.firework_particles = []
         self.reception_transition_started_at = None
         self.patient_fade_started_at = None
-        self.card_rects = self.build_card_rects()
+        self.refresh_hand_layout()
 
     def finish_intro(self):
         """Skip or finish the one-time opening animation and show the welcome screen."""
@@ -1860,26 +1894,36 @@ class AlienDoctorGUI:
             width=2,
         )
 
-        for cabinet_x, cabinet_width in ((35, 170), (875, 185)):
-            cabinet = pygame.Rect(cabinet_x, 394, cabinet_width, 163)
-            pygame.draw.rect(self.screen, (57, 62, 84), cabinet, border_radius=8)
-            pygame.draw.rect(
-                self.screen,
-                (107, 111, 138),
-                cabinet,
-                width=2,
-                border_radius=8,
-            )
-            pygame.draw.line(
-                self.screen,
-                (107, 111, 138),
-                (cabinet.x + 8, cabinet.centery),
-                (cabinet.right - 8, cabinet.centery),
-                width=1,
-            )
-            for handle_y in (cabinet.y + 35, cabinet.y + 115):
-                handle = pygame.Rect(cabinet.centerx - 16, handle_y, 32, 4)
-                pygame.draw.rect(self.screen, (154, 153, 174), handle, border_radius=2)
+        # One continuous workbench ties the notebook, cards, and diagnosis file together.
+        workbench = pygame.Rect(30, 390, 1040, 174)
+        pygame.draw.rect(
+            self.screen,
+            (25, 27, 40),
+            workbench.move(0, 7),
+            border_radius=13,
+        )
+        pygame.draw.rect(self.screen, (57, 62, 84), workbench, border_radius=13)
+        pygame.draw.rect(
+            self.screen,
+            (107, 111, 138),
+            workbench,
+            width=2,
+            border_radius=13,
+        )
+        pygame.draw.line(
+            self.screen,
+            (81, 83, 109),
+            (workbench.x + 14, workbench.bottom - 14),
+            (workbench.right - 14, workbench.bottom - 14),
+            width=2,
+        )
+        for screw_position in (
+            (workbench.x + 11, workbench.y + 11),
+            (workbench.right - 11, workbench.y + 11),
+            (workbench.x + 11, workbench.bottom - 11),
+            (workbench.right - 11, workbench.bottom - 11),
+        ):
+            pygame.draw.circle(self.screen, (145, 148, 169), screw_position, 2)
 
         pipe_color = (95, 109, 119)
         pygame.draw.line(
@@ -2791,22 +2835,11 @@ class AlienDoctorGUI:
         progress = self.update_notebook_preview_animation(hovered)
         lift = round(7 * progress)
 
-        # Cover the cabinet handle before drawing the heading so no line crosses it.
-        label = self.small_font.render("PATIENT NOTES", True, COLORS["muted"])
-        label_rect = label.get_rect(center=(panel.centerx, panel.y + 20))
-        pygame.draw.rect(
-            self.screen,
-            (57, 62, 84),
-            label_rect.inflate(16, 8),
-            border_radius=5,
-        )
-        self.screen.blit(label, label_rect)
-
         page_width = 54
         book_height = round(88 - 6 * progress)
         closed_spine_x = panel.centerx - page_width // 2
         spine_x = round(closed_spine_x + (panel.centerx - closed_spine_x) * progress)
-        book_y = panel.y + 38 - lift
+        book_y = panel.y + 25 - lift
         book_bottom = book_y + book_height
         left_extent = round(page_width * progress)
 
@@ -3027,35 +3060,59 @@ class AlienDoctorGUI:
         """Draw the currently active test or diagnosis hand and its selection state."""
 
         panel = self.layout["active_hand"]
+        tray = panel.inflate(-8, -8)
+        tray.y += 3
         pygame.draw.rect(
             self.screen,
-            (5, 12, 18),
-            panel.move(5, 6),
-            border_radius=14,
+            (8, 12, 20),
+            tray.move(5, 6),
+            border_radius=13,
         )
-        pygame.draw.rect(self.screen, (24, 31, 43), panel, border_radius=14)
+        pygame.draw.rect(self.screen, (20, 28, 39), tray, border_radius=13)
         pygame.draw.rect(
             self.screen,
-            (71, 69, 92),
-            panel,
+            (90, 88, 113),
+            tray,
             width=2,
-            border_radius=14,
+            border_radius=13,
         )
-        pygame.draw.line(
+        pygame.draw.rect(
             self.screen,
-            (98, 88, 118),
-            (panel.x + 20, panel.y + 34),
-            (panel.right - 20, panel.y + 34),
+            (11, 18, 27),
+            tray.inflate(-12, -12),
             width=1,
+            border_radius=9,
         )
         hand_name = (
-            "ACTIVE DIAGNOSIS HAND"
+            "DIAGNOSIS OPTIONS"
             if self.showing_diagnosis_hand
-            else "ACTIVE TEST HAND"
+            else "AVAILABLE TESTS"
         )
-        self.draw_centered_label(hand_name, panel, panel.y + 22)
+        name_plate = pygame.Rect(0, 0, 158, 24)
+        name_plate.midtop = (tray.centerx, tray.y + 5)
+        pygame.draw.rect(self.screen, (38, 48, 61), name_plate, border_radius=7)
+        pygame.draw.rect(
+            self.screen,
+            (112, 119, 142),
+            name_plate,
+            width=1,
+            border_radius=7,
+        )
+        self.draw_centered_label(hand_name, name_plate, name_plate.centery)
+
+        for light_x, light_color in (
+            (tray.x + 18, COLORS["accent"]),
+            (tray.x + 29, (79, 151, 235)),
+            (tray.right - 29, (79, 151, 235)),
+            (tray.right - 18, COLORS["accent"]),
+        ):
+            pygame.draw.circle(self.screen, (8, 14, 21), (light_x, tray.y + 17), 4)
+            pygame.draw.circle(self.screen, light_color, (light_x, tray.y + 17), 2)
 
         active_hand = self.get_active_hand()
+        # Future draw-card code can update the hand data without managing coordinates.
+        if len(self.card_rects) != len(active_hand):
+            self.refresh_hand_layout()
 
         if not active_hand:
             empty_text = (
@@ -3089,6 +3146,108 @@ class AlienDoctorGUI:
             else:
                 self.draw_test_card(selected_card, selected_rect, selected=True)
 
+    def get_card_shape_points(self, card_rect, corner_cut=7):
+        """Return the clipped-corner outline shared by every card style."""
+
+        return (
+            (card_rect.x + corner_cut, card_rect.y),
+            (card_rect.right - corner_cut, card_rect.y),
+            (card_rect.right, card_rect.y + corner_cut),
+            (card_rect.right, card_rect.bottom - corner_cut),
+            (card_rect.right - corner_cut, card_rect.bottom),
+            (card_rect.x + corner_cut, card_rect.bottom),
+            (card_rect.x, card_rect.bottom - corner_cut),
+            (card_rect.x, card_rect.y + corner_cut),
+        )
+
+    def draw_card_shell(self, card_rect, fill_color, border_color, border_width, selected):
+        """Draw one reusable sci-fi card body with a clipped outline and shadow."""
+
+        shadow_offset = 7 if selected else 4
+        shadow_rect = card_rect.move(shadow_offset, shadow_offset)
+        corner_cut = 10 if selected else 7
+        pygame.draw.polygon(
+            self.screen,
+            (3, 8, 12),
+            self.get_card_shape_points(shadow_rect, corner_cut),
+        )
+        card_points = self.get_card_shape_points(card_rect, corner_cut)
+        pygame.draw.polygon(self.screen, fill_color, card_points)
+        pygame.draw.polygon(
+            self.screen,
+            border_color,
+            card_points,
+            width=border_width,
+        )
+
+    def draw_fitted_card_title(self, title, area, selected=False):
+        """Choose the largest existing font that keeps a card title inside its header."""
+
+        fonts = (
+            (self.body_font, self.small_font, self.card_font)
+            if selected
+            else (self.card_font, self.pile_font, self.tiny_font)
+        )
+        font = fonts[-1]
+        for candidate in fonts:
+            if candidate.size(title)[0] <= area.width - 8:
+                font = candidate
+                break
+        title_surface = font.render(title, True, COLORS["card_text"])
+        self.screen.blit(title_surface, title_surface.get_rect(center=area.center))
+
+    def draw_rarity_badge(self, rarity, card_rect):
+        """Show card rarity with both text and a shape so color is not the only cue."""
+
+        rarity_color = RARITY_COLORS.get(rarity, COLORS["panel_border"])
+        badge = pygame.Rect(
+            card_rect.x + 7,
+            card_rect.bottom - 23,
+            card_rect.width - 14,
+            16,
+        )
+        pygame.draw.rect(self.screen, (203, 214, 202), badge, border_radius=6)
+        pygame.draw.rect(
+            self.screen,
+            rarity_color,
+            badge,
+            width=1,
+            border_radius=6,
+        )
+
+        symbol_center = (badge.x + 11, badge.centery)
+        if rarity == "Rare":
+            symbol = (
+                (symbol_center[0], symbol_center[1] - 5),
+                (symbol_center[0] + 3, symbol_center[1] - 2),
+                (symbol_center[0] + 5, symbol_center[1]),
+                (symbol_center[0] + 2, symbol_center[1] + 2),
+                (symbol_center[0], symbol_center[1] + 5),
+                (symbol_center[0] - 2, symbol_center[1] + 2),
+                (symbol_center[0] - 5, symbol_center[1]),
+                (symbol_center[0] - 3, symbol_center[1] - 2),
+            )
+            pygame.draw.polygon(self.screen, rarity_color, symbol)
+        elif rarity == "Uncommon":
+            pygame.draw.polygon(
+                self.screen,
+                rarity_color,
+                (
+                    (symbol_center[0], symbol_center[1] - 5),
+                    (symbol_center[0] + 5, symbol_center[1]),
+                    (symbol_center[0], symbol_center[1] + 5),
+                    (symbol_center[0] - 5, symbol_center[1]),
+                ),
+            )
+        else:
+            pygame.draw.circle(self.screen, rarity_color, symbol_center, 4)
+
+        rarity_text = self.pile_font.render(rarity.upper(), True, rarity_color)
+        self.screen.blit(
+            rarity_text,
+            rarity_text.get_rect(midleft=(badge.x + 20, badge.centery)),
+        )
+
     def draw_diagnosis_card(self, card, card_rect, hovered=False, selected=False):
         """Draw one diagnosis card in either its compact or enlarged state."""
 
@@ -3097,18 +3256,12 @@ class AlienDoctorGUI:
             COLORS["accent"] if hovered or selected else COLORS["panel_border"]
         )
         border_width = 4 if selected else 3 if hovered else 2
-
-        if selected:
-            shadow = card_rect.move(7, 7)
-            pygame.draw.rect(self.screen, (3, 8, 10), shadow, border_radius=9)
-
-        pygame.draw.rect(self.screen, COLORS["card"], card_rect, border_radius=8)
-        pygame.draw.rect(
-            self.screen,
-            border_color,
+        self.draw_card_shell(
             card_rect,
-            width=border_width,
-            border_radius=8,
+            (232, 224, 238),
+            border_color,
+            border_width,
+            selected,
         )
 
         name_font = (
@@ -3174,20 +3327,15 @@ class AlienDoctorGUI:
 
         test = card.value
         rarity_color = RARITY_COLORS.get(test.rarity, COLORS["panel_border"])
+        card_color = RARITY_CARD_COLORS.get(test.rarity, COLORS["card"])
         border_color = COLORS["accent"] if hovered or selected else rarity_color
         border_width = 4 if selected else 3 if hovered else 2
-
-        if selected:
-            shadow = card_rect.move(7, 7)
-            pygame.draw.rect(self.screen, (3, 8, 10), shadow, border_radius=9)
-
-        pygame.draw.rect(self.screen, COLORS["card"], card_rect, border_radius=8)
-        pygame.draw.rect(
-            self.screen,
-            border_color,
+        self.draw_card_shell(
             card_rect,
-            width=border_width,
-            border_radius=8,
+            card_color,
+            border_color,
+            border_width,
+            selected,
         )
 
         if selected:
@@ -3196,42 +3344,73 @@ class AlienDoctorGUI:
             self.draw_compact_card(test, card_rect, rarity_color)
 
     def draw_compact_card(self, test, card_rect, rarity_color):
-        """Draw the name, icon, and rarity shown on a card in the hand."""
+        """Draw the compact header, artwork, subtitle, and rarity badge of a test card."""
 
-        name = self.card_font.render(test.name, True, COLORS["card_text"])
-        self.screen.blit(name, name.get_rect(center=(card_rect.centerx, card_rect.y + 18)))
-
-        icon = pygame.Rect(card_rect.centerx - 20, card_rect.y + 36, 40, 40)
-        pygame.draw.rect(self.screen, (196, 211, 191), icon, border_radius=5)
-        pygame.draw.rect(self.screen, rarity_color, icon, width=2, border_radius=5)
-        icon_text = self.body_font.render(test.name[0], True, COLORS["card_text"])
-        self.screen.blit(icon_text, icon_text.get_rect(center=icon.center))
-
-        rarity = self.card_font.render(test.rarity.upper(), True, rarity_color)
-        self.screen.blit(
-            rarity, rarity.get_rect(center=(card_rect.centerx, card_rect.bottom - 17))
+        header = pygame.Rect(card_rect.x + 6, card_rect.y + 6, card_rect.width - 12, 25)
+        header_color = tuple(max(0, channel - 18) for channel in RARITY_CARD_COLORS.get(
+            test.rarity,
+            COLORS["card"],
+        ))
+        pygame.draw.rect(self.screen, header_color, header, border_radius=5)
+        pygame.draw.line(
+            self.screen,
+            rarity_color,
+            (header.x + 6, header.bottom),
+            (header.right - 6, header.bottom),
+            width=1,
         )
+        self.draw_fitted_card_title(test.name, header)
+
+        icon = pygame.Rect(card_rect.centerx - 25, card_rect.y + 35, 50, 45)
+        pygame.draw.rect(self.screen, (201, 214, 205), icon, border_radius=6)
+        pygame.draw.rect(self.screen, rarity_color, icon, width=2, border_radius=6)
+        self.draw_test_icon(test.name, icon, rarity_color)
+
+        subtitle = self.tiny_font.render(
+            TEST_SUBTITLES.get(test.name.upper(), "MEDICAL TEST"),
+            True,
+            COLORS["card_text"],
+        )
+        self.screen.blit(
+            subtitle,
+            subtitle.get_rect(center=(card_rect.centerx, card_rect.y + 88)),
+        )
+        self.draw_rarity_badge(test.rarity, card_rect)
 
     def draw_selected_card_details(self, test, card_rect, rarity_color):
         """Draw an enlarged test card with Run Test and Discard buttons."""
 
-        name = self.body_font.render(test.name, True, COLORS["card_text"])
-        self.screen.blit(name, name.get_rect(center=(card_rect.centerx, card_rect.y + 20)))
+        header = pygame.Rect(card_rect.x + 9, card_rect.y + 8, card_rect.width - 18, 39)
+        header_color = tuple(max(0, channel - 18) for channel in RARITY_CARD_COLORS.get(
+            test.rarity,
+            COLORS["card"],
+        ))
+        pygame.draw.rect(self.screen, header_color, header, border_radius=7)
+        self.draw_fitted_card_title(test.name, header, selected=True)
 
         rarity = self.card_font.render(test.rarity.upper(), True, rarity_color)
-        self.screen.blit(rarity, rarity.get_rect(center=(card_rect.centerx, card_rect.y + 42)))
+        self.screen.blit(rarity, rarity.get_rect(center=(card_rect.centerx, card_rect.y + 55)))
 
-        icon = pygame.Rect(card_rect.x + 18, card_rect.y + 57, 42, 42)
-        pygame.draw.rect(self.screen, (196, 211, 191), icon, border_radius=5)
-        pygame.draw.rect(self.screen, rarity_color, icon, width=2, border_radius=5)
-        icon_text = self.heading_font.render(test.name[0], True, COLORS["card_text"])
-        self.screen.blit(icon_text, icon_text.get_rect(center=icon.center))
+        icon = pygame.Rect(card_rect.x + 16, card_rect.y + 65, 58, 58)
+        pygame.draw.rect(self.screen, (201, 214, 205), icon, border_radius=7)
+        pygame.draw.rect(self.screen, rarity_color, icon, width=2, border_radius=7)
+        self.draw_test_icon(test.name, icon, rarity_color)
+
+        subtitle = self.tiny_font.render(
+            TEST_SUBTITLES.get(test.name.upper(), "MEDICAL TEST"),
+            True,
+            COLORS["card_text"],
+        )
+        self.screen.blit(
+            subtitle,
+            subtitle.get_rect(center=(icon.centerx, icon.bottom + 9)),
+        )
 
         description_box = pygame.Rect(
-            card_rect.x + 70,
-            card_rect.y + 57,
-            card_rect.width - 86,
-            105,
+            card_rect.x + 84,
+            card_rect.y + 67,
+            card_rect.width - 100,
+            100,
         )
         self.draw_wrapped_text(
             test.description,
@@ -3264,33 +3443,129 @@ class AlienDoctorGUI:
             discard_text.get_rect(center=self.discard_button.center),
         )
 
+    def draw_test_icon(self, test_name, icon, rarity_color):
+        """Render a test symbol onto a clipped surface that cannot escape its frame."""
+
+        icon_surface = pygame.Surface(icon.size, pygame.SRCALPHA)
+        icon_area = icon_surface.get_rect()
+        center_x, center_y = icon_area.center
+        ink = COLORS["card_text"]
+        test_name = test_name.upper()
+
+        if test_name == "TEMPERATURE":
+            pygame.draw.circle(icon_surface, rarity_color, (center_x, center_y + 8), 6)
+            pygame.draw.rect(
+                icon_surface,
+                ink,
+                pygame.Rect(center_x - 3, center_y - 13, 6, 20),
+                border_radius=3,
+            )
+            pygame.draw.rect(
+                icon_surface,
+                rarity_color,
+                pygame.Rect(center_x - 1, center_y - 9, 2, 16),
+            )
+            pygame.draw.circle(icon_surface, ink, (center_x, center_y + 8), 8, width=2)
+        elif test_name == "ULTRASOUND":
+            probe = pygame.Rect(center_x - 16, center_y - 8, 7, 16)
+            pygame.draw.rect(icon_surface, ink, probe, border_radius=3)
+            for wave_number, radius in enumerate((6, 10, 14)):
+                wave = pygame.Rect(
+                    center_x - 10,
+                    center_y - radius,
+                    radius * 2,
+                    radius * 2,
+                )
+                pygame.draw.arc(
+                    icon_surface,
+                    rarity_color if wave_number == 2 else ink,
+                    wave,
+                    -math.pi / 3,
+                    math.pi / 3,
+                    width=2,
+                )
+        elif test_name == "X-RAY":
+            for offset in (-4, 4):
+                start = (center_x - 9, center_y + offset)
+                end = (center_x + 9, center_y - offset)
+                pygame.draw.line(icon_surface, ink, start, end, width=4)
+                pygame.draw.circle(icon_surface, rarity_color, start, 4)
+                pygame.draw.circle(icon_surface, rarity_color, end, 4)
+                pygame.draw.circle(icon_surface, ink, start, 4, width=1)
+                pygame.draw.circle(icon_surface, ink, end, 4, width=1)
+        elif test_name == "ALLERGY":
+            drop = (
+                (center_x, center_y - 14),
+                (center_x - 10, center_y + 3),
+                (center_x - 8, center_y + 11),
+                (center_x, center_y + 15),
+                (center_x + 8, center_y + 11),
+                (center_x + 10, center_y + 3),
+            )
+            pygame.draw.polygon(icon_surface, rarity_color, drop)
+            pygame.draw.polygon(icon_surface, ink, drop, width=2)
+            pygame.draw.circle(
+                icon_surface,
+                (238, 246, 228),
+                (center_x + 3, center_y + 3),
+                3,
+            )
+        else:
+            icon_text = self.body_font.render(test_name[0], True, ink)
+            icon_surface.blit(icon_text, icon_text.get_rect(center=icon_area.center))
+
+        self.screen.blit(icon_surface, icon.topleft)
+
     def draw_diagnosis_cards(self):
-        """Draw the animated medical folder used to switch diagnosis cards on or off."""
+        """Draw the diagnosis folder standing in a compact desktop file rack."""
 
         panel = self.layout["diagnosis"]
-        tray = pygame.Rect(panel.x + 9, panel.y + 12, panel.width - 18, panel.height - 20)
-        pygame.draw.rect(self.screen, (5, 12, 18), tray.move(5, 6), border_radius=12)
-        pygame.draw.rect(self.screen, (35, 27, 49), tray, border_radius=12)
-        pygame.draw.rect(self.screen, (122, 82, 148), tray, width=2, border_radius=12)
+        mouse_position = pygame.mouse.get_pos()
+        hovered = panel.collidepoint(mouse_position)
+        folder_lift = 5 if hovered and not self.showing_diagnosis_hand else 0
+        progress = self.get_diagnosis_folder_progress()
 
-        warning = pygame.Rect(tray.x + 12, tray.y + 9, 20, 20)
-        pygame.draw.circle(self.screen, (216, 159, 238), warning.center, 9)
-        warning_text = self.card_font.render("!", True, (43, 31, 60))
-        self.screen.blit(warning_text, warning_text.get_rect(center=warning.center))
-        folder_title = self.card_font.render("FINAL DIAGNOSIS", True, COLORS["text"])
-        self.screen.blit(
-            folder_title,
-            folder_title.get_rect(midleft=(warning.right + 5, warning.centery)),
+        rack = pygame.Rect(panel.x + 24, panel.y + 27, panel.width - 48, 105)
+        pygame.draw.rect(self.screen, (8, 12, 20), rack.move(5, 6), border_radius=10)
+        pygame.draw.rect(self.screen, (42, 37, 58), rack, border_radius=10)
+        pygame.draw.rect(
+            self.screen,
+            (125, 98, 145),
+            rack,
+            width=2,
+            border_radius=10,
+        )
+        for slot_offset in (20, 34):
+            pygame.draw.line(
+                self.screen,
+                (76, 61, 94),
+                (rack.x + slot_offset, rack.y + 12),
+                (rack.x + slot_offset, rack.bottom - 10),
+                width=2,
+            )
+
+        base = pygame.Rect(rack.x - 8, rack.bottom - 13, rack.width + 16, 19)
+        pygame.draw.rect(self.screen, (31, 29, 45), base, border_radius=6)
+        pygame.draw.rect(
+            self.screen,
+            (108, 92, 129),
+            base,
+            width=2,
+            border_radius=6,
         )
 
-        progress = self.get_diagnosis_folder_progress()
-        folder = pygame.Rect(tray.x + 17, tray.y + 49, tray.width - 34, 61)
+        folder = pygame.Rect(
+            rack.x + 18,
+            rack.y + 25 - folder_lift,
+            rack.width - 32,
+            67,
+        )
         folder_shadow = folder.move(4, 5)
         pygame.draw.rect(self.screen, (5, 10, 16), folder_shadow, border_radius=7)
 
-        tab = pygame.Rect(folder.x + 5, folder.y - 12, 69, 22)
+        tab = pygame.Rect(folder.x + 5, folder.y - 13, folder.width - 18, 22)
         pygame.draw.rect(self.screen, (111, 72, 142), tab, border_radius=6)
-        tab_text = self.tiny_font.render("PATIENT FILE", True, COLORS["text"])
+        tab_text = self.tiny_font.render("FINAL DIAGNOSIS", True, COLORS["text"])
         self.screen.blit(tab_text, tab_text.get_rect(center=(tab.centerx, tab.y + 8)))
 
         pygame.draw.rect(self.screen, (92, 58, 119), folder, border_radius=7)
@@ -3299,38 +3574,53 @@ class AlienDoctorGUI:
         page_rise = round(18 * progress)
         for page_number, page_color in enumerate(((215, 224, 204), (229, 235, 216))):
             page = pygame.Rect(
-                folder.x + 13 + page_number * 5,
-                folder.y + 10 - page_rise - page_number * 3,
-                folder.width - 26,
+                folder.x + 10 + page_number * 5,
+                folder.y + 11 - page_rise - page_number * 3,
+                folder.width - 20,
                 43,
             )
             pygame.draw.rect(self.screen, page_color, page, border_radius=4)
-            pygame.draw.rect(self.screen, COLORS["card_text"], page, width=1, border_radius=4)
-            pygame.draw.line(
+            pygame.draw.rect(
                 self.screen,
-                (146, 159, 144),
-                (page.x + 8, page.y + 13),
-                (page.right - 8, page.y + 13),
+                COLORS["card_text"],
+                page,
                 width=1,
+                border_radius=4,
             )
             pygame.draw.line(
                 self.screen,
                 (146, 159, 144),
-                (page.x + 8, page.y + 22),
-                (page.right - 17, page.y + 22),
-                width=1,
+                (page.x + 7, page.y + 13),
+                (page.right - 7, page.y + 13),
+            )
+            pygame.draw.line(
+                self.screen,
+                (146, 159, 144),
+                (page.x + 7, page.y + 22),
+                (page.right - 15, page.y + 22),
             )
 
         cover_y = folder.y + 20 + round(13 * progress)
         cover_height = max(27, folder.bottom - cover_y)
         cover = pygame.Rect(folder.x, cover_y, folder.width, cover_height)
         pygame.draw.rect(self.screen, (126, 78, 151), cover, border_radius=7)
-        pygame.draw.rect(self.screen, (204, 145, 226), cover, width=2, border_radius=7)
+        pygame.draw.rect(
+            self.screen,
+            (204, 145, 226),
+            cover,
+            width=2,
+            border_radius=7,
+        )
+
+        seal_center = (cover.centerx, cover.y + min(16, cover.height // 2))
+        pygame.draw.circle(self.screen, (216, 159, 238), seal_center, 8)
+        warning_text = self.card_font.render("!", True, (43, 31, 60))
+        self.screen.blit(warning_text, warning_text.get_rect(center=seal_center))
 
         if self.showing_diagnosis_hand:
-            return_button = pygame.Rect(tray.x + 12, tray.bottom - 30, tray.width - 24, 23)
-            hovered = return_button.collidepoint(pygame.mouse.get_pos())
-            button_color = COLORS["accent"] if hovered else (151, 101, 180)
+            return_button = pygame.Rect(panel.x + 24, panel.bottom - 28, panel.width - 48, 23)
+            return_hovered = return_button.collidepoint(mouse_position)
+            button_color = COLORS["accent"] if return_hovered else (151, 101, 180)
             pygame.draw.rect(self.screen, button_color, return_button, border_radius=6)
             return_text = self.pile_font.render(
                 "<  RETURN TO TESTS",
@@ -3338,11 +3628,11 @@ class AlienDoctorGUI:
                 COLORS["background"],
             )
             self.screen.blit(return_text, return_text.get_rect(center=return_button.center))
-        else:
-            open_text = self.pile_font.render("OPEN PATIENT FILE", True, COLORS["text"])
+        elif hovered:
+            open_text = self.pile_font.render("OPEN FILE", True, COLORS["accent"])
             self.screen.blit(
                 open_text,
-                open_text.get_rect(center=(folder.centerx, tray.bottom - 17)),
+                open_text.get_rect(center=(panel.centerx, panel.bottom - 8)),
             )
 
     def get_diagnosis_folder_progress(self):
