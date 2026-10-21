@@ -1,5 +1,3 @@
-from operator import truediv
-
 from Deck import Deck
 from PatientData import create_zorpa
 from Player import DIAGNOSIS_REWARD, Player, display_hand

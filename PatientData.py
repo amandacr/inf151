@@ -12,10 +12,10 @@ def create_zorpa():
         "uncontrollable shaking",
         DIAGNOSES["hypothermia"],
         {
-            "TEMPERATURE": "Current temperature: 1700°F\nTypical body temperature: 2000°F",
-            "X-RAY": "Nothing remarkable.",
-            "ULTRASOUND": "Nothing remarkable.",
-            "ALLERGY": "Nothing remarkable.",
+            "TEMPERATURE": "Current temperature: 1700°F",
+            "X-RAY": "X-ray imaging found no fractures or visible bone damage.",
+            "ULTRASOUND": "Ultrasound imaging found no unusual internal changes.",
+            "ALLERGY": "Allergy screening produced no reaction.",
         },
         profile={
             "Occupation": "Black Hole Tour Guide",

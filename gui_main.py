@@ -1,6 +1,6 @@
-"""Minimal Pygame shell for The Cosmic Clinic GUI prototype.
+"""Pygame interface for The Cosmic Clinic vertical-slice prototype.
 
-you can run this file without changing the old text based version.
+You can run this file independently from the older text-based version.
 """
 
 from enum import Enum, auto
@@ -49,7 +49,7 @@ TEST_SUBTITLES = {
 
 
 class GameState(Enum):
-    """Screens planned for the GUI version of the prototype."""
+    """Screens used by the GUI version of the prototype."""
 
     INTRO = auto()
     TITLE = auto()
@@ -96,7 +96,6 @@ class AlienDoctorGUI:
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
         self.selected_card_index = None
-        self.card_message = ""
         self.run_test_button = None
         self.discard_button = None
         self.play_diagnosis_button = None
@@ -108,6 +107,8 @@ class AlienDoctorGUI:
         self.discard_animation_duration = 350
         self.last_test_name = ""
         self.last_test_result = ""
+        self.test_result_started_at = None
+        self.test_result_reveal_duration = 1400
         self.last_diagnosis = None
         self.diagnosis_correct = None
         self.celebration_started_at = None
@@ -119,7 +120,7 @@ class AlienDoctorGUI:
         self.patient_fade_started_at = None
         self.patient_fade_duration = 650
         self.start_button = pygame.Rect(61, 505, 238, 43)
-        self.continue_button = pygame.Rect(410, 430, 280, 52)
+        self.continue_button = pygame.Rect(700, 472, 220, 44)
         self.outcome_button = pygame.Rect(410, 455, 280, 52)
         self.shop_button = pygame.Rect(400, 465, 300, 52)
         self.diagnosis_cancel_button = pygame.Rect(315, 410, 210, 48)
@@ -127,7 +128,7 @@ class AlienDoctorGUI:
         self.layout = {
             "status_bar": pygame.Rect(30, 100, 1040, 50),
             "draw_deck": pygame.Rect(45, 180, 125, 175),
-            "alien": pygame.Rect(250, 165, 230, 195),
+            "alien": pygame.Rect(233, 165, 230, 195),
             "id_card": pygame.Rect(510, 180, 270, 155),
             "throwaway": pygame.Rect(910, 250, 125, 120),
             "notebook": pygame.Rect(40, 410, 155, 150),
@@ -148,6 +149,9 @@ class AlienDoctorGUI:
         self.diagnosis_card_font = pygame.font.SysFont("Arial", 13, bold=True)
         self.notebook_title_font = pygame.font.Font(None, 28)
         self.notebook_body_font = pygame.font.Font(None, 22)
+        self.logo_font = pygame.font.SysFont("Arial", 54, bold=True)
+        self.logo_small_font = pygame.font.SysFont("Arial", 18, bold=True)
+        self.game_logo = self.create_game_logo_surface()
 
     def run(self):
         """Run the GUI loop until the player closes the window."""
@@ -250,7 +254,6 @@ class AlienDoctorGUI:
         self.diagnosis_folder_animation_started_at = (
             pygame.time.get_ticks() if show_diagnoses else None
         )
-        self.card_message = ""
         self.refresh_hand_layout()
 
     def calculate_hand_layout(self, card_count):
@@ -319,18 +322,15 @@ class AlienDoctorGUI:
 
             if selected_rect.collidepoint(position):
                 self.selected_card_index = None
-                self.card_message = ""
                 return
 
         for index in reversed(range(len(self.card_rects))):
             if self.card_rects[index].collidepoint(position):
                 self.selected_card_index = index
-                self.card_message = ""
                 return
 
         if self.selected_card_index is not None:
             self.selected_card_index = None
-            self.card_message = ""
 
     def run_selected_test(self):
         """Play the selected test card and open its patient-specific result screen."""
@@ -350,7 +350,7 @@ class AlienDoctorGUI:
         self.selected_card_index = None
         self.run_test_button = None
         self.refresh_hand_layout()
-        self.card_message = self.last_test_name + " test complete"
+        self.test_result_started_at = pygame.time.get_ticks()
         self.state = GameState.TEST_RESULT
         self.notebook.add_test(self.patient, self.last_test_name, self.last_test_result)
 
@@ -372,12 +372,14 @@ class AlienDoctorGUI:
         self.run_test_button = None
         self.discard_button = None
         self.refresh_hand_layout()
-        self.card_message = card.value.name + " discarded"
 
     def handle_test_result_click(self, position):
         """Return to the patient workspace when the result screen is continued."""
 
-        if self.continue_button.collidepoint(position):
+        if (
+            self.get_test_result_reveal_progress() >= 1.0
+            and self.continue_button.collidepoint(position)
+        ):
             self.state = GameState.PATIENT
 
     def get_selected_card_rect(self, index):
@@ -467,7 +469,6 @@ class AlienDoctorGUI:
                 self.start_celebration()
             else:
                 self.switch_active_hand(False)
-                self.card_message = "Diagnosis incorrect - continue testing"
                 self.state = GameState.PATIENT
 
     def start_celebration(self):
@@ -577,7 +578,6 @@ class AlienDoctorGUI:
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
         self.selected_card_index = None
-        self.card_message = ""
         self.run_test_button = None
         self.discard_button = None
         self.play_diagnosis_button = None
@@ -587,6 +587,7 @@ class AlienDoctorGUI:
         self.discard_animation = None
         self.last_test_name = ""
         self.last_test_result = ""
+        self.test_result_started_at = None
         self.last_diagnosis = None
         self.diagnosis_correct = None
         self.celebration_started_at = None
@@ -625,16 +626,10 @@ class AlienDoctorGUI:
             return
 
         self.screen.fill(COLORS["background"])
-
-        title = self.title_font.render(
-            "T H E   C O S M I C   C L I N I C",
-            True,
-            COLORS["accent"],
-        )
-        self.screen.blit(title, title.get_rect(center=(WINDOW_SIZE[0] // 2, 42)))
+        self.draw_game_logo((WINDOW_SIZE[0] // 2, 38), scale=0.86)
 
         subtitle_text = (
-            "RECEPTION  •  SHIFT 01"
+            "RECEPTION"
             if self.state == GameState.TITLE
             else "INTERGALACTIC MEDICAL SERVICE"
         )
@@ -665,6 +660,85 @@ class AlienDoctorGUI:
         quit_hint = self.small_font.render(footer_text, True, COLORS["muted"])
         self.screen.blit(quit_hint, quit_hint.get_rect(center=(WINDOW_SIZE[0] // 2, 635)))
         self.draw_reception_transition_fade()
+
+    def create_game_logo_surface(self):
+        """Build the two-tone clinic logo and its heartbeat divider once for reuse."""
+
+        logo = pygame.Surface((720, 82), pygame.SRCALPHA)
+        the_text = self.logo_small_font.render("THE", True, (200, 216, 224))
+        cosmic_text = self.logo_font.render("COSMIC", True, (117, 190, 255))
+        clinic_text = self.logo_font.render("CLINIC", True, COLORS["accent"])
+        pulse_width = 78
+        gap = 13
+        total_width = (
+            the_text.get_width()
+            + cosmic_text.get_width()
+            + clinic_text.get_width()
+            + pulse_width
+            + gap * 3
+        )
+        start_x = (logo.get_width() - total_width) // 2
+        center_y = 39
+
+        placements = (
+            (the_text, start_x, center_y + 4),
+            (cosmic_text, start_x + the_text.get_width() + gap, center_y),
+        )
+        for text_surface, text_x, text_y in placements:
+            shadow = text_surface.copy()
+            shadow.set_alpha(120)
+            logo.blit(
+                shadow,
+                shadow.get_rect(midleft=(text_x + 3, text_y + 4)),
+            )
+            logo.blit(text_surface, text_surface.get_rect(midleft=(text_x, text_y)))
+
+        pulse_x = start_x + the_text.get_width() + gap + cosmic_text.get_width() + gap
+        pulse_y = center_y + 3
+        pulse_points = (
+            (pulse_x, pulse_y),
+            (pulse_x + 13, pulse_y),
+            (pulse_x + 20, pulse_y - 7),
+            (pulse_x + 28, pulse_y + 11),
+            (pulse_x + 38, pulse_y - 16),
+            (pulse_x + 49, pulse_y + 3),
+            (pulse_x + pulse_width, pulse_y + 3),
+        )
+        shadow_points = tuple((x + 3, y + 4) for x, y in pulse_points)
+        pygame.draw.lines(logo, (13, 47, 61, 180), False, shadow_points, width=5)
+        pygame.draw.lines(logo, (96, 224, 222), False, pulse_points, width=3)
+
+        clinic_x = pulse_x + pulse_width + gap
+        clinic_shadow = clinic_text.copy()
+        clinic_shadow.set_alpha(120)
+        logo.blit(
+            clinic_shadow,
+            clinic_shadow.get_rect(midleft=(clinic_x + 3, center_y + 4)),
+        )
+        logo.blit(
+            clinic_text,
+            clinic_text.get_rect(midleft=(clinic_x, center_y)),
+        )
+
+        pygame.draw.line(
+            logo,
+            (68, 98, 117),
+            (start_x + the_text.get_width() + gap, 72),
+            (clinic_x + clinic_text.get_width(), 72),
+            width=1,
+        )
+        return logo
+
+    def draw_game_logo(self, center, scale=1.0, alpha=255):
+        """Draw the cached game logo at the requested size and opacity."""
+
+        logo_size = (
+            max(1, round(self.game_logo.get_width() * scale)),
+            max(1, round(self.game_logo.get_height() * scale)),
+        )
+        logo = pygame.transform.smoothscale(self.game_logo, logo_size)
+        logo.set_alpha(alpha)
+        self.screen.blit(logo, logo.get_rect(center=center))
 
     def draw_reception_transition_fade(self):
         """Fade from the waiting room to black and then into the examination room."""
@@ -869,25 +943,11 @@ class AlienDoctorGUI:
             title_scale = 0.68 + 0.47 * (progress / 0.72)
         else:
             title_scale = 1.15 - 0.15 * ((progress - 0.72) / 0.28)
-
-        title_text = "THE COSMIC CLINIC"
-        shadow = self.title_font.render(title_text, True, (16, 45, 51))
-        title = self.title_font.render(title_text, True, COLORS["accent"])
-        scaled_size = (
-            max(1, round(title.get_width() * title_scale)),
-            max(1, round(title.get_height() * title_scale)),
+        self.draw_game_logo(
+            (WINDOW_SIZE[0] // 2, 64),
+            scale=title_scale,
+            alpha=round(255 * progress),
         )
-        scaled_shadow = pygame.transform.smoothscale(shadow, scaled_size)
-        scaled_title = pygame.transform.smoothscale(title, scaled_size)
-        scaled_title.set_alpha(round(255 * progress))
-        scaled_shadow.set_alpha(round(190 * progress))
-
-        title_center = (WINDOW_SIZE[0] // 2, 64)
-        self.screen.blit(
-            scaled_shadow,
-            scaled_shadow.get_rect(center=(title_center[0] + 4, title_center[1] + 5)),
-        )
-        self.screen.blit(scaled_title, scaled_title.get_rect(center=title_center))
 
     def draw_title_screen(self):
         """Draw the reusable reception room and its next-patient controls."""
@@ -960,7 +1020,7 @@ class AlienDoctorGUI:
         middle_text = "CALLING NEXT PATIENT" if progress > 0 else "PATIENTS WAITING: 4"
         middle = self.small_font.render(middle_text, True, waiting_color)
         right = self.body_font.render(
-            "SHIFT 01     MONEY: $" + str(self.player.balance),
+            "MONEY: $" + str(self.player.balance),
             True,
             COLORS["accent"],
         )
@@ -1403,7 +1463,7 @@ class AlienDoctorGUI:
         self.draw_med_bay_background()
         self.draw_status_bar()
         self.draw_draw_deck()
-        self.draw_alien_placeholder()
+        self.draw_alien_patient()
         self.draw_id_card()
         self.draw_throwaway_deck()
         self.draw_notebook()
@@ -1414,129 +1474,623 @@ class AlienDoctorGUI:
             self.draw_diagnosis_confirmation()
 
     def draw_test_result_screen(self):
-        """Draw the completed test report and a button back to the patient screen."""
+        """Draw an animated diagnostic terminal over the dimmed examination bay."""
 
-        panel = pygame.Rect(180, 125, 740, 405)
-        self.draw_panel(panel)
+        self.draw_patient_screen()
+        dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        dim.fill((2, 8, 13, 205))
+        self.screen.blit(dim, (0, 0))
 
-        test_name = self.last_test_name or "TEST"
-        heading = self.heading_font.render(
-            test_name + " RESULTS", True, COLORS["text"]
-        )
-        self.screen.blit(heading, heading.get_rect(center=(panel.centerx, 175)))
-
-        patient = self.small_font.render(
-            "PATIENT: " + self.patient.name, True, COLORS["muted"]
-        )
-        self.screen.blit(patient, patient.get_rect(center=(panel.centerx, 205)))
-
-        report = pygame.Rect(255, 230, 590, 145)
-        pygame.draw.rect(self.screen, COLORS["card"], report, border_radius=8)
+        panel = pygame.Rect(105, 105, 890, 455)
         pygame.draw.rect(
             self.screen,
-            COLORS["panel_border"],
-            report,
+            (2, 8, 13),
+            panel.move(8, 9),
+            border_radius=16,
+        )
+        pygame.draw.rect(self.screen, (16, 35, 43), panel, border_radius=16)
+        pygame.draw.rect(
+            self.screen,
+            (103, 135, 126),
+            panel,
             width=3,
-            border_radius=8,
+            border_radius=16,
+        )
+        pygame.draw.rect(
+            self.screen,
+            COLORS["accent"],
+            panel.inflate(-10, -10),
+            width=1,
+            border_radius=12,
         )
 
-        report_title = self.small_font.render(
-            "MEDICAL TEST REPORT", True, COLORS["card_text"]
-        )
-        self.screen.blit(
-            report_title,
-            report_title.get_rect(center=(report.centerx, report.y + 25)),
-        )
+        test_name = (self.last_test_name or "TEST").upper()
+        progress = self.get_test_result_reveal_progress()
+        revealed = progress >= 1.0
+        status_color = COLORS["accent"]
 
-        result_text = self.last_test_result or "No test has been run yet."
-        result_y = report.y + 57
-        for line in result_text.splitlines():
-            result_line = self.body_font.render(line, True, COLORS["card_text"])
-            self.screen.blit(
-                result_line,
-                result_line.get_rect(center=(report.centerx, result_y)),
-            )
-            result_y += 32
+        header = pygame.Rect(panel.x + 24, panel.y + 18, panel.width - 48, 68)
+        pygame.draw.rect(self.screen, (7, 22, 28), header, border_radius=10)
+        pygame.draw.rect(
+            self.screen,
+            (65, 101, 98),
+            header,
+            width=1,
+            border_radius=10,
+        )
+        icon = pygame.Rect(header.x + 13, header.y + 10, 48, 48)
+        pygame.draw.rect(self.screen, (202, 219, 208), icon, border_radius=7)
+        pygame.draw.rect(self.screen, COLORS["accent"], icon, width=2, border_radius=7)
+        self.draw_test_icon(test_name, icon, COLORS["accent"])
 
-        note = self.small_font.render(
-            "The used card was moved to the throwaway pile.",
+        heading = self.heading_font.render(test_name + " SCAN", True, COLORS["text"])
+        self.screen.blit(heading, heading.get_rect(midleft=(icon.right + 15, header.y + 25)))
+        patient = self.card_font.render(
+            "PATIENT: " + self.patient.name.upper(),
             True,
             COLORS["muted"],
         )
-        self.screen.blit(note, note.get_rect(center=(panel.centerx, 402)))
+        self.screen.blit(patient, patient.get_rect(midleft=(icon.right + 16, header.y + 49)))
 
-        hovered = self.continue_button.collidepoint(pygame.mouse.get_pos())
-        button_color = COLORS["accent"] if hovered else COLORS["panel_border"]
-        pygame.draw.rect(
-            self.screen, button_color, self.continue_button, border_radius=8
-        )
-        button_text = self.body_font.render(
-            "CONTINUE", True, COLORS["background"]
-        )
-        self.screen.blit(
-            button_text, button_text.get_rect(center=self.continue_button.center)
-        )
-
-    def draw_diagnosis_outcome(self):
-        """Draw the result of the diagnosis card most recently played."""
-
-        panel = pygame.Rect(180, 125, 740, 405)
-        self.draw_panel(panel)
-
-        correct = bool(self.diagnosis_correct)
-        heading_text = "CORRECT DIAGNOSIS" if correct else "INCORRECT DIAGNOSIS"
-        heading_color = COLORS["accent"] if correct else (245, 130, 115)
-        heading = self.heading_font.render(heading_text, True, heading_color)
-        self.screen.blit(heading, heading.get_rect(center=(panel.centerx, 175)))
-
-        diagnosis_name = self.last_diagnosis.name if self.last_diagnosis else "Unknown"
-        played = self.body_font.render(
-            "You played: " + diagnosis_name,
+        badge = pygame.Rect(header.right - 128, header.y + 17, 112, 34)
+        badge_color = status_color if revealed else (83, 128, 151)
+        pygame.draw.rect(self.screen, (11, 28, 34), badge, border_radius=17)
+        pygame.draw.rect(self.screen, badge_color, badge, width=2, border_radius=17)
+        badge_text = self.card_font.render(
+            "COMPLETE" if revealed else "SCANNING",
             True,
-            COLORS["text"],
+            badge_color,
         )
-        self.screen.blit(played, played.get_rect(center=(panel.centerx, 220)))
+        self.screen.blit(badge_text, badge_text.get_rect(center=badge.center))
 
-        if correct:
-            message = (
-                f"You correctly diagnosed {self.patient.name}. "
-                f"Recommended treatment: {self.last_diagnosis.treatment}"
+        visual = pygame.Rect(panel.x + 24, panel.y + 102, 252, 238)
+        report = pygame.Rect(visual.right + 18, visual.y, panel.right - visual.right - 42, 238)
+        self.draw_test_scan_visual(visual, test_name, progress)
+
+        pygame.draw.rect(self.screen, (7, 22, 28), report, border_radius=10)
+        pygame.draw.rect(
+            self.screen,
+            (65, 101, 98),
+            report,
+            width=2,
+            border_radius=10,
+        )
+        report_title = self.card_font.render("DIAGNOSTIC RESULT", True, COLORS["muted"])
+        self.screen.blit(report_title, (report.x + 20, report.y + 17))
+        pygame.draw.line(
+            self.screen,
+            (45, 72, 72),
+            (report.x + 20, report.y + 42),
+            (report.right - 20, report.y + 42),
+            width=1,
+        )
+
+        if revealed:
+            result_heading = "OBSERVED RESULT"
+            status = self.body_font.render(result_heading, True, status_color)
+            self.screen.blit(status, (report.x + 20, report.y + 58))
+            result_text = self.last_test_result or "No result recorded."
+            result_box = pygame.Rect(
+                report.x + 20,
+                report.y + 98,
+                report.width - 40,
+                78,
+            )
+            result_y = result_box.y
+            for paragraph in result_text.splitlines() or [result_text]:
+                for line_text in self.wrap_text(
+                    paragraph,
+                    self.body_font,
+                    result_box.width,
+                ):
+                    result_line = self.body_font.render(
+                        line_text,
+                        True,
+                        COLORS["text"],
+                    )
+                    self.screen.blit(result_line, (result_box.x, result_y))
+                    result_y += result_line.get_height() + 7
+
+            note_y = report.bottom - 30
+            note_icon = (report.x + 26, note_y + 1)
+            pygame.draw.circle(self.screen, COLORS["accent"], note_icon, 7)
+            pygame.draw.line(
+                self.screen,
+                COLORS["background"],
+                (note_icon[0] - 3, note_icon[1]),
+                (note_icon[0] - 1, note_icon[1] + 3),
+                width=2,
+            )
+            pygame.draw.line(
+                self.screen,
+                COLORS["background"],
+                (note_icon[0] - 1, note_icon[1] + 3),
+                (note_icon[0] + 4, note_icon[1] - 3),
+                width=2,
+            )
+            notebook_note = self.card_font.render(
+                "RESULT ADDED TO PATIENT NOTES",
+                True,
+                COLORS["accent"],
+            )
+            self.screen.blit(
+                notebook_note,
+                notebook_note.get_rect(midleft=(note_icon[0] + 13, note_icon[1])),
             )
         else:
-            message = (
-                f"{diagnosis_name} does not match the available evidence. "
-                "Return to the patient and gather more information before trying again."
+            loading = self.body_font.render(
+                "ANALYZING PATIENT DATA" + "." * (1 + int(progress * 9) % 3),
+                True,
+                (117, 190, 255),
             )
+            self.screen.blit(loading, loading.get_rect(center=(report.centerx, report.centery - 5)))
+            progress_back = pygame.Rect(report.x + 50, report.centery + 28, report.width - 100, 8)
+            progress_fill = progress_back.copy()
+            progress_fill.width = round(progress_back.width * progress)
+            pygame.draw.rect(self.screen, (25, 50, 57), progress_back, border_radius=4)
+            pygame.draw.rect(self.screen, (117, 190, 255), progress_fill, border_radius=4)
 
-        message_box = pygame.Rect(panel.x + 80, 255, panel.width - 160, 125)
-        self.draw_wrapped_text(
-            message,
-            self.body_font,
-            COLORS["muted"],
-            message_box,
-            line_spacing=8,
+        footer = pygame.Rect(panel.x + 24, panel.bottom - 91, panel.width - 48, 66)
+        pygame.draw.rect(self.screen, (7, 22, 28), footer, border_radius=10)
+        pygame.draw.rect(self.screen, (45, 72, 72), footer, width=1, border_radius=10)
+        self.draw_med_waste_notice(footer)
+
+        self.continue_button = pygame.Rect(footer.right - 226, footer.y + 11, 208, 44)
+        mouse_position = pygame.mouse.get_pos()
+        hovered = revealed and self.continue_button.collidepoint(mouse_position)
+        button_color = (
+            COLORS["accent"]
+            if hovered
+            else COLORS["panel_border"] if revealed else (52, 76, 78)
         )
-
-        hovered = self.outcome_button.collidepoint(pygame.mouse.get_pos())
-        button_color = COLORS["accent"] if hovered else COLORS["panel_border"]
+        pygame.draw.rect(self.screen, button_color, self.continue_button, border_radius=8)
         pygame.draw.rect(
             self.screen,
-            button_color,
-            self.outcome_button,
+            (168, 226, 204) if revealed else (79, 104, 105),
+            self.continue_button,
+            width=2,
             border_radius=8,
         )
-        button_label = (
-            "CONTINUE TO SHOP" if correct else "RETURN TO PATIENT"
-        )
-        button_text = self.body_font.render(
-            button_label,
+        button_text = self.small_font.render(
+            "RETURN TO PATIENT" if revealed else "ANALYZING...",
             True,
-            COLORS["background"],
+            COLORS["background"] if revealed else COLORS["muted"],
         )
+        self.screen.blit(button_text, button_text.get_rect(center=self.continue_button.center))
+
+    def get_test_result_reveal_progress(self):
+        """Return the zero-to-one progress of the short diagnostic scan animation."""
+
+        if self.test_result_started_at is None:
+            return 1.0
+        elapsed = pygame.time.get_ticks() - self.test_result_started_at
+        return max(0.0, min(1.0, elapsed / self.test_result_reveal_duration))
+
+    def draw_test_scan_visual(self, visual, test_name, progress):
+        """Draw the reusable animated machine graphic for the selected test type."""
+
+        pygame.draw.rect(self.screen, (5, 18, 26), visual, border_radius=10)
+        pygame.draw.rect(
+            self.screen,
+            (66, 112, 126),
+            visual,
+            width=2,
+            border_radius=10,
+        )
+        for grid_x in range(visual.x + 18, visual.right - 10, 28):
+            pygame.draw.line(
+                self.screen,
+                (13, 39, 49),
+                (grid_x, visual.y + 12),
+                (grid_x, visual.bottom - 12),
+            )
+        for grid_y in range(visual.y + 18, visual.bottom - 10, 28):
+            pygame.draw.line(
+                self.screen,
+                (13, 39, 49),
+                (visual.x + 12, grid_y),
+                (visual.right - 12, grid_y),
+            )
+
+        test_colors = {
+            "TEMPERATURE": COLORS["accent"],
+            "ULTRASOUND": (117, 190, 255),
+            "X-RAY": (150, 238, 205),
+            "ALLERGY": (219, 118, 239),
+        }
+        scan_color = test_colors.get(test_name, COLORS["accent"])
+        icon = pygame.Rect(visual.centerx - 58, visual.y + 45, 116, 116)
+        pygame.draw.rect(self.screen, (201, 218, 208), icon, border_radius=12)
+        pygame.draw.rect(self.screen, scan_color, icon, width=3, border_radius=12)
+        self.draw_test_icon(test_name, icon, scan_color)
+
+        scan_range = visual.height - 42
+        scan_phase = (pygame.time.get_ticks() % 3200) / 3200
+        scan_travel = 1 - abs(2 * scan_phase - 1)
+        scan_y = visual.y + 20 + round(scan_travel * scan_range)
+        scan_glow = pygame.Surface((visual.width - 24, 8), pygame.SRCALPHA)
+        scan_glow.fill((*scan_color, 48))
+        self.screen.blit(scan_glow, (visual.x + 12, scan_y - 4))
+        pygame.draw.line(
+            self.screen,
+            scan_color,
+            (visual.x + 12, scan_y),
+            (visual.right - 12, scan_y),
+            width=2,
+        )
+
+        subtitle = TEST_SUBTITLES.get(test_name, "MEDICAL SCAN")
+        machine_label = self.card_font.render(subtitle, True, scan_color)
         self.screen.blit(
-            button_text,
-            button_text.get_rect(center=self.outcome_button.center),
+            machine_label,
+            machine_label.get_rect(center=(visual.centerx, visual.bottom - 30)),
         )
+        percentage = self.card_font.render(
+            f"SCAN {round(progress * 100):03d}%",
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(percentage, percentage.get_rect(center=(visual.centerx, visual.bottom - 15)))
+
+    def draw_med_waste_notice(self, footer):
+        """Draw the compact used-card notice beside the result-screen button."""
+
+        bin_rect = pygame.Rect(footer.x + 17, footer.y + 13, 31, 39)
+        pygame.draw.rect(self.screen, (50, 81, 83), bin_rect, border_radius=4)
+        pygame.draw.rect(self.screen, (245, 126, 112), bin_rect, width=2, border_radius=4)
+        pygame.draw.line(
+            self.screen,
+            (245, 126, 112),
+            (bin_rect.x - 3, bin_rect.y + 3),
+            (bin_rect.right + 3, bin_rect.y + 3),
+            width=3,
+        )
+        warning = self.card_font.render("!", True, (245, 126, 112))
+        self.screen.blit(warning, warning.get_rect(center=bin_rect.center))
+        waste_title = self.card_font.render("CARD MOVED TO MED-WASTE", True, COLORS["text"])
+        waste_detail = self.card_font.render(
+            "THE USED TEST CARD IS NOW IN THE THROWAWAY PILE",
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(waste_title, (bin_rect.right + 12, footer.y + 18))
+        self.screen.blit(waste_detail, (bin_rect.right + 12, footer.y + 38))
+
+    def draw_diagnosis_outcome(self):
+        """Draw a clinic case report for the submitted diagnosis."""
+
+        self.draw_patient_screen()
+        dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        dim.fill((2, 8, 13, 205))
+        self.screen.blit(dim, (0, 0))
+
+        correct = bool(self.diagnosis_correct)
+        status_color = COLORS["accent"] if correct else (245, 130, 115)
+        diagnosis_name = self.last_diagnosis.name if self.last_diagnosis else "Unknown"
+        panel = pygame.Rect(105, 105, 890, 455)
+        pygame.draw.rect(self.screen, (2, 8, 13), panel.move(8, 9), border_radius=16)
+        pygame.draw.rect(self.screen, (16, 35, 43), panel, border_radius=16)
+        pygame.draw.rect(self.screen, (103, 135, 126), panel, width=3, border_radius=16)
+        pygame.draw.rect(
+            self.screen,
+            status_color,
+            panel.inflate(-10, -10),
+            width=1,
+            border_radius=12,
+        )
+
+        header = pygame.Rect(panel.x + 24, panel.y + 18, panel.width - 48, 68)
+        pygame.draw.rect(self.screen, (7, 22, 28), header, border_radius=10)
+        pygame.draw.rect(self.screen, (65, 101, 98), header, width=1, border_radius=10)
+        seal = pygame.Rect(header.x + 13, header.y + 10, 48, 48)
+        pygame.draw.rect(self.screen, (12, 34, 38), seal, border_radius=8)
+        pygame.draw.rect(self.screen, status_color, seal, width=2, border_radius=8)
+        self.draw_outcome_seal(seal, correct, status_color)
+
+        heading_text = "CASE RESOLVED" if correct else "CASE REQUIRES REVIEW"
+        heading = self.heading_font.render(heading_text, True, COLORS["text"])
+        self.screen.blit(heading, heading.get_rect(midleft=(seal.right + 15, header.y + 25)))
+        patient = self.card_font.render(
+            "PATIENT: " + self.patient.name.upper(),
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(patient, patient.get_rect(midleft=(seal.right + 16, header.y + 49)))
+
+        badge = pygame.Rect(header.right - 142, header.y + 17, 126, 34)
+        pygame.draw.rect(self.screen, (11, 28, 34), badge, border_radius=17)
+        pygame.draw.rect(self.screen, status_color, badge, width=2, border_radius=17)
+        badge_text = self.card_font.render(
+            "CONFIRMED" if correct else "NOT CONFIRMED",
+            True,
+            status_color,
+        )
+        self.screen.blit(badge_text, badge_text.get_rect(center=badge.center))
+
+        patient_panel = pygame.Rect(panel.x + 24, panel.y + 102, 252, 238)
+        report = pygame.Rect(
+            patient_panel.right + 18,
+            patient_panel.y,
+            panel.right - patient_panel.right - 42,
+            238,
+        )
+        self.draw_outcome_patient_panel(patient_panel, correct, status_color)
+
+        pygame.draw.rect(self.screen, (7, 22, 28), report, border_radius=10)
+        pygame.draw.rect(self.screen, (65, 101, 98), report, width=2, border_radius=10)
+        report_title = self.card_font.render("FINAL DIAGNOSIS", True, COLORS["muted"])
+        self.screen.blit(report_title, (report.x + 20, report.y + 16))
+        diagnosis = self.heading_font.render(diagnosis_name, True, status_color)
+        self.screen.blit(diagnosis, (report.x + 20, report.y + 38))
+        pygame.draw.line(
+            self.screen,
+            (45, 72, 72),
+            (report.x + 20, report.y + 76),
+            (report.right - 20, report.y + 76),
+        )
+
+        detail_label = self.card_font.render(
+            "TREATMENT PLAN" if correct else "NEXT STEP",
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(detail_label, (report.x + 20, report.y + 91))
+        if correct:
+            detail_text = self.last_diagnosis.treatment
+        else:
+            detail_text = (
+                f"{diagnosis_name} does not match the available evidence. "
+                "Return to the examination and collect more information."
+            )
+        detail_box = pygame.Rect(report.x + 20, report.y + 117, report.width - 40, 88)
+        self.draw_wrapped_text(
+            detail_text,
+            self.body_font,
+            COLORS["text"],
+            detail_box,
+            line_spacing=6,
+        )
+        filing_note = self.card_font.render(
+            "CASE FILE UPDATED" if correct else "CASE FILE REMAINS OPEN",
+            True,
+            status_color,
+        )
+        self.screen.blit(filing_note, (report.x + 20, report.bottom - 27))
+
+        footer = pygame.Rect(panel.x + 24, panel.bottom - 91, panel.width - 48, 66)
+        pygame.draw.rect(self.screen, (7, 22, 28), footer, border_radius=10)
+        pygame.draw.rect(self.screen, (45, 72, 72), footer, width=1, border_radius=10)
+        self.draw_outcome_reward(footer, correct, status_color)
+
+        self.outcome_button = pygame.Rect(footer.right - 226, footer.y + 11, 208, 44)
+        hovered = self.outcome_button.collidepoint(pygame.mouse.get_pos())
+        button_color = status_color if hovered else (
+            COLORS["panel_border"] if correct else (195, 95, 88)
+        )
+        pygame.draw.rect(self.screen, button_color, self.outcome_button, border_radius=8)
+        pygame.draw.rect(
+            self.screen,
+            (177, 229, 207) if correct else (255, 174, 158),
+            self.outcome_button,
+            width=2,
+            border_radius=8,
+        )
+        button_label = "CONTINUE TO SHOP" if correct else "RETURN TO PATIENT"
+        button_text = self.small_font.render(button_label, True, COLORS["background"])
+        self.screen.blit(button_text, button_text.get_rect(center=self.outcome_button.center))
+
+    def draw_outcome_seal(self, seal, correct, status_color):
+        """Draw the confirmed or rejected symbol in the outcome header."""
+
+        if correct:
+            pygame.draw.line(
+                self.screen,
+                status_color,
+                (seal.x + 12, seal.centery),
+                (seal.x + 21, seal.bottom - 13),
+                width=5,
+            )
+            pygame.draw.line(
+                self.screen,
+                status_color,
+                (seal.x + 21, seal.bottom - 13),
+                (seal.right - 10, seal.y + 12),
+                width=5,
+            )
+        else:
+            pygame.draw.line(
+                self.screen,
+                status_color,
+                (seal.x + 13, seal.y + 13),
+                (seal.right - 13, seal.bottom - 13),
+                width=5,
+            )
+            pygame.draw.line(
+                self.screen,
+                status_color,
+                (seal.right - 13, seal.y + 13),
+                (seal.x + 13, seal.bottom - 13),
+                width=5,
+            )
+
+    def draw_outcome_patient_panel(self, panel, correct, status_color):
+        """Draw Zorpa reacting to the diagnosis inside a compact recovery bay."""
+
+        pygame.draw.rect(self.screen, (5, 18, 26), panel, border_radius=10)
+        pygame.draw.rect(self.screen, (66, 112, 126), panel, width=2, border_radius=10)
+        glow = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.ellipse(
+            glow,
+            (*status_color, 32),
+            pygame.Rect(28, 34, panel.width - 56, panel.height - 45),
+        )
+        self.screen.blit(glow, panel.topleft)
+
+        title = self.card_font.render(
+            "PATIENT STABLE" if correct else "MORE TESTS NEEDED",
+            True,
+            status_color,
+        )
+        self.screen.blit(title, title.get_rect(center=(panel.centerx, panel.y + 21)))
+        platform = pygame.Rect(panel.centerx - 63, panel.bottom - 34, 126, 18)
+        pygame.draw.ellipse(self.screen, (45, 80, 74), platform)
+        pygame.draw.arc(self.screen, status_color, platform, 0, math.pi, width=2)
+
+        alien_color = (151, 99, 211)
+        alien_outline = (62, 36, 91)
+        body = pygame.Rect(panel.centerx - 24, panel.y + 126, 48, 64)
+        head = pygame.Rect(panel.centerx - 35, panel.y + 67, 70, 64)
+        for side in (-1, 1):
+            tip = (head.centerx + side * 27, head.y - 9)
+            pygame.draw.line(
+                self.screen,
+                alien_outline,
+                (head.centerx + side * 17, head.y + 7),
+                tip,
+                width=5,
+            )
+            pygame.draw.line(
+                self.screen,
+                alien_color,
+                (head.centerx + side * 17, head.y + 7),
+                tip,
+                width=2,
+            )
+            pygame.draw.circle(self.screen, alien_outline, tip, 7)
+            pygame.draw.circle(self.screen, alien_color, tip, 5)
+
+        for side in (-1, 1):
+            arm_start = (
+                body.centerx + side * 19,
+                body.y + 20,
+            )
+            arm_end = (
+                body.centerx + side * 38,
+                body.y + 43,
+            )
+            pygame.draw.line(
+                self.screen,
+                alien_outline,
+                arm_start,
+                arm_end,
+                width=11,
+            )
+            pygame.draw.line(
+                self.screen,
+                alien_color,
+                arm_start,
+                arm_end,
+                width=7,
+            )
+            pygame.draw.circle(self.screen, alien_outline, arm_end, 6)
+            pygame.draw.circle(self.screen, alien_color, arm_end, 4)
+
+        for side in (-1, 1):
+            leg_start = (
+                body.centerx + side * 10,
+                body.bottom - 7,
+            )
+            leg_end = (
+                platform.centerx + side * 22,
+                platform.y + 5,
+            )
+            pygame.draw.line(
+                self.screen,
+                alien_outline,
+                leg_start,
+                leg_end,
+                width=12,
+            )
+            pygame.draw.line(
+                self.screen,
+                alien_color,
+                leg_start,
+                leg_end,
+                width=8,
+            )
+            foot = pygame.Rect(0, 0, 24, 10)
+            foot.center = (leg_end[0] + side * 4, platform.y + 5)
+            pygame.draw.ellipse(self.screen, alien_outline, foot.inflate(4, 3))
+            pygame.draw.ellipse(self.screen, alien_color, foot)
+
+        pygame.draw.ellipse(self.screen, alien_outline, body.inflate(5, 5))
+        pygame.draw.ellipse(self.screen, alien_color, body)
+        pygame.draw.ellipse(
+            self.screen,
+            (181, 129, 224),
+            pygame.Rect(body.x + 10, body.y + 20, 28, 31),
+        )
+        pygame.draw.ellipse(self.screen, alien_outline, head.inflate(5, 5))
+        pygame.draw.ellipse(self.screen, alien_color, head)
+        for eye_x in (head.centerx - 14, head.centerx + 14):
+            pygame.draw.ellipse(
+                self.screen,
+                alien_outline,
+                pygame.Rect(eye_x - 5, head.y + 23, 10, 15),
+            )
+            pygame.draw.circle(self.screen, (245, 245, 255), (eye_x - 1, head.y + 27), 2)
+
+        mouth_y = head.y + 47
+        if correct:
+            pygame.draw.arc(
+                self.screen,
+                alien_outline,
+                pygame.Rect(head.centerx - 11, mouth_y - 7, 22, 14),
+                math.pi,
+                math.pi * 2,
+                width=2,
+            )
+            for sparkle_x, sparkle_y in (
+                (panel.x + 42, panel.y + 64),
+                (panel.right - 40, panel.y + 92),
+                (panel.right - 58, panel.y + 49),
+            ):
+                pygame.draw.line(
+                    self.screen,
+                    status_color,
+                    (sparkle_x - 5, sparkle_y),
+                    (sparkle_x + 5, sparkle_y),
+                    width=2,
+                )
+                pygame.draw.line(
+                    self.screen,
+                    status_color,
+                    (sparkle_x, sparkle_y - 5),
+                    (sparkle_x, sparkle_y + 5),
+                    width=2,
+                )
+        else:
+            pygame.draw.arc(
+                self.screen,
+                alien_outline,
+                pygame.Rect(head.centerx - 10, mouth_y, 20, 12),
+                0,
+                math.pi,
+                width=2,
+            )
+
+        name = self.card_font.render(self.patient.name.upper(), True, COLORS["muted"])
+        self.screen.blit(name, name.get_rect(center=(panel.centerx, panel.bottom - 11)))
+
+    def draw_outcome_reward(self, footer, correct, status_color):
+        """Draw the diagnosis reward and updated balance in the outcome footer."""
+
+        coin_center = (footer.x + 31, footer.centery)
+        pygame.draw.circle(self.screen, (255, 198, 75), coin_center, 17)
+        pygame.draw.circle(self.screen, (255, 230, 150), coin_center, 17, width=2)
+        coin = self.small_font.render("$", True, (80, 61, 36))
+        self.screen.blit(coin, coin.get_rect(center=coin_center))
+        reward_text = (
+            f"CASE REWARD  +${DIAGNOSIS_REWARD}" if correct else "NO CASE REWARD"
+        )
+        reward = self.card_font.render(reward_text, True, status_color)
+        balance = self.card_font.render(
+            "CURRENT BALANCE  $" + str(self.player.balance),
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(reward, (footer.x + 58, footer.y + 17))
+        self.screen.blit(balance, (footer.x + 58, footer.y + 37))
 
     def draw_shop_screen(self):
         """Draw the placeholder shop with the current balance and locked shelves."""
@@ -1942,10 +2496,67 @@ class AlienDoctorGUI:
             width=5,
         )
         pygame.draw.circle(self.screen, (149, 158, 162), (room.right - 9, 285), 6)
+    def get_case_progress_step(self):
+        """Return the currently active Inspect, Test, or Diagnose case stage."""
 
+        if self.showing_diagnosis_hand or self.diagnosis_confirmation_open:
+            return 2
+        entries = self.notebook.get_entries(self.patient)
+        if entries and "No tests" not in entries:
+            return 1
+        return 0
+
+    def draw_case_progress(self, area):
+        """Draw the compact Inspect-to-Diagnose tracker inside the status monitor."""
+
+        stages = ("INSPECT", "TEST", "DIAGNOSE")
+        active_step = self.get_case_progress_step()
+        stage_width = 84
+        stage_gap = 23
+        total_width = stage_width * len(stages) + stage_gap * (len(stages) - 1)
+        start_x = area.centerx - total_width // 2
+
+        for index, stage in enumerate(stages):
+            stage_rect = pygame.Rect(
+                start_x + index * (stage_width + stage_gap),
+                area.centery - 9,
+                stage_width,
+                18,
+            )
+            if index == active_step:
+                fill_color = (38, 97, 78)
+                border_color = COLORS["accent"]
+                text_color = COLORS["text"]
+            elif index < active_step:
+                fill_color = (26, 61, 58)
+                border_color = (85, 164, 139)
+                text_color = (164, 208, 192)
+            else:
+                fill_color = (19, 33, 40)
+                border_color = (66, 89, 91)
+                text_color = COLORS["muted"]
+
+            pygame.draw.rect(self.screen, fill_color, stage_rect, border_radius=6)
+            pygame.draw.rect(
+                self.screen,
+                border_color,
+                stage_rect,
+                width=1,
+                border_radius=6,
+            )
+            stage_text = self.pile_font.render(stage, True, text_color)
+            self.screen.blit(stage_text, stage_text.get_rect(center=stage_rect.center))
+
+            if index < len(stages) - 1:
+                arrow = self.pile_font.render(">", True, COLORS["muted"])
+                arrow_x = stage_rect.right + stage_gap // 2
+                self.screen.blit(
+                    arrow,
+                    arrow.get_rect(center=(arrow_x, stage_rect.centery)),
+                )
 
     def draw_status_bar(self):
-        """Draw patient, shift, and balance data on a clinic-monitor display."""
+        """Draw patient, case progress, and balance data on a clinic-monitor display."""
 
         panel = self.layout["status_bar"]
         pygame.draw.rect(self.screen, (54, 78, 78), panel, border_radius=10)
@@ -1998,9 +2609,6 @@ class AlienDoctorGUI:
         patient = self.body_font.render(
             "PATIENT: " + self.patient.name, True, COLORS["text"]
         )
-        center_text = self.card_message or "SHIFT 01"
-        center_font = self.small_font if self.card_message else self.body_font
-        shift = center_font.render(center_text, True, COLORS["muted"])
         money = self.body_font.render(
             "MONEY: $" + str(self.player.balance), True, COLORS["accent"]
         )
@@ -2017,26 +2625,15 @@ class AlienDoctorGUI:
             (display.x + 300, display.bottom - 5),
             width=1,
         )
-        trace_y = display.centery
-        trace_x = display.x + 326
-        trace_points = (
-            (trace_x, trace_y),
-            (trace_x + 22, trace_y),
-            (trace_x + 30, trace_y - 6),
-            (trace_x + 38, trace_y + 10),
-            (trace_x + 47, trace_y - 12),
-            (trace_x + 58, trace_y),
-            (trace_x + 120, trace_y),
+        progress_left = display.x + 301
+        progress_right = display.right - 236
+        progress_area = pygame.Rect(
+            progress_left,
+            display.y + 3,
+            progress_right - progress_left,
+            display.height - 6,
         )
-        pygame.draw.lines(
-            self.screen,
-            COLORS["accent"],
-            False,
-            trace_points,
-            width=2,
-        )
-
-        self.screen.blit(shift, shift.get_rect(center=(panel.centerx + 75, panel.centery)))
+        self.draw_case_progress(progress_area)
         pygame.draw.line(
             self.screen,
             (72, 101, 91),
@@ -2081,8 +2678,8 @@ class AlienDoctorGUI:
                 self.screen, COLORS["card_text"], shifted, width=2, border_radius=5
             )
 
-    def draw_alien_placeholder(self):
-        """Draw the temporary alien standing inside a softly lit examination bay."""
+    def draw_alien_patient(self):
+        """Draw Zorpa standing inside a softly lit examination bay."""
 
         panel = self.layout["alien"]
         pygame.draw.rect(
@@ -2163,8 +2760,15 @@ class AlienDoctorGUI:
             width=2,
         )
 
-        alien_center_x = bay.centerx - 38
-        platform = pygame.Rect(alien_center_x - 67, bay.bottom - 20, 134, 17)
+        idle_time = pygame.time.get_ticks()
+        shake_x = round(math.sin(idle_time / 42) * 1.2 + math.sin(idle_time / 23) * 0.5)
+        shake_y = round(math.sin(idle_time / 58) * 0.8)
+        antenna_sway = round(math.sin(idle_time / 260) * 2)
+        blinking = idle_time % 3600 >= 3480
+        chest_pulse = (math.sin(idle_time / 310) + 1) / 2
+
+        base_alien_center_x = bay.centerx - 38
+        platform = pygame.Rect(base_alien_center_x - 67, bay.bottom - 20, 134, 17)
         pygame.draw.ellipse(self.screen, (56, 91, 83), platform)
         pygame.draw.arc(
             self.screen,
@@ -2180,54 +2784,58 @@ class AlienDoctorGUI:
         alien_color = (151, 99, 211)
         alien_highlight = (207, 166, 245)
         cheek_color = (239, 130, 190)
-        head = pygame.Rect(alien_center_x - 29, bay.y + 25, 58, 52)
+        alien_center_x = base_alien_center_x + shake_x
+        head = pygame.Rect(alien_center_x - 29, bay.y + 25 + shake_y, 58, 52)
         body = pygame.Rect(alien_center_x - 23, head.bottom - 3, 46, 43)
+
+        left_antenna_tip = (head.centerx - 22 + antenna_sway, head.y - 7)
+        right_antenna_tip = (head.centerx + 22 + antenna_sway, head.y - 7)
 
         pygame.draw.line(
             self.screen,
             alien_outline,
             (head.centerx - 14, head.y + 7),
-            (head.centerx - 22, head.y - 6),
+            (left_antenna_tip[0], left_antenna_tip[1] + 1),
             width=5,
         )
         pygame.draw.line(
             self.screen,
             alien_color,
             (head.centerx - 14, head.y + 7),
-            (head.centerx - 22, head.y - 6),
+            (left_antenna_tip[0], left_antenna_tip[1] + 1),
             width=2,
         )
         pygame.draw.line(
             self.screen,
             alien_outline,
             (head.centerx + 14, head.y + 7),
-            (head.centerx + 22, head.y - 6),
+            (right_antenna_tip[0], right_antenna_tip[1] + 1),
             width=5,
         )
         pygame.draw.line(
             self.screen,
             alien_color,
             (head.centerx + 14, head.y + 7),
-            (head.centerx + 22, head.y - 6),
+            (right_antenna_tip[0], right_antenna_tip[1] + 1),
             width=2,
         )
-        for antenna_x in (head.centerx - 22, head.centerx + 22):
+        for antenna_x, antenna_y in (left_antenna_tip, right_antenna_tip):
             pygame.draw.circle(
                 self.screen,
                 alien_outline,
-                (antenna_x, head.y - 7),
+                (antenna_x, antenna_y),
                 7,
             )
             pygame.draw.circle(
                 self.screen,
                 alien_color,
-                (antenna_x, head.y - 7),
+                (antenna_x, antenna_y),
                 5,
             )
             pygame.draw.circle(
                 self.screen,
                 alien_highlight,
-                (antenna_x - 1, head.y - 9),
+                (antenna_x - 1, antenna_y - 2),
                 2,
             )
 
@@ -2292,10 +2900,31 @@ class AlienDoctorGUI:
 
         left_eye = pygame.Rect(head.x + 11, head.y + 18, 11, 16)
         right_eye = pygame.Rect(head.right - 22, head.y + 18, 11, 16)
-        pygame.draw.ellipse(self.screen, alien_outline, left_eye)
-        pygame.draw.ellipse(self.screen, alien_outline, right_eye)
-        pygame.draw.circle(self.screen, (245, 245, 255), (left_eye.x + 4, left_eye.y + 4), 2)
-        pygame.draw.circle(self.screen, (245, 245, 255), (right_eye.x + 4, right_eye.y + 4), 2)
+        if blinking:
+            for eye in (left_eye, right_eye):
+                pygame.draw.arc(
+                    self.screen,
+                    alien_outline,
+                    pygame.Rect(eye.x, eye.centery - 3, eye.width, 7),
+                    math.pi,
+                    math.pi * 2,
+                    width=2,
+                )
+        else:
+            pygame.draw.ellipse(self.screen, alien_outline, left_eye)
+            pygame.draw.ellipse(self.screen, alien_outline, right_eye)
+            pygame.draw.circle(
+                self.screen,
+                (245, 245, 255),
+                (left_eye.x + 4, left_eye.y + 4),
+                2,
+            )
+            pygame.draw.circle(
+                self.screen,
+                (245, 245, 255),
+                (right_eye.x + 4, right_eye.y + 4),
+                2,
+            )
 
         pygame.draw.ellipse(
             self.screen,
@@ -2322,48 +2951,33 @@ class AlienDoctorGUI:
             width=2,
         )
 
+        chest_light_center = (body.centerx + 11, body.y + 13)
+        chest_glow = pygame.Surface((22, 22), pygame.SRCALPHA)
+        pygame.draw.circle(
+            chest_glow,
+            (255, 198, 75, round(35 + 45 * chest_pulse)),
+            (11, 11),
+            round(8 + 2 * chest_pulse),
+        )
+        self.screen.blit(
+            chest_glow,
+            (chest_light_center[0] - 11, chest_light_center[1] - 11),
+        )
         pygame.draw.circle(
             self.screen,
-            (255, 198, 75),
-            (body.centerx + 11, body.y + 13),
-            5,
+            (
+                255,
+                round(185 + 45 * chest_pulse),
+                round(68 + 45 * chest_pulse),
+            ),
+            chest_light_center,
+            5 + round(chest_pulse),
         )
         pygame.draw.circle(
             self.screen,
             (255, 236, 164),
             (body.centerx + 10, body.y + 12),
             2,
-        )
-
-        monitor = pygame.Rect(bay.right - 38, bay.bottom - 55, 24, 35)
-        pygame.draw.rect(self.screen, (13, 45, 50), monitor, border_radius=3)
-        pygame.draw.rect(
-            self.screen,
-            COLORS["panel_border"],
-            monitor,
-            width=1,
-            border_radius=3,
-        )
-        pygame.draw.line(
-            self.screen,
-            COLORS["accent"],
-            (monitor.x + 4, monitor.centery),
-            (monitor.x + 9, monitor.centery - 4),
-            width=1,
-        )
-        pygame.draw.line(
-            self.screen,
-            COLORS["accent"],
-            (monitor.x + 9, monitor.centery - 4),
-            (monitor.x + 14, monitor.centery + 5),
-            width=1,
-        )
-        pygame.draw.line(
-            self.screen,
-            COLORS["accent"],
-            (monitor.x + 14, monitor.centery + 5),
-            (monitor.right - 4, monitor.centery),
-            width=1,
         )
 
         self.draw_symptom_bubble(bay, head)
@@ -3252,75 +3866,195 @@ class AlienDoctorGUI:
         """Draw one diagnosis card in either its compact or enlarged state."""
 
         diagnosis = card.value
-        border_color = (
-            COLORS["accent"] if hovered or selected else COLORS["panel_border"]
-        )
+        diagnosis_color = (183, 92, 211)
+        border_color = COLORS["accent"] if hovered or selected else diagnosis_color
         border_width = 4 if selected else 3 if hovered else 2
         self.draw_card_shell(
             card_rect,
-            (232, 224, 238),
+            (235, 220, 239),
             border_color,
             border_width,
             selected,
         )
 
-        name_font = (
-            self.diagnosis_name_font if selected else self.diagnosis_card_font
-        )
-        if selected or name_font.size(diagnosis.name)[0] <= card_rect.width - 12:
-            name_lines = [diagnosis.name]
-        else:
-            name_lines = diagnosis.name.split()
-
-        name_y = card_rect.y + 22 if selected else card_rect.y + 14
-        for line_number, line in enumerate(name_lines):
-            name = name_font.render(line, True, COLORS["card_text"])
-            line_y = name_y + line_number * 13
-            self.screen.blit(name, name.get_rect(center=(card_rect.centerx, line_y)))
-
-        icon_size = 48 if selected else 40
-        icon_y = card_rect.y + 50 if selected else card_rect.y + 42
-        icon = pygame.Rect(card_rect.centerx - icon_size // 2, icon_y, icon_size, icon_size)
-        pygame.draw.rect(self.screen, (196, 211, 191), icon, border_radius=5)
-        pygame.draw.rect(self.screen, COLORS["panel_border"], icon, width=2, border_radius=5)
-        icon_text = self.heading_font.render("D", True, COLORS["card_text"])
-        self.screen.blit(icon_text, icon_text.get_rect(center=icon.center))
-
         if selected:
-            description_box = pygame.Rect(
-                card_rect.x + 18,
-                icon.bottom + 10,
-                card_rect.width - 36,
-                card_rect.bottom - icon.bottom - 55,
-            )
-            self.draw_wrapped_text(
-                diagnosis.description,
-                self.card_font,
-                COLORS["card_text"],
-                description_box,
-            )
-            self.play_diagnosis_button = self.get_card_action_button(card_rect)
-            pygame.draw.rect(
-                self.screen,
-                COLORS["panel_border"],
-                self.play_diagnosis_button,
-                border_radius=5,
-            )
-            play_text = self.small_font.render(
-                "PLAY DIAGNOSIS",
-                True,
-                COLORS["background"],
-            )
-            self.screen.blit(
-                play_text,
-                play_text.get_rect(center=self.play_diagnosis_button.center),
+            self.draw_selected_diagnosis_details(
+                diagnosis,
+                card_rect,
+                diagnosis_color,
             )
         else:
-            label = self.card_font.render("DIAGNOSIS", True, COLORS["panel_border"])
-            self.screen.blit(
-                label,
-                label.get_rect(center=(card_rect.centerx, card_rect.bottom - 17)),
+            self.draw_compact_diagnosis_card(
+                diagnosis,
+                card_rect,
+                diagnosis_color,
             )
+
+    def draw_compact_diagnosis_card(self, diagnosis, card_rect, diagnosis_color):
+        """Draw a diagnosis option with the same hierarchy as a compact test card."""
+
+        header = pygame.Rect(card_rect.x + 6, card_rect.y + 6, card_rect.width - 12, 30)
+        pygame.draw.rect(self.screen, (218, 199, 226), header, border_radius=5)
+        pygame.draw.line(
+            self.screen,
+            diagnosis_color,
+            (header.x + 6, header.bottom),
+            (header.right - 6, header.bottom),
+        )
+        if self.diagnosis_card_font.size(diagnosis.name)[0] <= header.width - 8:
+            title = self.diagnosis_card_font.render(
+                diagnosis.name,
+                True,
+                COLORS["card_text"],
+            )
+            self.screen.blit(title, title.get_rect(center=header.center))
+        else:
+            name_parts = diagnosis.name.split(maxsplit=1)
+            for line_index, line_text in enumerate(name_parts):
+                title = self.pile_font.render(line_text, True, COLORS["card_text"])
+                line_y = header.centery - 6 + line_index * 11
+                self.screen.blit(
+                    title,
+                    title.get_rect(center=(header.centerx, line_y)),
+                )
+
+        icon = pygame.Rect(card_rect.centerx - 25, card_rect.y + 40, 50, 43)
+        pygame.draw.rect(self.screen, (210, 211, 216), icon, border_radius=6)
+        pygame.draw.rect(self.screen, diagnosis_color, icon, width=2, border_radius=6)
+        self.draw_diagnosis_file_icon(icon, diagnosis_color)
+
+        subtitle = self.tiny_font.render(
+            "CONDITION FILE",
+            True,
+            COLORS["card_text"],
+        )
+        self.screen.blit(
+            subtitle,
+            subtitle.get_rect(center=(card_rect.centerx, card_rect.y + 90)),
+        )
+        self.draw_diagnosis_badge(card_rect, diagnosis_color)
+
+    def draw_selected_diagnosis_details(self, diagnosis, card_rect, diagnosis_color):
+        """Draw the enlarged diagnosis file with its description and play action."""
+
+        header = pygame.Rect(card_rect.x + 9, card_rect.y + 8, card_rect.width - 18, 39)
+        pygame.draw.rect(self.screen, (218, 199, 226), header, border_radius=7)
+        self.draw_fitted_card_title(diagnosis.name, header, selected=True)
+        type_label = self.card_font.render("FINAL DIAGNOSIS", True, diagnosis_color)
+        self.screen.blit(
+            type_label,
+            type_label.get_rect(center=(card_rect.centerx, card_rect.y + 56)),
+        )
+
+        icon = pygame.Rect(card_rect.x + 16, card_rect.y + 68, 58, 58)
+        pygame.draw.rect(self.screen, (210, 211, 216), icon, border_radius=7)
+        pygame.draw.rect(self.screen, diagnosis_color, icon, width=2, border_radius=7)
+        self.draw_diagnosis_file_icon(icon, diagnosis_color)
+
+        description_box = pygame.Rect(
+            card_rect.x + 84,
+            card_rect.y + 69,
+            card_rect.width - 100,
+            100,
+        )
+        self.draw_wrapped_text(
+            diagnosis.description,
+            self.card_font,
+            COLORS["card_text"],
+            description_box,
+        )
+
+        self.play_diagnosis_button = self.get_card_action_button(card_rect)
+        pygame.draw.rect(
+            self.screen,
+            diagnosis_color,
+            self.play_diagnosis_button,
+            border_radius=5,
+        )
+        pygame.draw.rect(
+            self.screen,
+            (218, 159, 235),
+            self.play_diagnosis_button,
+            width=2,
+            border_radius=5,
+        )
+        play_text = self.small_font.render(
+            "PLAY DIAGNOSIS",
+            True,
+            COLORS["background"],
+        )
+        self.screen.blit(
+            play_text,
+            play_text.get_rect(center=self.play_diagnosis_button.center),
+        )
+
+    def draw_diagnosis_file_icon(self, icon, diagnosis_color):
+        """Draw a clipped patient-file symbol in place of the old letter placeholder."""
+
+        icon_surface = pygame.Surface(icon.size, pygame.SRCALPHA)
+        center_x, center_y = icon_surface.get_rect().center
+        paper = pygame.Rect(center_x - 13, center_y - 14, 27, 30)
+        pygame.draw.rect(icon_surface, (240, 234, 219), paper, border_radius=3)
+        pygame.draw.rect(icon_surface, COLORS["card_text"], paper, width=2, border_radius=3)
+        clip = pygame.Rect(center_x - 7, paper.y - 3, 14, 7)
+        pygame.draw.rect(icon_surface, diagnosis_color, clip, border_radius=3)
+        pygame.draw.line(
+            icon_surface,
+            (118, 122, 116),
+            (paper.x + 5, paper.y + 9),
+            (paper.right - 5, paper.y + 9),
+            width=2,
+        )
+        pygame.draw.line(
+            icon_surface,
+            (118, 122, 116),
+            (paper.x + 5, paper.y + 14),
+            (paper.right - 8, paper.y + 14),
+            width=2,
+        )
+        pygame.draw.line(
+            icon_surface,
+            diagnosis_color,
+            (paper.x + 6, paper.bottom - 8),
+            (paper.x + 11, paper.bottom - 4),
+            width=2,
+        )
+        pygame.draw.line(
+            icon_surface,
+            diagnosis_color,
+            (paper.x + 11, paper.bottom - 4),
+            (paper.right - 5, paper.bottom - 12),
+            width=2,
+        )
+        self.screen.blit(icon_surface, icon.topleft)
+
+    def draw_diagnosis_badge(self, card_rect, diagnosis_color):
+        """Draw the diagnosis-type badge in the same position as test rarity badges."""
+
+        badge = pygame.Rect(
+            card_rect.x + 7,
+            card_rect.bottom - 23,
+            card_rect.width - 14,
+            16,
+        )
+        pygame.draw.rect(self.screen, (213, 205, 218), badge, border_radius=6)
+        pygame.draw.rect(self.screen, diagnosis_color, badge, width=1, border_radius=6)
+        symbol_center = (badge.x + 11, badge.centery)
+        pygame.draw.polygon(
+            self.screen,
+            diagnosis_color,
+            (
+                (symbol_center[0], symbol_center[1] - 5),
+                (symbol_center[0] + 5, symbol_center[1]),
+                (symbol_center[0], symbol_center[1] + 5),
+                (symbol_center[0] - 5, symbol_center[1]),
+            ),
+        )
+        label = self.pile_font.render("DIAGNOSIS", True, diagnosis_color)
+        self.screen.blit(
+            label,
+            label.get_rect(midleft=(badge.x + 20, badge.centery)),
+        )
 
     def draw_test_card(self, card, card_rect, hovered=False, selected=False):
         """Draw one test card in either its compact or enlarged state."""
@@ -3565,7 +4299,7 @@ class AlienDoctorGUI:
 
         tab = pygame.Rect(folder.x + 5, folder.y - 13, folder.width - 18, 22)
         pygame.draw.rect(self.screen, (111, 72, 142), tab, border_radius=6)
-        tab_text = self.tiny_font.render("FINAL DIAGNOSIS", True, COLORS["text"])
+        tab_text = self.card_font.render("DIAGNOSIS", True, COLORS["text"])
         self.screen.blit(tab_text, tab_text.get_rect(center=(tab.centerx, tab.y + 8)))
 
         pygame.draw.rect(self.screen, (92, 58, 119), folder, border_radius=7)
@@ -3782,80 +4516,351 @@ class AlienDoctorGUI:
             y += surface.get_height() + line_spacing
 
     def draw_notebook_screen(self):
-        """Dim the workspace and draw the open notebook spread."""
+        """Dim the workspace and draw a decorated field-notebook spread."""
+
         dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
-        dim.fill((0, 0, 0, 170))
+        dim.fill((0, 0, 0, 185))
         self.screen.blit(dim, (0, 0))
 
         layout = self.notebook_layout
         book = layout["book"]
-        pygame.draw.rect(self.screen, (40, 62, 52), book, border_radius=12)
-        pygame.draw.rect(self.screen, COLORS["panel_border"], book, width=2, border_radius=12)
+        pygame.draw.rect(self.screen, (4, 9, 13), book.move(9, 11), border_radius=16)
+        pygame.draw.rect(self.screen, (70, 48, 88), book, border_radius=16)
+        pygame.draw.rect(
+            self.screen,
+            (190, 132, 211),
+            book,
+            width=3,
+            border_radius=16,
+        )
 
-        for page in (pygame.Rect(book.x + 12, book.y + 12, book.width // 2 - 12, book.height - 24),
-                     pygame.Rect(book.centerx, book.y + 12, book.width // 2 - 12, book.height - 24)):
-            pygame.draw.rect(self.screen, COLORS["card"], page, border_radius=6)
-        pygame.draw.line(self.screen, COLORS["card_text"],
-                         (book.centerx, book.y + 12), (book.centerx, book.bottom - 12), 2)
+        left_page = pygame.Rect(
+            book.x + 14,
+            book.y + 14,
+            book.width // 2 - 14,
+            book.height - 28,
+        )
+        right_page = pygame.Rect(
+            book.centerx,
+            book.y + 14,
+            book.width // 2 - 14,
+            book.height - 28,
+        )
+        self.draw_notebook_paper(left_page, (244, 239, 214))
+        self.draw_notebook_paper(right_page, (240, 235, 209))
+
+        spine = pygame.Rect(book.centerx - 8, book.y + 13, 16, book.height - 26)
+        pygame.draw.rect(self.screen, (51, 42, 60), spine)
+        pygame.draw.line(
+            self.screen,
+            (124, 103, 133),
+            (spine.x + 3, spine.y),
+            (spine.x + 3, spine.bottom),
+            width=2,
+        )
+        pygame.draw.line(
+            self.screen,
+            (26, 31, 34),
+            (spine.right - 3, spine.y),
+            (spine.right - 3, spine.bottom),
+            width=2,
+        )
+        for stitch_y in range(spine.y + 18, spine.bottom - 10, 28):
+            pygame.draw.line(
+                self.screen,
+                (194, 174, 150),
+                (spine.x + 5, stitch_y),
+                (spine.right - 5, stitch_y + 7),
+                width=2,
+            )
+
+        tab_data = (
+            ("PATIENT FILE", pygame.Rect(left_page.x + 24, left_page.y - 5, 118, 25), (126, 78, 151)),
+            ("TEST LOG", pygame.Rect(right_page.x + 24, right_page.y - 5, 96, 25), (72, 122, 158)),
+        )
+        for tab_text, tab, tab_color in tab_data:
+            pygame.draw.rect(self.screen, tab_color, tab, border_radius=6)
+            label = self.card_font.render(tab_text, True, (249, 240, 222))
+            self.screen.blit(label, label.get_rect(center=tab.center))
 
         left, right = self.get_spread_columns(self.notebook_spread)
         if left is None:
             self.draw_notebook_id_page(layout["left"])
         else:
-            self.draw_notebook_column(left, layout["left"])
-        self.draw_notebook_column(right, layout["right"])
+            self.draw_notebook_column(left, layout["left"], "CONTINUED NOTES")
+        self.draw_notebook_column(right, layout["right"], "DIAGNOSTIC LOG")
 
-        # Page numbers
         left_num = self.notebook_spread * 2 + 1
         for num, key in ((left_num, "left"), (left_num + 1, "right")):
-            label = self.card_font.render(str(num), True, COLORS["card_text"])
-            self.screen.blit(label, label.get_rect(center=(layout[key].centerx, book.bottom - 22)))
+            label = self.card_font.render(f"—  {num}  —", True, (112, 104, 86))
+            self.screen.blit(
+                label,
+                label.get_rect(center=(layout[key].centerx, book.bottom - 22)),
+            )
 
-        # Buttons
         mouse = pygame.mouse.get_pos()
-        buttons = [("CLOSE", layout["close"], True),
-                   ("< PREV", layout["prev"], self.notebook_spread > 0),
-                   ("NEXT >", layout["next"],
-                    self.notebook_spread < self.notebook_spread_count() - 1)]
-        for text, rect, enabled in buttons:
+        buttons = [
+            ("CLOSE", layout["close"], True, COLORS["panel_border"]),
+            ("< PREV", layout["prev"], self.notebook_spread > 0, (151, 101, 180)),
+            (
+                "NEXT >",
+                layout["next"],
+                self.notebook_spread < self.notebook_spread_count() - 1,
+                (151, 101, 180),
+            ),
+        ]
+        for text, rect, enabled, resting_color in buttons:
             if not enabled:
                 continue
-            color = COLORS["accent"] if rect.collidepoint(mouse) else COLORS["panel_border"]
+            color = COLORS["accent"] if rect.collidepoint(mouse) else resting_color
+            pygame.draw.rect(self.screen, (20, 24, 29), rect.move(3, 4), border_radius=7)
             pygame.draw.rect(self.screen, color, rect, border_radius=6)
             label = self.small_font.render(text, True, COLORS["background"])
             self.screen.blit(label, label.get_rect(center=rect.center))
 
-    def draw_notebook_column(self, column, rect):
-        """Draw one column of test titles and result lines."""
-        for kind, text, y in column:
-            if kind == "title":
-                surface = self.notebook_title_font.render(text, True, COLORS["card_text"])
+    def draw_notebook_paper(self, page, paper_color):
+        """Draw one warm ruled page with stacked edges and a folded corner."""
+
+        for offset in (6, 3):
+            pygame.draw.rect(
+                self.screen,
+                (204, 198, 173),
+                page.move(0, offset),
+                border_radius=7,
+            )
+        pygame.draw.rect(self.screen, paper_color, page, border_radius=7)
+        pygame.draw.rect(
+            self.screen,
+            (202, 194, 166),
+            page,
+            width=1,
+            border_radius=7,
+        )
+        for line_y in range(page.y + 62, page.bottom - 18, 25):
+            pygame.draw.line(
+                self.screen,
+                (203, 216, 203),
+                (page.x + 18, line_y),
+                (page.right - 18, line_y),
+                width=1,
+            )
+        pygame.draw.line(
+            self.screen,
+            (224, 169, 163),
+            (page.x + 31, page.y + 42),
+            (page.x + 31, page.bottom - 18),
+            width=1,
+        )
+        fold = (
+            (page.right - 25, page.y),
+            (page.right, page.y),
+            (page.right, page.y + 25),
+        )
+        pygame.draw.polygon(self.screen, (218, 211, 184), fold)
+        pygame.draw.line(
+            self.screen,
+            (187, 181, 158),
+            (page.right - 25, page.y),
+            (page.right, page.y + 25),
+        )
+
+    def draw_notebook_column(self, column, rect, page_heading):
+        """Draw test results as clipped diagnostic entries on a ruled page."""
+
+        ink = (54, 68, 67)
+        heading = self.notebook_title_font.render(page_heading, True, ink)
+        heading_y = rect.y + 18
+        self.screen.blit(heading, (rect.x + 5, heading_y))
+        entry_count = sum(
+            1
+            for kind, text, _ in column
+            if kind == "title" and text.upper() != "NO TESTS"
+        )
+        count_text = (
+            "NO RECORDS"
+            if entry_count == 0
+            else f"{entry_count} RECORD" + ("" if entry_count == 1 else "S")
+        )
+        count_label = self.card_font.render(
+            count_text,
+            True,
+            (103, 117, 108),
+        )
+        self.screen.blit(
+            count_label,
+            count_label.get_rect(midright=(rect.right - 5, heading_y + 14)),
+        )
+
+        content = pygame.Rect(rect.x, rect.y + 63, rect.width, rect.height - 63)
+        groups = []
+        current_group = []
+        for item in column:
+            if item[0] == "title" and current_group:
+                groups.append(current_group)
+                current_group = []
+            current_group.append(item)
+        if current_group:
+            groups.append(current_group)
+
+        test_colors = {
+            "TEMPERATURE": COLORS["panel_border"],
+            "ULTRASOUND": (85, 145, 230),
+            "X-RAY": (67, 178, 132),
+            "ALLERGY": (191, 91, 211),
+            "NO TESTS": (151, 101, 180),
+        }
+        for group in groups:
+            title = group[0][1]
+            first_y = group[0][2]
+            last_kind, _, last_y = group[-1]
+            last_height = (
+                self.notebook_title_font.get_linesize()
+                if last_kind == "title"
+                else self.notebook_body_font.get_linesize()
+            )
+            card = pygame.Rect(
+                content.x,
+                content.y + first_y,
+                content.width,
+                max(58, last_y - first_y + last_height + 12),
+            )
+            accent = test_colors.get(title.upper(), COLORS["panel_border"])
+            pygame.draw.rect(self.screen, (231, 227, 204), card, border_radius=8)
+            pygame.draw.rect(self.screen, accent, card, width=2, border_radius=8)
+            pygame.draw.rect(
+                self.screen,
+                accent,
+                pygame.Rect(card.x, card.y, 6, card.height),
+                border_radius=4,
+            )
+            icon = pygame.Rect(card.x + 15, card.y + 10, 33, 33)
+            pygame.draw.rect(self.screen, (205, 216, 204), icon, border_radius=5)
+            pygame.draw.rect(self.screen, accent, icon, width=2, border_radius=5)
+            if title.upper() in TEST_SUBTITLES:
+                self.draw_test_icon(title.upper(), icon, accent)
             else:
-                surface = self.notebook_body_font.render(text, True, (72, 101, 91))
-            self.screen.blit(surface, (rect.x, rect.y + y))
+                question = self.small_font.render("?", True, accent)
+                self.screen.blit(question, question.get_rect(center=icon.center))
+
+            title_surface = self.notebook_title_font.render(title, True, ink)
+            self.screen.blit(title_surface, (card.x + 57, card.y + 8))
+            for kind, text, y in group[1:]:
+                if kind != "body":
+                    continue
+                surface = self.notebook_body_font.render(text, True, (72, 91, 84))
+                self.screen.blit(surface, (card.x + 57, content.y + y + 5))
 
     def draw_notebook_id_page(self, rect):
-        """Draw the patient's name and both ID cards as a single column."""
-        y = rect.y
-        name = self.heading_font.render(self.patient.name, True, COLORS["card_text"])
-        self.screen.blit(name, (rect.x, y))
-        y += name.get_height() + 12
+        """Draw a patient header and two clipped information cards."""
 
-        sections = [
-            ("INTERGALACTIC ID", self.patient.profile.items()),
-            ("HEALTH ID", self.patient.medical_info.items()),
-        ]
+        ink = (54, 68, 67)
+        header = pygame.Rect(rect.x, rect.y, rect.width, 58)
+        pygame.draw.rect(self.screen, (229, 221, 204), header, border_radius=9)
+        pygame.draw.rect(
+            self.screen,
+            (151, 101, 180),
+            header,
+            width=2,
+            border_radius=9,
+        )
+        portrait = pygame.Rect(header.x + 9, header.y + 7, 44, 44)
+        self.draw_notebook_patient_stamp(portrait)
+        name = self.heading_font.render(self.patient.name, True, ink)
+        self.screen.blit(name, name.get_rect(midleft=(portrait.right + 10, header.centery - 5)))
+        case_id = self.card_font.render("CASE BLP-004-ZV", True, (111, 91, 124))
+        self.screen.blit(case_id, case_id.get_rect(midleft=(portrait.right + 11, header.centery + 17)))
+
+        y = header.bottom + 12
+        y = self.draw_notebook_info_section(
+            "INTERGALACTIC ID",
+            self.patient.profile.items(),
+            rect,
+            y,
+            (72, 122, 158),
+        )
+        self.draw_notebook_info_section(
+            "HEALTH ID",
+            self.patient.medical_info.items(),
+            rect,
+            y + 10,
+            (126, 78, 151),
+        )
+
+    def draw_notebook_patient_stamp(self, portrait):
+        """Draw a tiny stamped portrait of the current alien patient."""
+
+        pygame.draw.rect(self.screen, (205, 190, 219), portrait, border_radius=6)
+        pygame.draw.rect(self.screen, (126, 78, 151), portrait, width=2, border_radius=6)
+        head_center = (portrait.centerx, portrait.y + 19)
+        pygame.draw.line(
+            self.screen,
+            (70, 43, 94),
+            (head_center[0] - 8, head_center[1] - 9),
+            (head_center[0] - 11, head_center[1] - 15),
+            width=2,
+        )
+        pygame.draw.line(
+            self.screen,
+            (70, 43, 94),
+            (head_center[0] + 8, head_center[1] - 9),
+            (head_center[0] + 11, head_center[1] - 15),
+            width=2,
+        )
+        pygame.draw.circle(self.screen, (151, 99, 211), (head_center[0] - 11, head_center[1] - 15), 3)
+        pygame.draw.circle(self.screen, (151, 99, 211), (head_center[0] + 11, head_center[1] - 15), 3)
+        pygame.draw.ellipse(
+            self.screen,
+            (151, 99, 211),
+            pygame.Rect(head_center[0] - 13, head_center[1] - 10, 26, 22),
+        )
+        pygame.draw.circle(self.screen, (50, 35, 68), (head_center[0] - 5, head_center[1]), 2)
+        pygame.draw.circle(self.screen, (50, 35, 68), (head_center[0] + 5, head_center[1]), 2)
+        pygame.draw.ellipse(
+            self.screen,
+            (151, 99, 211),
+            pygame.Rect(portrait.centerx - 9, portrait.y + 29, 18, 13),
+        )
+
+    def draw_notebook_info_section(self, heading, items, rect, y, accent):
+        """Draw one labeled patient-information card and return its bottom edge."""
+
         body_h = self.notebook_body_font.get_linesize()
-        for heading, items in sections:
-            title = self.notebook_title_font.render(heading, True, COLORS["card_text"])
-            self.screen.blit(title, (rect.x, y))
-            y += self.notebook_title_font.get_linesize()
-            for label, value in items:
-                for line in self.wrap_text(f"{label}: {value}", self.notebook_body_font, rect.width):
-                    surface = self.notebook_body_font.render(line, True, (72, 101, 91))
-                    self.screen.blit(surface, (rect.x, y))
-                    y += body_h
-            y += body_h
+        rows = []
+        for label, value in items:
+            rows.extend(
+                self.wrap_text(
+                    f"{label}: {value}",
+                    self.notebook_body_font,
+                    rect.width - 42,
+                )
+            )
+        section = pygame.Rect(rect.x, y, rect.width, 36 + len(rows) * body_h + 8)
+        pygame.draw.rect(self.screen, (231, 227, 204), section, border_radius=8)
+        pygame.draw.rect(self.screen, accent, section, width=2, border_radius=8)
+        title_bar = pygame.Rect(section.x, section.y, section.width, 30)
+        pygame.draw.rect(self.screen, accent, title_bar, border_radius=8)
+        pygame.draw.rect(
+            self.screen,
+            accent,
+            pygame.Rect(title_bar.x, title_bar.bottom - 8, title_bar.width, 8),
+        )
+        title = self.card_font.render(heading, True, (249, 240, 222))
+        self.screen.blit(title, title.get_rect(midleft=(title_bar.x + 12, title_bar.centery)))
+
+        row_y = title_bar.bottom + 6
+        for row_index, row in enumerate(rows):
+            pygame.draw.circle(self.screen, accent, (section.x + 15, row_y + body_h // 2), 3)
+            surface = self.notebook_body_font.render(row, True, (72, 91, 84))
+            self.screen.blit(surface, (section.x + 25, row_y))
+            row_y += body_h
+            if row_index < len(rows) - 1:
+                pygame.draw.line(
+                    self.screen,
+                    (205, 201, 180),
+                    (section.x + 25, row_y - 2),
+                    (section.right - 12, row_y - 2),
+                )
+        return section.bottom
 
     def wrap_text(self, text, font, width):
         """Return a list of lines that fit within width pixels."""
@@ -3877,41 +4882,33 @@ class AlienDoctorGUI:
 
         Each column is a list of (kind, text, y_offset) tuples.
         """
-        width = self.notebook_layout["right"].width
-        height = self.notebook_layout["right"].height
+        width = self.notebook_layout["right"].width - 73
+        height = self.notebook_layout["right"].height - 63
         title_h = self.notebook_title_font.get_linesize()
         body_h = self.notebook_body_font.get_linesize()
-        gap = body_h
-
-        blocks = []
-        for test_name, result in self.notebook.get_entries(self.patient).items():
-            block = [("title", test_name.upper(), title_h)]
-            for line in self.wrap_text(result, self.notebook_body_font, width):
-                block.append(("body", line, body_h))
-            blocks.append(block)
-
+        card_gap = 10
         columns = [[]]
         used = 0
-        for block in blocks:
-            if columns[-1]:
-                # Keep a title together with at least its first body line
-                start_needed = block[0][2] + (block[1][2] if len(block) > 1 else 0)
-                if used + gap + start_needed > height:
-                    columns.append([])
-                    used = 0
-                else:
-                    used += gap
+        for test_name, result in self.notebook.get_entries(self.patient).items():
+            result_lines = self.wrap_text(result, self.notebook_body_font, width)
+            card_height = max(58, title_h + len(result_lines) * body_h + 12)
+            if columns[-1] and used + card_height > height:
+                columns.append([])
+                used = 0
 
-            for kind, text, item_h in block:
-                if used + item_h > height and columns[-1]:
-                    columns.append([])  # runoff continues on the next page
-                    used = 0
-                columns[-1].append((kind, text, used))
-                used += item_h
+            start_y = used
+            columns[-1].append(("title", test_name.upper(), start_y))
+            for line_index, line in enumerate(result_lines):
+                columns[-1].append(
+                    ("body", line, start_y + title_h + line_index * body_h)
+                )
+            used += card_height + card_gap
 
         self.notebook_columns = columns
 
     def notebook_spread_count(self):
+        """Return the number of two-page spreads needed for all notebook columns."""
+
         extra = max(0, len(self.notebook_columns) - 1)
         return 1 + (extra + 1) // 2  # ceil(extra / 2)
 
@@ -3926,16 +4923,22 @@ class AlienDoctorGUI:
         return left, right
 
     def open_notebook(self):
+        """Rebuild the current notes and open the notebook at its first spread."""
+
         self.build_notebook_columns()  # rebuild so new results appear
         self.notebook_spread = 0
         self.state = GameState.NOTEBOOK
 
     def flip_notebook(self, direction):
+        """Move one notebook spread left or right when the destination exists."""
+
         new_spread = self.notebook_spread + direction
         if 0 <= new_spread < self.notebook_spread_count():
             self.notebook_spread = new_spread
 
     def handle_notebook_click(self, position):
+        """Handle notebook close and page-navigation button clicks."""
+
         if self.notebook_layout["close"].collidepoint(position):
             self.state = GameState.PATIENT
         elif self.notebook_layout["prev"].collidepoint(position):

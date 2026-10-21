@@ -1,0 +1,141 @@
+"""Smoke tests for shared game data and the GUI vertical slice."""
+
+import os
+import unittest
+
+
+# Pygame can render into memory during tests, so no game window or audio device is needed.
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
+import pygame
+
+from Deck import Deck
+from Notebook import Notebook
+from PatientData import create_zorpa
+from Player import DIAGNOSIS_REWARD
+from Tests.AllergyTest import AllergyTest
+from Tests.TemperatureTest import TemperatureTest
+from Tests.UltrasoundTest import UltrasoundTest
+from Tests.XrayTest import XrayTest
+from gui_main import AlienDoctorGUI, GameState
+
+
+class SharedModelSmokeTests(unittest.TestCase):
+    """Check the game data used by both interfaces."""
+
+    def test_zorpa_results_are_recorded_in_the_notebook(self):
+        """A completed test should replace the notebook's empty-state entry."""
+
+        patient = create_zorpa()
+        notebook = Notebook()
+        notebook.add_patient(patient)
+
+        result = patient.perform_test("TEMPERATURE").removeprefix("RESULTS: ")
+        notebook.add_test(patient, "TEMPERATURE", result)
+
+        self.assertEqual(result, "Current temperature: 1700°F")
+        self.assertEqual(patient.medical_info["Normal temperature"], "2,000°F")
+        self.assertEqual(notebook.get_entries(patient), {"TEMPERATURE": result})
+
+    def test_deck_rarity_counts_match_the_design(self):
+        """The generated deck should contain each test according to its rarity."""
+
+        deck = Deck()
+        deck.populate(
+            [TemperatureTest(), XrayTest(), UltrasoundTest(), AllergyTest()]
+        )
+        counts = {}
+        for card in deck.contents:
+            counts[card.value.name] = counts.get(card.value.name, 0) + 1
+
+        self.assertEqual(
+            counts,
+            {
+                "TEMPERATURE": 8,
+                "X-RAY": 8,
+                "ULTRASOUND": 5,
+                "ALLERGY": 3,
+            },
+        )
+        self.assertEqual(len(deck.contents), 24)
+
+
+class GuiFlowSmokeTests(unittest.TestCase):
+    """Exercise the current vertical-slice state changes with headless Pygame."""
+
+    def setUp(self):
+        """Create a fresh GUI session for every flow test."""
+
+        self.game = AlienDoctorGUI()
+        self.game.finish_intro()
+        self.game.state = GameState.PATIENT
+
+    def tearDown(self):
+        """Release Pygame resources after each test."""
+
+        pygame.quit()
+
+    def test_correct_diagnosis_reaches_shop_and_resets_round(self):
+        """A test and correct diagnosis should reward the player and reach the shop."""
+
+        starting_balance = self.game.player.balance
+        self.game.selected_card_index = 0
+        self.game.run_selected_test()
+
+        self.assertEqual(self.game.state, GameState.TEST_RESULT)
+        self.assertEqual(len(self.game.player.test_hand), 4)
+        self.assertEqual(len(self.game.discard_pile), 1)
+        self.assertIn("TEMPERATURE", self.game.notebook.get_entries(self.game.patient))
+
+        self.game.test_result_started_at = (
+            pygame.time.get_ticks() - self.game.test_result_reveal_duration - 1
+        )
+        self.game.draw()
+        self.game.handle_test_result_click(self.game.continue_button.center)
+        self.assertEqual(self.game.state, GameState.PATIENT)
+
+        self.game.switch_active_hand(True)
+        self.game.selected_card_index = 0
+        self.game.play_selected_diagnosis()
+        self.assertEqual(self.game.state, GameState.OUTCOME)
+        self.assertTrue(self.game.diagnosis_correct)
+        self.assertEqual(
+            self.game.player.balance,
+            starting_balance + DIAGNOSIS_REWARD,
+        )
+
+        self.game.draw()
+        self.game.handle_outcome_click(self.game.outcome_button.center)
+        self.assertEqual(self.game.state, GameState.CELEBRATION)
+        self.game.finish_celebration()
+        self.assertEqual(self.game.state, GameState.SHOP)
+
+        earned_balance = self.game.player.balance
+        self.game.draw()
+        self.game.handle_shop_click(self.game.shop_button.center)
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertEqual(self.game.player.balance, earned_balance)
+        self.assertEqual(len(self.game.player.test_hand), 5)
+
+    def test_incorrect_diagnosis_returns_to_test_hand(self):
+        """A wrong diagnosis should keep the case open and return to test cards."""
+
+        starting_balance = self.game.player.balance
+        self.game.switch_active_hand(True)
+        self.game.selected_card_index = 1
+        self.game.play_selected_diagnosis()
+
+        self.assertEqual(self.game.state, GameState.OUTCOME)
+        self.assertFalse(self.game.diagnosis_correct)
+        self.assertEqual(self.game.player.balance, starting_balance)
+
+        self.game.draw()
+        self.game.handle_outcome_click(self.game.outcome_button.center)
+        self.assertEqual(self.game.state, GameState.PATIENT)
+        self.assertFalse(self.game.showing_diagnosis_hand)
+
+
+if __name__ == "__main__":
+    unittest.main()
