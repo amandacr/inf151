@@ -20,6 +20,7 @@ from Tests.TemperatureTest import TemperatureTest
 from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
 from gui_animations import AnimationMixin
+from gui_cards import CardMixin
 from gui_main import AlienDoctorGUI, GameState
 from gui_notebook import NotebookMixin
 
@@ -104,11 +105,14 @@ class GuiFlowSmokeTests(unittest.TestCase):
         pygame.quit()
 
     def test_gui_uses_the_extracted_feature_modules(self):
-        """The main GUI should receive notebook and animation behavior from mixins."""
+        """The main GUI should receive extracted feature behavior from mixins."""
 
         self.assertIsInstance(self.game, AnimationMixin)
+        self.assertIsInstance(self.game, CardMixin)
         self.assertIsInstance(self.game, NotebookMixin)
         self.assertEqual(self.game.draw_discard_animation.__module__, "gui_animations")
+        self.assertEqual(self.game.draw_test_card.__module__, "gui_cards")
+        self.assertEqual(self.game.run_selected_test.__module__, "gui_cards")
         self.assertEqual(self.game.draw_notebook.__module__, "gui_notebook")
 
     def test_correct_diagnosis_reaches_shop_and_resets_round(self):
