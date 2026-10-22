@@ -21,6 +21,7 @@ from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
 from gui_animations import AnimationMixin
 from gui_cards import CardMixin
+from gui_examination import ExaminationMixin
 from gui_main import AlienDoctorGUI, GameState
 from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
@@ -110,11 +111,14 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.assertIsInstance(self.game, AnimationMixin)
         self.assertIsInstance(self.game, CardMixin)
+        self.assertIsInstance(self.game, ExaminationMixin)
         self.assertIsInstance(self.game, NotebookMixin)
         self.assertIsInstance(self.game, ReceptionMixin)
         self.assertEqual(self.game.draw_discard_animation.__module__, "gui_animations")
         self.assertEqual(self.game.draw_test_card.__module__, "gui_cards")
         self.assertEqual(self.game.run_selected_test.__module__, "gui_cards")
+        self.assertEqual(self.game.draw_patient_screen.__module__, "gui_examination")
+        self.assertEqual(self.game.draw_id_card.__module__, "gui_examination")
         self.assertEqual(self.game.draw_notebook.__module__, "gui_notebook")
         self.assertEqual(self.game.draw_intro_screen.__module__, "gui_reception")
         self.assertEqual(self.game.draw_title_screen.__module__, "gui_reception")
