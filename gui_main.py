@@ -104,6 +104,8 @@ class AlienDoctorGUI:
         self.discard_pile = []
         self.discard_animation = None
         self.discard_animation_duration = 350
+        self.test_discard_animation_duration = 700
+        self.pending_test_discard = None
         self.last_test_name = ""
         self.last_test_result = ""
         self.test_result_started_at = None
@@ -129,7 +131,7 @@ class AlienDoctorGUI:
             "throwaway": pygame.Rect(910, 410, 125, 145),
             "notebook": pygame.Rect(35, 395, 180, 165),
             "active_hand": pygame.Rect(225, 390, 625, 170),
-            "diagnosis": pygame.Rect(875, 175, 185, 180),
+            "diagnosis": pygame.Rect(840, 175, 185, 180),
         }
         self.refresh_hand_layout()
         self.notebook_layout = self.build_notebook_rects()
@@ -213,6 +215,8 @@ class AlienDoctorGUI:
     def handle_patient_click(self, position):
         """Handle ID-card and test-card clicks on the patient screen."""
 
+        if self.discard_animation and self.discard_animation.get("locks_input"):
+            return
         if self.diagnosis_confirmation_open:
             self.handle_diagnosis_confirmation_click(position)
             return
@@ -339,7 +343,7 @@ class AlienDoctorGUI:
         self.last_test_result = result.replace("RESULTS: ", "", 1)
 
         self.player.play(card)
-        self.discard_pile.append(card)
+        self.pending_test_discard = card
         self.selected_card_index = None
         self.run_test_button = None
         self.refresh_hand_layout()
@@ -367,13 +371,24 @@ class AlienDoctorGUI:
         self.refresh_hand_layout()
 
     def handle_test_result_click(self, position):
-        """Return to the patient workspace when the result screen is continued."""
+        """Return to the workspace and visibly send the used card to med-waste."""
 
         if (
             self.get_test_result_reveal_progress() >= 1.0
             and self.continue_button.collidepoint(position)
         ):
             self.state = GameState.PATIENT
+            if self.pending_test_discard is not None:
+                self.discard_animation = {
+                    "card": self.pending_test_discard,
+                    "start": self.layout["active_hand"].center,
+                    "started_at": pygame.time.get_ticks(),
+                    "duration": self.test_discard_animation_duration,
+                    "add_to_pile_on_complete": True,
+                    "locks_input": True,
+                    "arc_height": 105,
+                }
+                self.pending_test_discard = None
 
     def get_selected_card_rect(self, index):
         """Return the larger rectangle used to display a selected test card."""
@@ -473,6 +488,17 @@ class AlienDoctorGUI:
                 self.finish_intro()
             return
 
+        if self.discard_animation is not None:
+            elapsed = pygame.time.get_ticks() - self.discard_animation["started_at"]
+            duration = self.discard_animation.get(
+                "duration",
+                self.discard_animation_duration,
+            )
+            if elapsed >= duration:
+                if self.discard_animation.get("add_to_pile_on_complete"):
+                    self.discard_pile.append(self.discard_animation["card"])
+                self.discard_animation = None
+
         if self.state == GameState.TITLE and self.reception_transition_started_at is not None:
             elapsed = pygame.time.get_ticks() - self.reception_transition_started_at
             if elapsed >= self.reception_transition_duration:
@@ -516,6 +542,7 @@ class AlienDoctorGUI:
         self.diagnosis_folder_animation_started_at = None
         self.discard_pile = []
         self.discard_animation = None
+        self.pending_test_discard = None
         self.last_test_name = ""
         self.last_test_result = ""
         self.test_result_started_at = None
@@ -1674,9 +1701,9 @@ class AlienDoctorGUI:
         )
         warning = self.card_font.render("!", True, (245, 126, 112))
         self.screen.blit(warning, warning.get_rect(center=bin_rect.center))
-        waste_title = self.card_font.render("CARD MOVED TO MED-WASTE", True, COLORS["text"])
+        waste_title = self.card_font.render("CARD READY FOR MED-WASTE", True, COLORS["text"])
         waste_detail = self.card_font.render(
-            "THE USED TEST CARD IS NOW IN THE THROWAWAY PILE",
+            "CONTINUE TO DISPOSE OF THE USED TEST CARD",
             True,
             COLORS["muted"],
         )
@@ -2220,29 +2247,35 @@ class AlienDoctorGUI:
                 star_size,
             )
 
-        planet = pygame.Rect(window.right - 190, window.y + 26, 145, 145)
-        pygame.draw.ellipse(self.screen, (83, 70, 132), planet)
-        pygame.draw.ellipse(
-            self.screen,
-            (112, 94, 164),
-            pygame.Rect(planet.x + 16, planet.y + 13, 87, 55),
+        distant_planets = (
+            ((183, 175), 10, (225, 105, 126), (255, 169, 146), None),
+            ((477, 342), 9, (61, 176, 185), (135, 231, 217), None),
+            ((500, 181), 12, (218, 157, 69), (255, 212, 105), (240, 180, 99)),
+            ((1042, 338), 8, (181, 99, 198), (237, 155, 224), None),
         )
-        pygame.draw.arc(
-            self.screen,
-            (64, 54, 110),
-            pygame.Rect(planet.x + 10, planet.y + 64, 121, 47),
-            0,
-            math.pi,
-            width=4,
-        )
-        pygame.draw.arc(
-            self.screen,
-            (174, 133, 207),
-            planet.inflate(24, -58),
-            math.pi,
-            math.pi * 2,
-            width=4,
-        )
+        for center, radius, planet_color, highlight_color, ring_color in distant_planets:
+            pygame.draw.circle(self.screen, planet_color, center, radius)
+            pygame.draw.circle(
+                self.screen,
+                highlight_color,
+                (center[0] - radius // 3, center[1] - radius // 3),
+                max(2, radius // 3),
+            )
+            if ring_color is not None:
+                ring = pygame.Rect(
+                    center[0] - radius - 7,
+                    center[1] - radius // 2,
+                    radius * 2 + 14,
+                    radius,
+                )
+                pygame.draw.arc(
+                    self.screen,
+                    ring_color,
+                    ring,
+                    0,
+                    math.pi * 2,
+                    width=2,
+                )
         for frame_x in (window.x + 175, window.x + 462, window.x + 765):
             pygame.draw.line(
                 self.screen,
@@ -3179,40 +3212,132 @@ class AlienDoctorGUI:
         )
 
     def draw_discard_animation(self):
-        """Animate a manually discarded card moving into the throwaway pile."""
+        """Arc a visible test card into the med-waste slot after use or discard."""
 
         if self.discard_animation is None:
             return
 
         elapsed = pygame.time.get_ticks() - self.discard_animation["started_at"]
-        progress = min(1.0, elapsed / self.discard_animation_duration)
-        eased_progress = 1 - (1 - progress) ** 3
+        duration = self.discard_animation.get(
+            "duration",
+            self.discard_animation_duration,
+        )
+        progress = min(1.0, elapsed / duration)
+        eased_progress = progress * progress * (3 - 2 * progress)
         start_x, start_y = self.discard_animation["start"]
-        target = (self.layout["throwaway"].centerx, self.layout["throwaway"].y + 50)
-        center_x = start_x + (target[0] - start_x) * eased_progress
-        center_y = start_y + (target[1] - start_y) * eased_progress
-        width = int(96 - 42 * eased_progress)
-        height = int(118 - 84 * eased_progress)
-        moving_card = pygame.Rect(0, 0, width, height)
-        moving_card.center = (round(center_x), round(center_y))
+        target = (
+            self.layout["throwaway"].centerx,
+            self.layout["throwaway"].y + 51,
+        )
+        control = (
+            (start_x + target[0]) / 2,
+            min(start_y, target[1]) - self.discard_animation.get("arc_height", 55),
+        )
+        center_x, center_y = self.get_quadratic_curve_point(
+            (start_x, start_y),
+            control,
+            target,
+            eased_progress,
+        )
 
-        pygame.draw.rect(self.screen, COLORS["card"], moving_card, border_radius=6)
+        for lag, radius, trail_color in (
+            (0.12, 5, (74, 120, 142)),
+            (0.07, 4, (91, 162, 166)),
+            (0.03, 3, (147, 208, 190)),
+        ):
+            trail_progress = max(0.0, eased_progress - lag)
+            trail_x, trail_y = self.get_quadratic_curve_point(
+                (start_x, start_y),
+                control,
+                target,
+                trail_progress,
+            )
+            pygame.draw.circle(
+                self.screen,
+                trail_color,
+                (round(trail_x), round(trail_y)),
+                radius,
+            )
+
+        card_surface = self.create_discard_card_surface(
+            self.discard_animation["card"],
+        )
+        scale = 1.0 - 0.57 * eased_progress
+        scaled_size = (
+            max(38, round(card_surface.get_width() * scale)),
+            max(48, round(card_surface.get_height() * scale)),
+        )
+        card_surface = pygame.transform.smoothscale(card_surface, scaled_size)
+        card_surface = pygame.transform.rotate(
+            card_surface,
+            -8 + 30 * math.sin(progress * math.pi),
+        )
+        if progress > 0.82:
+            card_surface.set_alpha(round(255 * (1 - (progress - 0.82) / 0.18)))
+        card_rect = card_surface.get_rect(center=(round(center_x), round(center_y)))
+        self.screen.blit(card_surface, card_rect)
+
+        if progress > 0.72:
+            self.draw_med_waste_slot_lip()
+
+    def get_quadratic_curve_point(self, start, control, target, progress):
+        """Return a point along the arcing path used by the disposal animation."""
+
+        inverse = 1 - progress
+        return (
+            inverse * inverse * start[0]
+            + 2 * inverse * progress * control[0]
+            + progress * progress * target[0],
+            inverse * inverse * start[1]
+            + 2 * inverse * progress * control[1]
+            + progress * progress * target[1],
+        )
+
+    def create_discard_card_surface(self, card):
+        """Create a compact snapshot so the flying object is recognizably the used card."""
+
+        test = card.value
+        rarity_color = RARITY_COLORS.get(test.rarity, COLORS["panel_border"])
+        fill_color = RARITY_CARD_COLORS.get(test.rarity, COLORS["card"])
+        card_surface = pygame.Surface((96, 118), pygame.SRCALPHA)
+        shape = self.get_card_shape_points(card_surface.get_rect(), 7)
+        pygame.draw.polygon(card_surface, fill_color, shape)
+        pygame.draw.polygon(card_surface, rarity_color, shape, width=3)
+
+        header = pygame.Rect(7, 7, 82, 25)
+        header_color = tuple(max(0, channel - 18) for channel in fill_color)
+        pygame.draw.rect(card_surface, header_color, header, border_radius=5)
+        title_font = self.card_font
+        if title_font.size(test.name)[0] > header.width - 6:
+            title_font = self.pile_font
+        title = title_font.render(test.name, True, COLORS["card_text"])
+        card_surface.blit(title, title.get_rect(center=header.center))
+
+        icon = pygame.Rect(28, 40, 40, 40)
+        pygame.draw.rect(card_surface, (201, 214, 205), icon, border_radius=6)
+        pygame.draw.rect(card_surface, rarity_color, icon, width=2, border_radius=6)
+        initial = self.body_font.render(test.name[0], True, COLORS["card_text"])
+        card_surface.blit(initial, initial.get_rect(center=icon.center))
+
+        rarity = self.pile_font.render(test.rarity.upper(), True, rarity_color)
+        card_surface.blit(rarity, rarity.get_rect(center=(48, 101)))
+        return card_surface
+
+    def draw_med_waste_slot_lip(self):
+        """Redraw the bin opening over the final frames so the card appears to enter it."""
+
+        panel = self.layout["throwaway"]
+        lid = pygame.Rect(panel.x + 16, panel.y + 45, panel.width - 32, 12)
+        pygame.draw.rect(self.screen, (245, 130, 115), lid, border_radius=5)
         pygame.draw.rect(
             self.screen,
-            COLORS["panel_border"],
-            moving_card,
+            COLORS["background"],
+            lid,
             width=2,
-            border_radius=6,
+            border_radius=5,
         )
-        initial = self.body_font.render(
-            self.discard_animation["card"].value.name[0],
-            True,
-            COLORS["card_text"],
-        )
-        self.screen.blit(initial, initial.get_rect(center=moving_card.center))
-
-        if progress >= 1.0:
-            self.discard_animation = None
+        slot = pygame.Rect(lid.centerx - 25, lid.y + 3, 50, 4)
+        pygame.draw.rect(self.screen, COLORS["background"], slot, border_radius=2)
 
     def update_notebook_preview_animation(self, hovered):
         """Open or close the miniature notebook smoothly based on the mouse position."""
@@ -3553,12 +3678,21 @@ class AlienDoctorGUI:
                 continue
 
             card_rect = self.card_rects[index]
-            hovered = card_rect.collidepoint(mouse_position)
-            display_rect = card_rect.move(0, -8 if hovered else 0)
+            hovered = (
+                self.selected_card_index is None
+                and card_rect.collidepoint(mouse_position)
+            )
+            display_rect = (
+                self.get_hovered_card_rect(card_rect)
+                if hovered
+                else card_rect
+            )
             if self.showing_diagnosis_hand:
                 self.draw_diagnosis_card(card, display_rect, hovered=hovered)
             else:
                 self.draw_test_card(card, display_rect, hovered=hovered)
+            if self.selected_card_index is not None:
+                self.draw_card_dimming_overlay(display_rect)
 
         if self.selected_card_index is not None:
             selected_card = active_hand[self.selected_card_index]
@@ -3567,6 +3701,13 @@ class AlienDoctorGUI:
                 self.draw_diagnosis_card(selected_card, selected_rect, selected=True)
             else:
                 self.draw_test_card(selected_card, selected_rect, selected=True)
+
+    def get_hovered_card_rect(self, card_rect):
+        """Lift and gently enlarge a hovered card without changing its color."""
+
+        width_growth = max(4, round(card_rect.width * 0.04))
+        height_growth = max(6, round(card_rect.height * 0.04))
+        return card_rect.inflate(width_growth, height_growth).move(0, -7)
 
     def get_card_shape_points(self, card_rect, corner_cut=7):
         """Return the clipped-corner outline shared by every card style."""
@@ -3582,12 +3723,28 @@ class AlienDoctorGUI:
             (card_rect.x, card_rect.y + corner_cut),
         )
 
-    def draw_card_shell(self, card_rect, fill_color, border_color, border_width, selected):
+    def draw_card_shell(
+        self,
+        card_rect,
+        fill_color,
+        border_color,
+        border_width,
+        selected,
+        hovered=False,
+    ):
         """Draw one reusable sci-fi card body with a clipped outline and shadow."""
 
-        shadow_offset = 7 if selected else 4
-        shadow_rect = card_rect.move(shadow_offset, shadow_offset)
         corner_cut = 10 if selected else 7
+        if hovered:
+            soft_shadow = card_rect.inflate(10, 10).move(6, 8)
+            pygame.draw.polygon(
+                self.screen,
+                (9, 16, 24),
+                self.get_card_shape_points(soft_shadow, corner_cut + 3),
+            )
+
+        shadow_offset = 7 if selected else 5 if hovered else 4
+        shadow_rect = card_rect.move(shadow_offset, shadow_offset)
         pygame.draw.polygon(
             self.screen,
             (3, 8, 12),
@@ -3601,6 +3758,18 @@ class AlienDoctorGUI:
             card_points,
             width=border_width,
         )
+
+    def draw_card_dimming_overlay(self, card_rect):
+        """Subtly dim unselected cards while an enlarged card has focus."""
+
+        overlay = pygame.Surface(card_rect.size, pygame.SRCALPHA)
+        local_rect = overlay.get_rect()
+        pygame.draw.polygon(
+            overlay,
+            (5, 11, 17, 42),
+            self.get_card_shape_points(local_rect, 7),
+        )
+        self.screen.blit(overlay, card_rect.topleft)
 
     def draw_fitted_card_title(self, title, area, selected=False):
         """Choose the largest existing font that keeps a card title inside its header."""
@@ -3675,14 +3844,15 @@ class AlienDoctorGUI:
 
         diagnosis = card.value
         diagnosis_color = (183, 92, 211)
-        border_color = COLORS["accent"] if hovered or selected else diagnosis_color
-        border_width = 4 if selected else 3 if hovered else 2
+        border_color = diagnosis_color
+        border_width = 4 if selected else 2
         self.draw_card_shell(
             card_rect,
             (235, 220, 239),
             border_color,
             border_width,
             selected,
+            hovered=hovered,
         )
 
         if selected:
@@ -3709,7 +3879,13 @@ class AlienDoctorGUI:
             (header.x + 6, header.bottom),
             (header.right - 6, header.bottom),
         )
-        if self.diagnosis_card_font.size(diagnosis.name)[0] <= header.width - 8:
+        # Base this decision on the resting 96-pixel card, not the slightly wider
+        # hover rectangle, so titles never switch fonts while the mouse moves.
+        resting_single_line_width = 80
+        if (
+            self.diagnosis_card_font.size(diagnosis.name)[0]
+            <= resting_single_line_width
+        ):
             title = self.diagnosis_card_font.render(
                 diagnosis.name,
                 True,
@@ -3870,14 +4046,15 @@ class AlienDoctorGUI:
         test = card.value
         rarity_color = RARITY_COLORS.get(test.rarity, COLORS["panel_border"])
         card_color = RARITY_CARD_COLORS.get(test.rarity, COLORS["card"])
-        border_color = COLORS["accent"] if hovered or selected else rarity_color
-        border_width = 4 if selected else 3 if hovered else 2
+        border_color = rarity_color
+        border_width = 4 if selected else 2
         self.draw_card_shell(
             card_rect,
             card_color,
             border_color,
             border_width,
             selected,
+            hovered=hovered,
         )
 
         if selected:

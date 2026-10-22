@@ -110,7 +110,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.assertEqual(self.game.state, GameState.TEST_RESULT)
         self.assertEqual(len(self.game.player.test_hand), 4)
-        self.assertEqual(len(self.game.discard_pile), 1)
+        self.assertEqual(len(self.game.discard_pile), 0)
+        self.assertIsNotNone(self.game.pending_test_discard)
         self.assertIn("TEMPERATURE", self.game.notebook.get_entries(self.game.patient))
 
         self.game.test_result_started_at = (
@@ -119,6 +120,15 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.draw()
         self.game.handle_test_result_click(self.game.continue_button.center)
         self.assertEqual(self.game.state, GameState.PATIENT)
+        self.assertIsNotNone(self.game.discard_animation)
+        self.assertIsNone(self.game.pending_test_discard)
+
+        self.game.discard_animation["started_at"] = (
+            pygame.time.get_ticks() - self.game.test_discard_animation_duration - 1
+        )
+        self.game.update()
+        self.assertIsNone(self.game.discard_animation)
+        self.assertEqual(len(self.game.discard_pile), 1)
 
         self.game.switch_active_hand(True)
         self.game.selected_card_index = 0
@@ -175,11 +185,38 @@ class GuiFlowSmokeTests(unittest.TestCase):
         throwaway = self.game.layout["throwaway"]
         notebook = self.game.layout["notebook"]
         active_hand = self.game.layout["active_hand"]
+        right_window = pygame.Rect(794, 157, 277, 210)
 
         self.assertLess(diagnosis.centery, throwaway.centery)
+        self.assertLessEqual(abs(diagnosis.centerx - right_window.centerx), 1)
         self.assertGreaterEqual(notebook.width, 180)
         self.assertFalse(throwaway.colliderect(active_hand))
         self.assertFalse(notebook.colliderect(active_hand))
+
+    def test_hovered_cards_lift_and_expand_without_shifting_sideways(self):
+        """Hover feedback should enlarge a card while preserving its horizontal center."""
+
+        resting = self.game.card_rects[0]
+        hovered = self.game.get_hovered_card_rect(resting)
+
+        self.assertGreater(hovered.width, resting.width)
+        self.assertGreater(hovered.height, resting.height)
+        self.assertLess(hovered.y, resting.y)
+        self.assertEqual(hovered.centerx, resting.centerx)
+
+    def test_used_test_card_follows_an_arc_to_med_waste(self):
+        """The midpoint of the disposal path should rise above a straight-line flight."""
+
+        start = self.game.layout["active_hand"].center
+        target = (
+            self.game.layout["throwaway"].centerx,
+            self.game.layout["throwaway"].y + 51,
+        )
+        control = ((start[0] + target[0]) / 2, min(start[1], target[1]) - 105)
+        midpoint = self.game.get_quadratic_curve_point(start, control, target, 0.5)
+        straight_midpoint_y = (start[1] + target[1]) / 2
+
+        self.assertLess(midpoint[1], straight_midpoint_y)
 
 
 if __name__ == "__main__":
