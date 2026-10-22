@@ -120,6 +120,22 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.draw()
         self.game.handle_test_result_click(self.game.continue_button.center)
         self.assertEqual(self.game.state, GameState.PATIENT)
+        self.assertIsNotNone(self.game.note_transfer_animation)
+        self.assertIsNotNone(self.game.pending_test_discard)
+        self.assertIsNone(self.game.discard_animation)
+
+        self.game.note_transfer_animation["started_at"] = (
+            pygame.time.get_ticks() - self.game.note_transfer_animation_duration - 1
+        )
+        self.game.update()
+        self.assertIsNone(self.game.note_transfer_animation)
+        self.assertIsNotNone(self.game.notebook_attention_started_at)
+        self.assertIsNone(self.game.discard_animation)
+
+        self.game.notebook_attention_started_at = (
+            pygame.time.get_ticks() - self.game.notebook_attention_duration - 1
+        )
+        self.game.update()
         self.assertIsNotNone(self.game.discard_animation)
         self.assertIsNone(self.game.pending_test_discard)
 
@@ -172,9 +188,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
         """The notebook preview should show a short count instead of overflowing notes."""
 
         self.assertEqual(self.game.get_notebook_test_count_label(), "NO TESTS")
+        self.assertFalse(self.game.notebook_has_test_results())
         result = self.game.patient.perform_test("TEMPERATURE").removeprefix("RESULTS: ")
         self.game.notebook.add_test(self.game.patient, "TEMPERATURE", result)
         self.assertEqual(self.game.get_notebook_test_count_label(), "1 TEST")
+        self.assertTrue(self.game.notebook_has_test_results())
         self.game.notebook.add_test(self.game.patient, "X-RAY", "No damage found.")
         self.assertEqual(self.game.get_notebook_test_count_label(), "2 TESTS")
 

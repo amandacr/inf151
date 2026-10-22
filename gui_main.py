@@ -106,6 +106,10 @@ class AlienDoctorGUI:
         self.discard_animation_duration = 350
         self.test_discard_animation_duration = 700
         self.pending_test_discard = None
+        self.note_transfer_animation = None
+        self.note_transfer_animation_duration = 650
+        self.notebook_attention_started_at = None
+        self.notebook_attention_duration = 420
         self.last_test_name = ""
         self.last_test_result = ""
         self.test_result_started_at = None
@@ -215,7 +219,20 @@ class AlienDoctorGUI:
     def handle_patient_click(self, position):
         """Handle ID-card and test-card clicks on the patient screen."""
 
-        if self.discard_animation and self.discard_animation.get("locks_input"):
+        note_sequence_active = (
+            self.note_transfer_animation is not None
+            or (
+                self.notebook_attention_started_at is not None
+                and self.pending_test_discard is not None
+            )
+        )
+        if (
+            note_sequence_active
+            or (
+                self.discard_animation
+                and self.discard_animation.get("locks_input")
+            )
+        ):
             return
         if self.diagnosis_confirmation_open:
             self.handle_diagnosis_confirmation_click(position)
@@ -371,7 +388,7 @@ class AlienDoctorGUI:
         self.refresh_hand_layout()
 
     def handle_test_result_click(self, position):
-        """Return to the workspace and visibly send the used card to med-waste."""
+        """Return to the workspace and begin logging the result in patient notes."""
 
         if (
             self.get_test_result_reveal_progress() >= 1.0
@@ -379,16 +396,27 @@ class AlienDoctorGUI:
         ):
             self.state = GameState.PATIENT
             if self.pending_test_discard is not None:
-                self.discard_animation = {
-                    "card": self.pending_test_discard,
-                    "start": self.layout["active_hand"].center,
+                self.note_transfer_animation = {
+                    "test_name": self.last_test_name,
+                    "result": self.last_test_result,
                     "started_at": pygame.time.get_ticks(),
-                    "duration": self.test_discard_animation_duration,
-                    "add_to_pile_on_complete": True,
-                    "locks_input": True,
-                    "arc_height": 105,
                 }
-                self.pending_test_discard = None
+
+    def start_pending_test_discard_animation(self):
+        """Begin the card-to-bin animation after its result has entered the notebook."""
+
+        if self.pending_test_discard is None:
+            return
+        self.discard_animation = {
+            "card": self.pending_test_discard,
+            "start": self.layout["active_hand"].center,
+            "started_at": pygame.time.get_ticks(),
+            "duration": self.test_discard_animation_duration,
+            "add_to_pile_on_complete": True,
+            "locks_input": True,
+            "arc_height": 105,
+        }
+        self.pending_test_discard = None
 
     def get_selected_card_rect(self, index):
         """Return the larger rectangle used to display a selected test card."""
@@ -488,8 +516,24 @@ class AlienDoctorGUI:
                 self.finish_intro()
             return
 
+        now = pygame.time.get_ticks()
+        if self.note_transfer_animation is not None:
+            elapsed = now - self.note_transfer_animation["started_at"]
+            if elapsed >= self.note_transfer_animation_duration:
+                self.note_transfer_animation = None
+                self.notebook_attention_started_at = now
+
+        if (
+            self.notebook_attention_started_at is not None
+            and self.pending_test_discard is not None
+        ):
+            attention_elapsed = now - self.notebook_attention_started_at
+            if attention_elapsed >= self.notebook_attention_duration:
+                self.notebook_attention_started_at = None
+                self.start_pending_test_discard_animation()
+
         if self.discard_animation is not None:
-            elapsed = pygame.time.get_ticks() - self.discard_animation["started_at"]
+            elapsed = now - self.discard_animation["started_at"]
             duration = self.discard_animation.get(
                 "duration",
                 self.discard_animation_duration,
@@ -543,6 +587,8 @@ class AlienDoctorGUI:
         self.discard_pile = []
         self.discard_animation = None
         self.pending_test_discard = None
+        self.note_transfer_animation = None
+        self.notebook_attention_started_at = None
         self.last_test_name = ""
         self.last_test_result = ""
         self.test_result_started_at = None
@@ -1423,6 +1469,7 @@ class AlienDoctorGUI:
         self.draw_notebook()
         self.draw_active_hand()
         self.draw_diagnosis_cards()
+        self.draw_note_transfer_animation()
         self.draw_discard_animation()
         if self.diagnosis_confirmation_open:
             self.draw_diagnosis_confirmation()
@@ -1563,7 +1610,7 @@ class AlienDoctorGUI:
                 width=2,
             )
             notebook_note = self.card_font.render(
-                "RESULT ADDED TO PATIENT NOTES",
+                "RESULT READY FOR PATIENT NOTES",
                 True,
                 COLORS["accent"],
             )
@@ -3339,13 +3386,91 @@ class AlienDoctorGUI:
         slot = pygame.Rect(lid.centerx - 25, lid.y + 3, 50, 4)
         pygame.draw.rect(self.screen, COLORS["background"], slot, border_radius=2)
 
-    def update_notebook_preview_animation(self, hovered):
-        """Open or close the miniature notebook smoothly based on the mouse position."""
+    def draw_note_transfer_animation(self):
+        """Fly a small diagnostic slip into the notebook before discarding its card."""
+
+        if self.note_transfer_animation is None:
+            return
+
+        elapsed = pygame.time.get_ticks() - self.note_transfer_animation["started_at"]
+        progress = min(1.0, elapsed / self.note_transfer_animation_duration)
+        eased_progress = progress * progress * (3 - 2 * progress)
+        start = (720, 330)
+        notebook_panel = self.layout["notebook"]
+        target = (notebook_panel.centerx + 34, notebook_panel.y + 58)
+        control = (
+            (start[0] + target[0]) / 2,
+            min(start[1], target[1]) - 90,
+        )
+        center_x, center_y = self.get_quadratic_curve_point(
+            start,
+            control,
+            target,
+            eased_progress,
+        )
+
+        for lag, radius in ((0.11, 4), (0.06, 3), (0.025, 2)):
+            trail_progress = max(0.0, eased_progress - lag)
+            trail_x, trail_y = self.get_quadratic_curve_point(
+                start,
+                control,
+                target,
+                trail_progress,
+            )
+            pygame.draw.circle(
+                self.screen,
+                (117, 190, 255),
+                (round(trail_x), round(trail_y)),
+                radius,
+            )
+
+        slip = self.create_note_slip_surface(
+            self.note_transfer_animation["test_name"],
+            self.note_transfer_animation["result"],
+        )
+        scale = 1.0 - 0.48 * eased_progress
+        scaled_size = (
+            max(65, round(slip.get_width() * scale)),
+            max(41, round(slip.get_height() * scale)),
+        )
+        slip = pygame.transform.smoothscale(slip, scaled_size)
+        slip = pygame.transform.rotate(slip, 7 - 18 * eased_progress)
+        if progress > 0.86:
+            slip.set_alpha(round(255 * (1 - (progress - 0.86) / 0.14)))
+        slip_rect = slip.get_rect(center=(round(center_x), round(center_y)))
+        self.screen.blit(slip, slip_rect)
+
+    def create_note_slip_surface(self, test_name, result):
+        """Create the miniature paper report used by the notebook logging animation."""
+
+        slip = pygame.Surface((126, 80), pygame.SRCALPHA)
+        paper = slip.get_rect()
+        pygame.draw.rect(slip, (244, 241, 215), paper, border_radius=6)
+        pygame.draw.rect(slip, (117, 190, 255), paper, width=3, border_radius=6)
+        pygame.draw.rect(slip, (214, 225, 205), pygame.Rect(7, 7, 112, 20), border_radius=4)
+
+        heading = self.pile_font.render("TEST RESULT", True, (53, 83, 91))
+        slip.blit(heading, heading.get_rect(center=(63, 17)))
+        test_label = self.card_font.render(test_name, True, COLORS["card_text"])
+        if test_label.get_width() > 110:
+            test_label = self.pile_font.render(test_name, True, COLORS["card_text"])
+        slip.blit(test_label, test_label.get_rect(center=(63, 38)))
+
+        result_line = result.splitlines()[0] if result else "Result recorded"
+        while self.pile_font.size(result_line)[0] > 108 and len(result_line) > 4:
+            result_line = result_line[:-4].rstrip() + "..."
+        result_text = self.pile_font.render(result_line, True, (69, 91, 86))
+        slip.blit(result_text, result_text.get_rect(center=(63, 57)))
+        pygame.draw.line(slip, (190, 199, 177), (12, 70), (114, 70), width=1)
+        return slip
+
+    def update_notebook_preview_animation(self, should_open):
+        """Smoothly move the miniature notebook toward its requested open state."""
 
         now = pygame.time.get_ticks()
         elapsed = max(0, min(50, now - self.notebook_preview_last_tick))
         self.notebook_preview_last_tick = now
-        direction = 1 if hovered else -1
+        direction = 1 if should_open else -1
         step = elapsed / self.notebook_preview_duration
         self.notebook_preview_progress = max(
             0.0,
@@ -3365,13 +3490,31 @@ class AlienDoctorGUI:
             return "1 TEST"
         return f"{test_count} TESTS"
 
+    def notebook_has_test_results(self):
+        """Return whether the notebook should remain open after its first recorded test."""
+
+        return self.get_notebook_test_count_label() != "NO TESTS"
+
     def draw_notebook(self):
-        """Draw a portrait notebook whose front cover swings open on hover."""
+        """Draw notes that open on hover, then stay open after the first test."""
 
         panel = self.layout["notebook"]
         hovered = panel.collidepoint(pygame.mouse.get_pos())
-        progress = self.update_notebook_preview_animation(hovered)
-        lift = round(7 * progress)
+        has_results = self.notebook_has_test_results()
+        stays_open = has_results and self.state != GameState.TEST_RESULT
+        progress = self.update_notebook_preview_animation(hovered or stays_open)
+
+        attention_progress = 0.0
+        if self.notebook_attention_started_at is not None:
+            attention_elapsed = (
+                pygame.time.get_ticks() - self.notebook_attention_started_at
+            )
+            attention_progress = max(
+                0.0,
+                min(1.0, attention_elapsed / self.notebook_attention_duration),
+            )
+        attention_bounce = math.sin(attention_progress * math.pi)
+        lift = round(7 * progress + 5 * attention_bounce)
 
         page_width = 70
         book_height = round(110 - 6 * progress)
@@ -3390,7 +3533,9 @@ class AlienDoctorGUI:
 
         glow = pygame.Surface(panel.size, pygame.SRCALPHA)
         pulse = (math.sin(pygame.time.get_ticks() / 650) + 1) / 2
-        glow_alpha = round(18 + 12 * pulse + 16 * progress)
+        glow_alpha = round(
+            18 + 12 * pulse + 16 * progress + 65 * attention_bounce
+        )
         pygame.draw.ellipse(
             glow,
             (173, 118, 208, glow_alpha),
@@ -3594,13 +3739,25 @@ class AlienDoctorGUI:
 
         if hovered:
             hover_label = self.card_font.render(
-                "OPEN NOTEBOOK",
+                "VIEW NOTES" if has_results else "OPEN NOTEBOOK",
                 True,
                 COLORS["accent"],
             )
             self.screen.blit(
                 hover_label,
                 hover_label.get_rect(center=(panel.centerx, panel.bottom - 5)),
+            )
+
+        if attention_bounce > 0.05:
+            notice = self.card_font.render(
+                "NEW NOTE!",
+                True,
+                (117, 190, 255),
+            )
+            notice.set_alpha(round(255 * attention_bounce))
+            self.screen.blit(
+                notice,
+                notice.get_rect(center=(panel.centerx, panel.y + 3 - lift)),
             )
 
     def draw_active_hand(self):
