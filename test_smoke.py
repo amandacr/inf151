@@ -208,6 +208,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertLess(diagnosis.centery, throwaway.centery)
         self.assertLessEqual(abs(diagnosis.centerx - right_window.centerx), 1)
         self.assertGreaterEqual(notebook.width, 180)
+        self.assertLess(throwaway.width, notebook.width)
+        self.assertLess(throwaway.height, notebook.height)
         self.assertFalse(throwaway.colliderect(active_hand))
         self.assertFalse(notebook.colliderect(active_hand))
 
@@ -228,7 +230,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         start = self.game.layout["active_hand"].center
         target = (
             self.game.layout["throwaway"].centerx,
-            self.game.layout["throwaway"].y + 51,
+            self.game.layout["throwaway"].y + 45,
         )
         control = ((start[0] + target[0]) / 2, min(start[1], target[1]) - 105)
         midpoint = self.game.get_quadratic_curve_point(start, control, target, 0.5)

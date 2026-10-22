@@ -132,7 +132,7 @@ class AlienDoctorGUI:
             "draw_deck": pygame.Rect(45, 180, 125, 175),
             "alien": pygame.Rect(233, 165, 230, 195),
             "id_card": pygame.Rect(510, 180, 270, 155),
-            "throwaway": pygame.Rect(910, 410, 125, 145),
+            "throwaway": pygame.Rect(923, 423, 100, 125),
             "notebook": pygame.Rect(35, 395, 180, 165),
             "active_hand": pygame.Rect(225, 390, 625, 170),
             "diagnosis": pygame.Rect(840, 175, 185, 180),
@@ -3154,8 +3154,8 @@ class AlienDoctorGUI:
         """Draw used and discarded cards inside a medical-waste container."""
 
         panel = self.layout["throwaway"]
-        label = self.small_font.render("MED-WASTE", True, (245, 130, 115))
-        label_plate = pygame.Rect(panel.x + 15, panel.y + 2, panel.width - 30, 27)
+        label = self.card_font.render("MED-WASTE", True, (245, 130, 115))
+        label_plate = pygame.Rect(panel.x + 4, panel.y + 3, panel.width - 8, 23)
         pygame.draw.rect(self.screen, (48, 38, 45), label_plate, border_radius=5)
         pygame.draw.rect(
             self.screen,
@@ -3168,7 +3168,7 @@ class AlienDoctorGUI:
 
         if self.discard_pile:
             last_test = self.discard_pile[-1].value.name
-            visible_card = pygame.Rect(panel.centerx - 27, panel.y + 30, 54, 34)
+            visible_card = pygame.Rect(panel.centerx - 22, panel.y + 25, 44, 29)
             pygame.draw.rect(
                 self.screen,
                 COLORS["card"],
@@ -3192,10 +3192,10 @@ class AlienDoctorGUI:
             )
             self.screen.blit(
                 card_name,
-                card_name.get_rect(center=(visible_card.centerx, visible_card.y + 11)),
+                card_name.get_rect(center=(visible_card.centerx, visible_card.y + 10)),
             )
 
-        lid = pygame.Rect(panel.x + 16, panel.y + 45, panel.width - 32, 12)
+        lid = pygame.Rect(panel.x + 12, panel.y + 40, panel.width - 24, 10)
         pygame.draw.rect(self.screen, (245, 130, 115), lid, border_radius=5)
         pygame.draw.rect(
             self.screen,
@@ -3204,14 +3204,14 @@ class AlienDoctorGUI:
             width=2,
             border_radius=5,
         )
-        slot = pygame.Rect(lid.centerx - 25, lid.y + 3, 50, 4)
+        slot = pygame.Rect(lid.centerx - 20, lid.y + 3, 40, 3)
         pygame.draw.rect(self.screen, COLORS["background"], slot, border_radius=2)
 
         container_points = (
-            (panel.x + 23, lid.bottom - 2),
-            (panel.right - 23, lid.bottom - 2),
-            (panel.right - 29, panel.bottom - 8),
-            (panel.x + 29, panel.bottom - 8),
+            (panel.x + 18, lid.bottom - 1),
+            (panel.right - 18, lid.bottom - 1),
+            (panel.right - 23, panel.bottom - 7),
+            (panel.x + 23, panel.bottom - 7),
         )
         pygame.draw.polygon(self.screen, (48, 72, 76), container_points)
         pygame.draw.polygon(
@@ -3221,11 +3221,11 @@ class AlienDoctorGUI:
             width=2,
         )
 
-        warning_center = (panel.centerx, panel.y + 78)
+        warning_center = (panel.centerx, panel.y + 68)
         warning_triangle = (
-            (warning_center[0], warning_center[1] - 12),
-            (warning_center[0] - 13, warning_center[1] + 10),
-            (warning_center[0] + 13, warning_center[1] + 10),
+            (warning_center[0], warning_center[1] - 10),
+            (warning_center[0] - 11, warning_center[1] + 8),
+            (warning_center[0] + 11, warning_center[1] + 8),
         )
         pygame.draw.polygon(
             self.screen,
@@ -3255,7 +3255,7 @@ class AlienDoctorGUI:
         count = self.pile_font.render(count_text, True, COLORS["text"])
         self.screen.blit(
             count,
-            count.get_rect(center=(panel.centerx, panel.bottom - 14)),
+            count.get_rect(center=(panel.centerx, panel.bottom - 12)),
         )
 
     def draw_discard_animation(self):
@@ -3274,7 +3274,7 @@ class AlienDoctorGUI:
         start_x, start_y = self.discard_animation["start"]
         target = (
             self.layout["throwaway"].centerx,
-            self.layout["throwaway"].y + 51,
+            self.layout["throwaway"].y + 45,
         )
         control = (
             (start_x + target[0]) / 2,
@@ -3374,7 +3374,7 @@ class AlienDoctorGUI:
         """Redraw the bin opening over the final frames so the card appears to enter it."""
 
         panel = self.layout["throwaway"]
-        lid = pygame.Rect(panel.x + 16, panel.y + 45, panel.width - 32, 12)
+        lid = pygame.Rect(panel.x + 12, panel.y + 40, panel.width - 24, 10)
         pygame.draw.rect(self.screen, (245, 130, 115), lid, border_radius=5)
         pygame.draw.rect(
             self.screen,
@@ -3383,7 +3383,7 @@ class AlienDoctorGUI:
             width=2,
             border_radius=5,
         )
-        slot = pygame.Rect(lid.centerx - 25, lid.y + 3, 50, 4)
+        slot = pygame.Rect(lid.centerx - 20, lid.y + 3, 40, 3)
         pygame.draw.rect(self.screen, COLORS["background"], slot, border_radius=2)
 
     def draw_note_transfer_animation(self):
