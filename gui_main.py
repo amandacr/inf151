@@ -126,10 +126,10 @@ class AlienDoctorGUI:
             "draw_deck": pygame.Rect(45, 180, 125, 175),
             "alien": pygame.Rect(233, 165, 230, 195),
             "id_card": pygame.Rect(510, 180, 270, 155),
-            "throwaway": pygame.Rect(910, 250, 125, 120),
-            "notebook": pygame.Rect(40, 410, 155, 150),
+            "throwaway": pygame.Rect(910, 410, 125, 145),
+            "notebook": pygame.Rect(35, 395, 180, 165),
             "active_hand": pygame.Rect(225, 390, 625, 170),
-            "diagnosis": pygame.Rect(885, 400, 175, 160),
+            "diagnosis": pygame.Rect(875, 175, 185, 180),
         }
         self.refresh_hand_layout()
         self.notebook_layout = self.build_notebook_rects()
@@ -141,7 +141,7 @@ class AlienDoctorGUI:
         self.card_font = pygame.font.Font(None, 17)
         self.pile_font = pygame.font.Font(None, 14)
         self.tiny_font = pygame.font.Font(None, 10)
-        self.notebook_preview_font = pygame.font.Font(None, 14)
+        self.notebook_preview_font = pygame.font.Font(None, 15)
         self.diagnosis_name_font = pygame.font.SysFont("Arial", 21, bold=True)
         self.diagnosis_card_font = pygame.font.SysFont("Arial", 13, bold=True)
         self.notebook_title_font = pygame.font.Font(None, 28)
@@ -3248,11 +3248,11 @@ class AlienDoctorGUI:
         progress = self.update_notebook_preview_animation(hovered)
         lift = round(7 * progress)
 
-        page_width = 64
-        book_height = round(100 - 6 * progress)
+        page_width = 70
+        book_height = round(110 - 6 * progress)
         closed_spine_x = panel.centerx - page_width // 2
         spine_x = round(closed_spine_x + (panel.centerx - closed_spine_x) * progress)
-        book_y = panel.y + 15 - lift
+        book_y = panel.y + 13 - lift
         book_bottom = book_y + book_height
         left_extent = round(page_width * progress)
 
@@ -3262,6 +3262,16 @@ class AlienDoctorGUI:
         page_color = (240, 237, 211)
         page_edge = (174, 160, 176)
         rule_color = (188, 196, 174)
+
+        glow = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pulse = (math.sin(pygame.time.get_ticks() / 650) + 1) / 2
+        glow_alpha = round(18 + 12 * pulse + 16 * progress)
+        pygame.draw.ellipse(
+            glow,
+            (173, 118, 208, glow_alpha),
+            pygame.Rect(8, 5, panel.width - 16, panel.height - 27),
+        )
+        self.screen.blit(glow, panel.topleft)
 
         full_book = pygame.Rect(
             spine_x - left_extent - 2,
@@ -3363,8 +3373,8 @@ class AlienDoctorGUI:
                     (page_width, book_height),
                     pygame.SRCALPHA,
                 )
-                title = self.pile_font.render("PATIENT", True, (245, 225, 255))
-                subtitle = self.pile_font.render("NOTES", True, (245, 225, 255))
+                title = self.card_font.render("PATIENT", True, (245, 225, 255))
+                subtitle = self.card_font.render("NOTES", True, (245, 225, 255))
                 title.set_alpha(title_alpha)
                 subtitle.set_alpha(title_alpha)
                 cover_surface.blit(
@@ -3454,11 +3464,11 @@ class AlienDoctorGUI:
             rotated_pencil = pygame.transform.rotate(pencil_surface, -13)
             self.screen.blit(
                 rotated_pencil,
-                (right_page.right - 12, book_y + 14),
+                (right_page.right - 18, book_y + 18),
             )
 
         if hovered:
-            hover_label = self.pile_font.render(
+            hover_label = self.card_font.render(
                 "OPEN NOTEBOOK",
                 True,
                 COLORS["accent"],

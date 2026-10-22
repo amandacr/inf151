@@ -168,6 +168,19 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.notebook.add_test(self.game.patient, "X-RAY", "No damage found.")
         self.assertEqual(self.game.get_notebook_test_count_label(), "2 TESTS")
 
+    def test_workspace_tools_use_the_swapped_non_overlapping_layout(self):
+        """Diagnosis should sit above med-waste while the larger notebook clears the hand."""
+
+        diagnosis = self.game.layout["diagnosis"]
+        throwaway = self.game.layout["throwaway"]
+        notebook = self.game.layout["notebook"]
+        active_hand = self.game.layout["active_hand"]
+
+        self.assertLess(diagnosis.centery, throwaway.centery)
+        self.assertGreaterEqual(notebook.width, 180)
+        self.assertFalse(throwaway.colliderect(active_hand))
+        self.assertFalse(notebook.colliderect(active_hand))
+
 
 if __name__ == "__main__":
     unittest.main()
