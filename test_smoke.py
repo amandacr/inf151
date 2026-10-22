@@ -14,7 +14,7 @@ import pygame
 from Deck import Deck
 from Notebook import Notebook
 from PatientData import create_zorpa
-from Player import DIAGNOSIS_REWARD
+from Player import DIAGNOSIS_REWARD, Player
 from Tests.AllergyTest import AllergyTest
 from Tests.TemperatureTest import TemperatureTest
 from Tests.UltrasoundTest import UltrasoundTest
@@ -60,6 +60,30 @@ class SharedModelSmokeTests(unittest.TestCase):
             },
         )
         self.assertEqual(len(deck.contents), 24)
+
+    def test_starting_diagnosis_hand_has_five_options_and_the_correct_answer(self):
+        """The fixed prototype hand should contain five unique diagnoses including Hypothermia."""
+
+        player = Player("Test Doctor")
+        diagnosis_names = [card.value.name for card in player.diagnosis_hand]
+
+        self.assertEqual(len(diagnosis_names), 5)
+        self.assertEqual(len(set(diagnosis_names)), 5)
+        self.assertEqual(
+            diagnosis_names,
+            [
+                "Hypothermia",
+                "Missing Intestine",
+                "Acute Water Reaction",
+                "Skeletal Resonance",
+                "Lava-Flow Blockage",
+            ],
+        )
+        correct_diagnosis = create_zorpa().diagnosis
+        self.assertEqual(
+            sum(card.value == correct_diagnosis for card in player.diagnosis_hand),
+            1,
+        )
 
 
 class GuiFlowSmokeTests(unittest.TestCase):

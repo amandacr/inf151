@@ -26,6 +26,24 @@ DIAGNOSES = {
         "digestion and nutrient absorption.",
         "Perform an intestinal transplant.",
     ),
+    "acute_water_reaction": Diagnosis(
+        "Acute Water Reaction",
+        "The patient is experiencing a severe allergic response following "
+        "contact with water, causing shaking and systemic distress.",
+        "Remove all water exposure and administer a species-safe antihistamine.",
+    ),
+    "skeletal_resonance": Diagnosis(
+        "Skeletal Resonance",
+        "The patient's bones are vibrating at an unstable frequency, causing "
+        "uncontrollable shaking and skeletal strain.",
+        "Stabilize the patient in a resonance-dampening chamber.",
+    ),
+    "lava_flow_blockage": Diagnosis(
+        "Lava-Flow Blockage",
+        "The patient's lava blood is not circulating normally, causing shaking, "
+        "weakness, and internal pressure.",
+        "Restore circulation with a controlled geothermal infusion.",
+    ),
 }
 
 

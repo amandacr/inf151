@@ -19,7 +19,7 @@ class Player:
     def __init__(self, name):
         """
         Initializes a player at the beginning of the game.
-        Players start with $500, two diagnosis cards, and five test cards.
+        Players start with $500, five diagnosis cards, and five test cards.
         """
         self.name = name
         self.balance = 500 # start with 500 alien dollars
@@ -33,6 +33,9 @@ class Player:
         self.diagnosis_hand = [
             Card("Diagnosis", DIAGNOSES["hypothermia"]),
             Card("Diagnosis", DIAGNOSES["missing_intestine"]),
+            Card("Diagnosis", DIAGNOSES["acute_water_reaction"]),
+            Card("Diagnosis", DIAGNOSES["skeletal_resonance"]),
+            Card("Diagnosis", DIAGNOSES["lava_flow_blockage"]),
         ]
 
     def draw(self, card):
