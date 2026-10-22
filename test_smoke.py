@@ -23,6 +23,7 @@ from gui_animations import AnimationMixin
 from gui_cards import CardMixin
 from gui_main import AlienDoctorGUI, GameState
 from gui_notebook import NotebookMixin
+from gui_reception import ReceptionMixin
 
 
 class SharedModelSmokeTests(unittest.TestCase):
@@ -110,10 +111,13 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIsInstance(self.game, AnimationMixin)
         self.assertIsInstance(self.game, CardMixin)
         self.assertIsInstance(self.game, NotebookMixin)
+        self.assertIsInstance(self.game, ReceptionMixin)
         self.assertEqual(self.game.draw_discard_animation.__module__, "gui_animations")
         self.assertEqual(self.game.draw_test_card.__module__, "gui_cards")
         self.assertEqual(self.game.run_selected_test.__module__, "gui_cards")
         self.assertEqual(self.game.draw_notebook.__module__, "gui_notebook")
+        self.assertEqual(self.game.draw_intro_screen.__module__, "gui_reception")
+        self.assertEqual(self.game.draw_title_screen.__module__, "gui_reception")
 
     def test_correct_diagnosis_reaches_shop_and_resets_round(self):
         """A test and correct diagnosis should reward the player and reach the shop."""
@@ -197,6 +201,22 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_outcome_click(self.game.outcome_button.center)
         self.assertEqual(self.game.state, GameState.PATIENT)
         self.assertFalse(self.game.showing_diagnosis_hand)
+
+    def test_reception_transition_reaches_the_patient_workspace(self):
+        """Calling the next patient should finish in the examination workspace."""
+
+        self.game.state = GameState.TITLE
+        self.game.reception_transition_started_at = None
+        self.game.begin_reception_transition()
+
+        self.assertIsNotNone(self.game.reception_transition_started_at)
+        self.game.reception_transition_started_at = (
+            pygame.time.get_ticks() - self.game.reception_transition_duration - 1
+        )
+        self.game.update()
+
+        self.assertEqual(self.game.state, GameState.PATIENT)
+        self.assertIsNotNone(self.game.patient_fade_started_at)
 
     def test_miniature_notebook_uses_a_compact_test_count(self):
         """The notebook preview should show a short count instead of overflowing notes."""
