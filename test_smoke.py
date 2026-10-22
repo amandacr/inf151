@@ -25,6 +25,8 @@ from gui_examination import ExaminationMixin
 from gui_main import AlienDoctorGUI, GameState
 from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
+from gui_results import ResultsMixin
+from gui_shop import ShopMixin
 
 
 class SharedModelSmokeTests(unittest.TestCase):
@@ -114,6 +116,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIsInstance(self.game, ExaminationMixin)
         self.assertIsInstance(self.game, NotebookMixin)
         self.assertIsInstance(self.game, ReceptionMixin)
+        self.assertIsInstance(self.game, ResultsMixin)
+        self.assertIsInstance(self.game, ShopMixin)
         self.assertEqual(self.game.draw_discard_animation.__module__, "gui_animations")
         self.assertEqual(self.game.draw_test_card.__module__, "gui_cards")
         self.assertEqual(self.game.run_selected_test.__module__, "gui_cards")
@@ -122,6 +126,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.draw_notebook.__module__, "gui_notebook")
         self.assertEqual(self.game.draw_intro_screen.__module__, "gui_reception")
         self.assertEqual(self.game.draw_title_screen.__module__, "gui_reception")
+        self.assertEqual(self.game.draw_test_result_screen.__module__, "gui_results")
+        self.assertEqual(self.game.draw_diagnosis_outcome.__module__, "gui_results")
+        self.assertEqual(self.game.draw_shop_screen.__module__, "gui_shop")
 
     def test_correct_diagnosis_reaches_shop_and_resets_round(self):
         """A test and correct diagnosis should reward the player and reach the shop."""
