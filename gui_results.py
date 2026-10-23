@@ -477,7 +477,12 @@ class ResultsMixin:
         platform = pygame.Rect(panel.centerx - 63, panel.bottom - 34, 126, 18)
         pygame.draw.ellipse(self.screen, (45, 80, 74), platform)
         pygame.draw.arc(self.screen, status_color, platform, 0, math.pi, width=2)
-
+        entry = self.get_current_entry()
+        if entry["exam"] is not None:
+            self.draw_outcome_exam_sprite(panel, platform, entry, correct, status_color)
+            name = self.card_font.render(self.patient.name.upper(), True, COLORS["muted"])
+            self.screen.blit(name, name.get_rect(center=(panel.centerx, panel.bottom - 11)))
+            return
         alien_color = (151, 99, 211)
         alien_outline = (62, 36, 91)
         body = pygame.Rect(panel.centerx - 24, panel.y + 126, 48, 64)
@@ -634,4 +639,48 @@ class ResultsMixin:
         )
         self.screen.blit(reward, (footer.x + 58, footer.y + 17))
         self.screen.blit(balance, (footer.x + 58, footer.y + 37))
+
+    def draw_outcome_exam_sprite(self, panel, platform, entry, correct, status_color):
+        """Draw the current patient's exam sprite, scaled up, standing on the recovery platform."""
+
+        scale = 1.5
+        layer_size = (166, 133)  # same height as the exam bay's inner area
+        layer = pygame.Surface(layer_size, pygame.SRCALPHA)
+        bay = layer.get_rect()
+        layer_platform = pygame.Rect(bay.centerx - 67, bay.bottom - 20, 134, 17)
+        blinking = pygame.time.get_ticks() % 3600 >= 3480
+
+        real_screen = self.screen
+        self.screen = layer
+        try:
+            head = entry["exam"](bay, bay.centerx, layer_platform, 0, 0, blinking)
+        finally:
+            self.screen = real_screen
+
+        scaled_size = (round(layer_size[0] * scale), round(layer_size[1] * scale))
+        scaled = pygame.transform.smoothscale(layer, scaled_size)
+        # Line the sprite's platform up with the panel's platform
+        position = (
+            panel.centerx - scaled_size[0] // 2,
+            platform.y - round(layer_platform.y * scale),
+        )
+        self.screen.blit(scaled, position)
+
+        if correct:
+            for sparkle_x, sparkle_y in (
+                    (panel.x + 42, panel.y + 64),
+                    (panel.right - 40, panel.y + 92),
+                    (panel.right - 58, panel.y + 49),
+            ):
+                pygame.draw.line(self.screen, status_color,
+                                 (sparkle_x - 5, sparkle_y), (sparkle_x + 5, sparkle_y), 2)
+                pygame.draw.line(self.screen, status_color,
+                                 (sparkle_x, sparkle_y - 5), (sparkle_x, sparkle_y + 5), 2)
+        else:
+            # A small sweat drop beside the head for "not quite right"
+            drop_x = position[0] + round(head.right * scale) + 6
+            drop_y = position[1] + round(head.y * scale) + 12
+            pygame.draw.polygon(self.screen, (117, 190, 255),
+                                ((drop_x, drop_y - 8), (drop_x - 5, drop_y + 1), (drop_x + 5, drop_y + 1)))
+            pygame.draw.circle(self.screen, (117, 190, 255), (drop_x, drop_y + 3), 5)
 

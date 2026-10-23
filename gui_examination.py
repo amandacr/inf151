@@ -525,6 +525,14 @@ class ExaminationMixin:
             width=2,
         )
 
+        entry = self.get_current_entry()
+        if entry["exam"] is not None:
+            head = entry["exam"](bay, base_alien_center_x, platform, shake_x, shake_y, blinking)
+            self.draw_symptom_bubble(bay, head, entry["symptom"])
+            name = self.small_font.render(self.patient.name, True, COLORS["muted"])
+            self.screen.blit(name, name.get_rect(center=(panel.centerx, panel.bottom - 13)))
+            return
+
         alien_outline = (62, 36, 91)
         alien_shadow = (89, 54, 132)
         alien_color = (151, 99, 211)
@@ -726,13 +734,13 @@ class ExaminationMixin:
             2,
         )
 
-        self.draw_symptom_bubble(bay, head)
+        self.draw_symptom_bubble(bay, head, entry["symptom"])
 
         name = self.small_font.render(self.patient.name, True, COLORS["muted"])
         self.screen.blit(name, name.get_rect(center=(panel.centerx, panel.bottom - 13)))
 
 
-    def draw_symptom_bubble(self, bay, alien_head):
+    def draw_symptom_bubble(self, bay, alien_head, symptom_lines):
         """Draw Zorpa's current symptom in a speech bubble beside the alien."""
 
         bubble = pygame.Rect(bay.right - 100, bay.y + 15, 91, 55)
@@ -755,7 +763,6 @@ class ExaminationMixin:
             border_radius=10,
         )
 
-        symptom_lines = ("I CAN'T STOP", "SHAKING!")
         for line_index, line_text in enumerate(symptom_lines):
             line = self.pile_font.render(line_text, True, bubble_outline)
             line_y = bubble.y + 17 + line_index * 17
@@ -862,7 +869,7 @@ class ExaminationMixin:
             self.screen.blit(detail, (card.x + 70, detail_y))
             detail_y += 15
 
-        serial = self.pile_font.render("BLP-004-ZV", True, (72, 101, 91))
+        serial = self.pile_font.render(self.get_current_entry()["serial"], True, (72, 101, 91))
         self.screen.blit(serial, serial.get_rect(center=(portrait.centerx, portrait.bottom + 9)))
 
         flip_hint = self.card_font.render(next_side, True, COLORS["card_text"])
@@ -875,10 +882,9 @@ class ExaminationMixin:
     def draw_id_portrait(self, portrait, medical_side):
         """Draw a miniature version of Zorpa on either side of the ID."""
 
-        portrait_background = (218, 199, 235)
-        portrait_border = (91, 59, 125)
-        portrait_alien = (126, 75, 174)
-        portrait_highlight = (190, 143, 229)
+        portrait_background, portrait_border, portrait_alien, portrait_highlight = (
+            self.get_current_entry()["portrait"]
+        )
         pygame.draw.rect(self.screen, portrait_background, portrait, border_radius=5)
         pygame.draw.rect(
             self.screen,
@@ -1108,3 +1114,133 @@ class ExaminationMixin:
             count.get_rect(center=(panel.centerx, panel.bottom - 12)),
         )
 
+    def get_current_entry(self):
+        """Return the queue entry for the patient currently in the exam bay."""
+
+        slot = max(0, min(self.patients_called - 1, len(self.waiting_room_queue) - 1))
+        return self.waiting_room_queue[slot]
+
+    def draw_exam_limb(self, start, end, outline, color, width):
+        """Draw an outlined arm or leg with a rounded hand or foot."""
+
+        pygame.draw.line(self.screen, outline, start, end, width + 4)
+        pygame.draw.line(self.screen, color, start, end, width)
+        pygame.draw.circle(self.screen, color, end, width // 2 + 1)
+
+    def draw_exam_zoogy(self, bay, center_x, platform, shake_x, shake_y, blinking):
+        """Draw the green four-armed patient on the exam platform."""
+
+        outline, color = (49, 111, 82), (103, 173, 124)
+        belly, ink = (151, 211, 155), (31, 51, 47)
+        cx = center_x + shake_x
+        head = pygame.Rect(0, 0, 56, 54)
+        head.midtop = (cx, bay.y + 24 + shake_y)
+        body = pygame.Rect(cx - 24, head.bottom - 4, 48, 42)
+
+        for side in (-1, 1):
+            self.draw_exam_limb(
+                (cx + side * 10, body.bottom - 4), (cx + side * 14, platform.y + 5),
+                outline, color, 8,
+            )
+            for start_y, end_y in ((10, 0), (26, 34)):  # upper and lower arm
+                self.draw_exam_limb(
+                    (cx + side * 20, body.y + start_y), (cx + side * 44, body.y + end_y),
+                    outline, color, 6,
+                )
+
+        pygame.draw.rect(self.screen, outline, body.inflate(5, 5), border_radius=18)
+        pygame.draw.rect(self.screen, color, body, border_radius=16)
+        pygame.draw.ellipse(self.screen, belly, pygame.Rect(cx - 13, body.y + 12, 26, 24))
+        pygame.draw.polygon(
+            self.screen, (232, 194, 93),
+            ((cx, body.y + 15), (cx + 5, body.y + 21), (cx, body.y + 27), (cx - 5, body.y + 21)),
+        )
+
+        pygame.draw.circle(self.screen, outline, head.center, 29)
+        pygame.draw.circle(self.screen, color, head.center, 26)
+        pygame.draw.ellipse(self.screen, belly, pygame.Rect(head.x + 10, head.y + 7, 18, 11))
+        for side in (-1, 1):
+            eye = (head.centerx + side * 11, head.y + 26)
+            if blinking:
+                pygame.draw.line(self.screen, ink, (eye[0] - 4, eye[1]), (eye[0] + 4, eye[1]), 2)
+            else:
+                pygame.draw.circle(self.screen, ink, eye, 5)
+                pygame.draw.circle(self.screen, (235, 249, 232), (eye[0] - 2, eye[1] - 2), 1)
+            pygame.draw.circle(self.screen, (72, 137, 98), (head.centerx + side * 20, head.y + 36), 3)
+        pygame.draw.arc(
+            self.screen, ink, pygame.Rect(cx - 8, head.y + 34, 16, 10), math.pi, math.pi * 2, 2
+        )
+        return head
+
+    def draw_exam_titus(self, bay, center_x, platform, shake_x, shake_y, blinking):
+        """Draw the tall blue three-eyed patient on the exam platform."""
+
+        outline, color = (38, 83, 119), (64, 125, 166)
+        light, ink = (118, 190, 220), (31, 50, 70)
+        cx = center_x + shake_x
+        head = pygame.Rect(0, 0, 44, 56)
+        head.midtop = (cx, bay.y + 16 + shake_y)
+        body = pygame.Rect(cx - 19, head.bottom - 4, 38, 46)
+
+        for side in (-1, 1):
+            self.draw_exam_limb(
+                (cx + side * 8, body.bottom - 4), (cx + side * 11, platform.y + 5),
+                outline, color, 7,
+            )
+            self.draw_exam_limb(
+                (cx + side * 17, body.y + 8), (cx + side * 34, body.y + 34),
+                outline, color, 5,
+            )
+
+        pygame.draw.ellipse(self.screen, outline, body.inflate(5, 5))
+        pygame.draw.ellipse(self.screen, color, body)
+        pygame.draw.line(
+            self.screen, (175, 220, 225), (body.x + 6, body.y + 20), (body.right - 6, body.y + 20), 3
+        )
+        pygame.draw.circle(self.screen, (245, 187, 87), (cx, body.y + 26), 4)
+
+        pygame.draw.ellipse(self.screen, outline, head.inflate(5, 5))
+        pygame.draw.ellipse(self.screen, color, head)
+        pygame.draw.ellipse(self.screen, light, pygame.Rect(head.x + 8, head.y + 5, 15, 20))
+        for eye_x, eye_y in ((cx - 13, head.y + 31), (cx, head.y + 23), (cx + 13, head.y + 31)):
+            if blinking:
+                pygame.draw.line(self.screen, ink, (eye_x - 5, eye_y), (eye_x + 5, eye_y), 2)
+            else:
+                pygame.draw.circle(self.screen, (233, 246, 242), (eye_x, eye_y), 6)
+                pygame.draw.circle(self.screen, ink, (eye_x, eye_y), 2)
+        pygame.draw.line(
+            self.screen, ink, (cx - 5, head.y + 45), (cx + 5, head.y + 45), 2
+        )
+        return head
+
+    def draw_exam_conmann(self, bay, center_x, platform, shake_x, shake_y, blinking):
+        """Draw the orange blob patient on the exam platform."""
+
+        outline, color = (159, 70, 66), (226, 127, 91)
+        light, ink = (249, 170, 119), (50, 39, 57)
+        cx = center_x + shake_x
+        blob = pygame.Rect(0, 0, 68, 64)
+        blob.midtop = (cx, bay.y + 50 + shake_y)
+        head = pygame.Rect(blob.x, blob.y, blob.width, 40)
+
+        for foot_x in (cx - 24, cx - 6, cx + 12):
+            pygame.draw.ellipse(self.screen, outline, pygame.Rect(foot_x - 1, platform.y - 1, 20, 12))
+            pygame.draw.ellipse(self.screen, (191, 91, 72), pygame.Rect(foot_x, platform.y, 18, 10))
+
+        pygame.draw.ellipse(self.screen, outline, blob.inflate(5, 5))
+        pygame.draw.ellipse(self.screen, color, blob)
+        pygame.draw.ellipse(self.screen, light, pygame.Rect(blob.x + 10, blob.y + 6, 20, 12))
+        pygame.draw.circle(self.screen, (177, 75, 68), (blob.right - 10, blob.y + 38), 5)
+        pygame.draw.circle(self.screen, (197, 88, 70), (blob.x + 9, blob.y + 44), 3)
+        for side in (-1, 1):
+            eye = (cx + side * 11, blob.y + 24)
+            if blinking:
+                pygame.draw.line(self.screen, ink, (eye[0] - 4, eye[1]), (eye[0] + 4, eye[1]), 2)
+            else:
+                pygame.draw.circle(self.screen, ink, eye, 4)
+                pygame.draw.circle(self.screen, (249, 235, 220), (eye[0] - 1, eye[1] - 1), 1)
+        pygame.draw.arc(
+            self.screen, (82, 50, 62), pygame.Rect(cx - 12, blob.y + 32, 24, 14),
+            math.pi, math.pi * 2, 3,
+        )
+        return head

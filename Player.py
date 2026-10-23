@@ -36,6 +36,7 @@ class Player:
             Card("Diagnosis", DIAGNOSES["acute_water_reaction"]),
             Card("Diagnosis", DIAGNOSES["skeletal_resonance"]),
             Card("Diagnosis", DIAGNOSES["lava_flow_blockage"]),
+            Card("Diagnosis", DIAGNOSES["lactose_intolerance"])
         ]
 
     def draw(self, card):

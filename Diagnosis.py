@@ -44,6 +44,12 @@ DIAGNOSES = {
         "weakness, and internal pressure.",
         "Restore circulation with a controlled geothermal infusion.",
     ),
+    "lactose_intolerance": Diagnosis(
+        "Lactose Intolerance",
+        "The patient's digestive track cannot process lactose, a sugar "
+        "found commonly in the milk of mammalia across the galaxy.",
+        "Dietary changes: no more cheese (or other dairy products)!"
+    )
 }
 
 

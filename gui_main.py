@@ -24,7 +24,7 @@ from gui_theme import (
     FPS,
     WINDOW_SIZE,
 )
-from PatientData import create_zorpa
+from PatientData import create_zorpa, create_zoogy, create_titus, create_conmann
 from Player import Player
 from Notebook import Notebook
 from Deck import Deck
@@ -62,7 +62,39 @@ class AlienDoctorGUI(
             )
             for _ in range(70)
         ]
-        self.patient = create_zorpa()
+
+        self.waiting_room_queue = [
+            {
+                "chair_x": 782, "draw": self.draw_waiting_zorpa, "create": create_zorpa,
+                "exam": None,
+                "symptom": ("I CAN'T STOP", "SHAKING!"),
+                "serial": "BLP-004-ZV",
+                "portrait": ((218, 199, 235), (91, 59, 125), (126, 75, 174), (190, 143, 229)),
+            },
+            {
+                "chair_x": 640, "draw": self.draw_waiting_zoogy, "create": create_zoogy,
+                "exam": self.draw_exam_zoogy,
+                "symptom": ("I FEEL...", "STRAINED?"),
+                "serial": "GRN-017-ZG",
+                "portrait": ((205, 228, 208), (49, 111, 82), (84, 151, 108), (151, 211, 155)),
+            },
+            {
+                "chair_x": 498, "draw": self.draw_waiting_titus, "create": create_titus,
+                "exam": self.draw_exam_titus,
+                "symptom": ("I'M SO", "DISTRESSED!"),
+                "serial": "BLU-203-TT",
+                "portrait": ((200, 222, 236), (38, 83, 119), (64, 125, 166), (118, 190, 220)),
+            },
+            {
+                "chair_x": 356, "draw": self.draw_waiting_conmann, "create": create_conmann,
+                "exam": self.draw_exam_conmann,
+                "symptom": ("MY TUMMY", "HURTS :("),
+                "serial": "ORG-088-CM",
+                "portrait": ((240, 212, 196), (159, 70, 66), (226, 127, 91), (249, 170, 119)),
+            },
+        ]
+        self.patients_called = 0
+        self.patient = self.waiting_room_queue[0]["create"]()
         self.player = Player("Dr GUI")
         self.notebook = Notebook()
         self.notebook.add_patient(self.patient)
@@ -299,6 +331,7 @@ class AlienDoctorGUI(
             elapsed = pygame.time.get_ticks() - self.reception_transition_started_at
             if elapsed >= self.reception_transition_duration:
                 self.reception_transition_started_at = None
+                self.patients_called += 1
                 self.patient_fade_started_at = pygame.time.get_ticks()
                 self.state = GameState.PATIENT
             return
@@ -319,7 +352,8 @@ class AlienDoctorGUI(
         """Prepare a fresh patient encounter while preserving earned money."""
 
         current_balance = self.player.balance
-        self.patient = create_zorpa()
+        next_slot = min(self.patients_called, len(self.waiting_room_queue) - 1)
+        self.patient = self.waiting_room_queue[next_slot]["create"]()
         self.player = Player(self.player.name)
         self.player.balance = current_balance
         self.notebook = Notebook()

@@ -1,5 +1,5 @@
 from Deck import Deck
-from PatientData import create_zorpa
+from PatientData import create_zorpa, create_zoogy, create_titus, create_conmann
 from Player import DIAGNOSIS_REWARD, Player, display_hand
 from Tests.AllergyTest import AllergyTest
 from Tests.TemperatureTest import TemperatureTest
@@ -21,7 +21,7 @@ class Game:
         """)
         self.player = Player(f"Dr {input('What would you like your name to be? Dr ')}")
 
-        self.patients = [create_zorpa()]
+        self.patients = [create_zorpa(), create_zoogy(), create_titus(), create_conmann()]
 
         self.deck = Deck()
         self.deck.populate([AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()])

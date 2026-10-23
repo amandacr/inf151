@@ -585,7 +585,9 @@ class NotebookMixin:
             name,
             name.get_rect(midleft=(portrait.right + 10, header.centery - 5)),
         )
-        case_id = self.card_font.render("CASE BLP-004-ZV", True, (111, 91, 124))
+        case_id = self.card_font.render(
+            f"CASE {self.get_current_entry()['serial']}", True, (111, 91, 124)
+        )
         self.screen.blit(
             case_id,
             case_id.get_rect(midleft=(portrait.right + 11, header.centery + 17)),
@@ -608,6 +610,41 @@ class NotebookMixin:
         )
 
     def draw_notebook_patient_stamp(self, portrait):
+        """Draw a tiny stamped portrait of the current alien patient."""
+
+        entry = self.get_current_entry()
+        if entry["exam"] is None:
+            self.draw_zorpa_notebook_stamp(portrait)
+            return
+
+        background, border = entry["portrait"][0], entry["portrait"][1]
+        pygame.draw.rect(self.screen, background, portrait, border_radius=6)
+        pygame.draw.rect(self.screen, border, portrait, width=2, border_radius=6)
+
+        # Draw the exam sprite off-screen, then crop around the head
+        layer = pygame.Surface((166, 133), pygame.SRCALPHA)
+        bay = layer.get_rect()
+        platform = pygame.Rect(bay.centerx - 67, bay.bottom - 20, 134, 17)
+        real_screen = self.screen
+        self.screen = layer
+        try:
+            head = entry["exam"](bay, bay.centerx, platform, 0, 0, False)
+        finally:
+            self.screen = real_screen
+
+        side = max(head.width, head.height) + 16
+        crop = pygame.Rect(0, 0, side, side)
+        crop.center = head.center
+        crop = crop.clip(layer.get_rect())
+        face = layer.subsurface(crop).copy()
+
+        target = portrait.width - 8
+        scale = min(target / crop.width, target / crop.height)
+        size = (max(1, round(crop.width * scale)), max(1, round(crop.height * scale)))
+        face = pygame.transform.smoothscale(face, size)
+        self.screen.blit(face, face.get_rect(center=portrait.center))
+
+    def draw_zorpa_patient_stamp(self, portrait):
         """Draw a tiny stamped portrait of the current alien patient."""
 
         pygame.draw.rect(self.screen, (205, 190, 219), portrait, border_radius=6)

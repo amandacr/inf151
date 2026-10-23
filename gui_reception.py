@@ -16,14 +16,15 @@ class ReceptionMixin:
         self.patient_fade_started_at = None
         self.state = GameState.TITLE
 
-
     def begin_reception_transition(self):
-        """Call the waiting patient and begin the examination-door animation."""
+        """Call the next patient, or end the day if the room is empty."""
 
+        if self.patients_waiting() == 0:
+            self.end_day()
+            return
         if self.reception_transition_started_at is None:
             self.patient_fade_started_at = None
             self.reception_transition_started_at = pygame.time.get_ticks()
-
 
     def get_reception_transition_progress(self):
         """Return a zero-to-one value for the active reception-room transition."""
@@ -398,7 +399,13 @@ class ReceptionMixin:
         )
 
         left = self.body_font.render("RECEPTION", True, COLORS["text"])
-        middle_text = "CALLING NEXT PATIENT" if progress > 0 else "PATIENTS WAITING: 4"
+        waiting = self.patients_waiting()
+        if progress > 0:
+            middle_text = "CALLING NEXT PATIENT"
+        elif waiting == 0:
+            middle_text = "ALL PATIENTS SEEN"
+        else:
+            middle_text = f"PATIENTS WAITING: {waiting}"
         middle = self.small_font.render(middle_text, True, waiting_color)
         right = self.body_font.render(
             "MONEY: $" + str(self.player.balance),
@@ -538,53 +545,38 @@ class ReceptionMixin:
                 width=6,
             )
 
-
     def draw_waiting_room_aliens(self):
-        """Draw four distinct patients and move Zorpa toward the exam door when called."""
+        """Draw patients still waiting; walk the called one to the exam door."""
 
-        # A sleepy orange blob occupies the first chair.
-        pygame.draw.ellipse(self.screen, (191, 91, 72), pygame.Rect(323, 355, 67, 62))
-        pygame.draw.ellipse(self.screen, (226, 127, 91), pygame.Rect(329, 350, 55, 48))
-        pygame.draw.ellipse(self.screen, (249, 170, 119), pygame.Rect(337, 355, 19, 12))
-        pygame.draw.circle(self.screen, (177, 75, 68), (378, 385), 5)
-        pygame.draw.circle(self.screen, (197, 88, 70), (335, 392), 3)
-        pygame.draw.circle(self.screen, (50, 39, 57), (346, 371), 4)
-        pygame.draw.circle(self.screen, (50, 39, 57), (367, 371), 4)
-        pygame.draw.circle(self.screen, (249, 235, 220), (345, 370), 1)
-        pygame.draw.circle(self.screen, (249, 235, 220), (366, 370), 1)
-        pygame.draw.arc(
-            self.screen,
-            (82, 50, 62),
-            pygame.Rect(348, 376, 18, 12),
-            0,
-            math.pi,
-            width=2,
-        )
-        pygame.draw.arc(
-            self.screen,
-            (255, 190, 125),
-            pygame.Rect(339, 393, 36, 13),
-            math.pi,
-            math.pi * 2,
-            width=3,
-        )
-        pygame.draw.circle(self.screen, (255, 211, 105), (357, 401), 3)
-        for foot_x in (334, 354, 374):
-            pygame.draw.ellipse(self.screen, (159, 70, 66), pygame.Rect(foot_x, 407, 19, 12))
-            pygame.draw.line(
-                self.screen,
-                (224, 125, 94),
-                (foot_x + 8, 410),
-                (foot_x + 8, 416),
-                width=1,
-            )
-
-        # Zorpa walks from the chair nearest the exam door after being called.
         progress = self.get_reception_transition_progress()
-        walking_progress = min(1.0, progress / 0.92)
-        walking_eased = walking_progress * walking_progress * (3 - 2 * walking_progress)
-        zorpa_x = round(782 + (930 - 782) * walking_eased)
-        zorpa_y = round(360 - 5 * math.sin(walking_progress * math.pi * 5))
+        for slot, entry in enumerate(self.waiting_room_queue):
+            if slot < self.patients_called:
+                continue  # already seen, so the chair stays empty
+
+            if slot == self.patients_called and progress > 0:
+                walk = min(1.0, progress / 0.92)
+                eased = walk * walk * (3 - 2 * walk)
+                dx = round((930 - entry["chair_x"]) * eased)
+                dy = round(-5 * math.sin(walk * math.pi * 5))
+                self.draw_with_offset(entry["draw"], dx, dy)
+            else:
+                entry["draw"]()
+
+    def draw_with_offset(self, draw_method, dx, dy):
+        """Run a draw method onto a temporary layer, then blit it shifted."""
+
+        layer = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        real_screen = self.screen
+        self.screen = layer
+        try:
+            draw_method()
+        finally:
+            self.screen = real_screen
+        self.screen.blit(layer, (dx, dy))
+
+    def draw_waiting_zorpa(self):
+        # Zorpa walks from the chair nearest the exam door after being called.
+        zorpa_x, zorpa_y = 782, 360
         alien_outline = (62, 36, 91)
         alien_color = (151, 99, 211)
         pygame.draw.ellipse(
@@ -639,8 +631,8 @@ class ReceptionMixin:
         pygame.draw.line(self.screen, alien_outline, (zorpa_x - 7, zorpa_y + 31), (zorpa_x, zorpa_y + 35), width=2)
         pygame.draw.line(self.screen, alien_outline, (zorpa_x, zorpa_y + 35), (zorpa_x + 7, zorpa_y + 31), width=2)
         for arm_start, arm_end in (
-            ((zorpa_x - 17, zorpa_y + 57), (zorpa_x - 31, zorpa_y + 78)),
-            ((zorpa_x + 17, zorpa_y + 57), (zorpa_x + 31, zorpa_y + 78)),
+                ((zorpa_x - 17, zorpa_y + 57), (zorpa_x - 31, zorpa_y + 78)),
+                ((zorpa_x + 17, zorpa_y + 57), (zorpa_x + 31, zorpa_y + 78)),
         ):
             pygame.draw.line(self.screen, alien_outline, arm_start, arm_end, width=9)
             pygame.draw.line(self.screen, alien_color, arm_start, arm_end, width=6)
@@ -680,31 +672,8 @@ class ReceptionMixin:
         pygame.draw.ellipse(self.screen, alien_color, pygame.Rect(zorpa_x - 21, zorpa_y + 100, 18, 7))
         pygame.draw.ellipse(self.screen, alien_color, pygame.Rect(zorpa_x + 3, zorpa_y + 100, 18, 7))
 
-        # A tall blue patient watches the queue display with all three eyes.
-        pygame.draw.ellipse(self.screen, (64, 125, 166), pygame.Rect(468, 338, 61, 74))
-        pygame.draw.ellipse(self.screen, (118, 190, 220), pygame.Rect(477, 344, 20, 29))
-        pygame.draw.ellipse(self.screen, (45, 95, 132), pygame.Rect(471, 390, 55, 64))
-        pygame.draw.ellipse(self.screen, (77, 148, 188), pygame.Rect(474, 393, 49, 58))
-        for eye_x, eye_y in ((484, 365), (499, 358), (514, 365)):
-            pygame.draw.circle(self.screen, (233, 246, 242), (eye_x, eye_y), 6)
-            pygame.draw.circle(self.screen, (31, 50, 70), (eye_x, eye_y), 2)
-            pygame.draw.circle(self.screen, (255, 255, 255), (eye_x - 1, eye_y - 2), 1)
-        pygame.draw.circle(self.screen, (38, 91, 132), (480, 382), 2)
-        pygame.draw.circle(self.screen, (38, 91, 132), (518, 382), 2)
-        pygame.draw.arc(self.screen, (31, 70, 104), pygame.Rect(489, 377, 20, 13), 0, math.pi, width=2)
-        pygame.draw.line(self.screen, (175, 220, 225), (477, 402), (520, 402), width=3)
-        pygame.draw.circle(self.screen, (245, 187, 87), (499, 407), 4)
-        pygame.draw.line(self.screen, (45, 95, 132), (476, 410), (460, 429), width=7)
-        pygame.draw.line(self.screen, (45, 95, 132), (521, 410), (537, 429), width=7)
-        pygame.draw.circle(self.screen, (77, 148, 188), (459, 430), 5)
-        pygame.draw.circle(self.screen, (77, 148, 188), (538, 430), 5)
-        pygame.draw.arc(self.screen, (132, 197, 219), pygame.Rect(485, 418, 28, 22), 0, math.pi * 2, width=2)
-        pygame.draw.line(self.screen, (45, 95, 132), (482, 442), (474, 466), width=8)
-        pygame.draw.line(self.screen, (45, 95, 132), (515, 442), (523, 466), width=8)
-        pygame.draw.ellipse(self.screen, (38, 83, 119), pygame.Rect(465, 461, 20, 8))
-        pygame.draw.ellipse(self.screen, (38, 83, 119), pygame.Rect(514, 461, 20, 8))
-
-        # A small green four-armed patient fills the final chair.
+    def draw_waiting_zoogy(self):
+        # draws zoogy
         pygame.draw.circle(self.screen, (49, 111, 82), (640, 371), 34)
         pygame.draw.circle(self.screen, (103, 173, 124), (640, 371), 31)
         pygame.draw.ellipse(self.screen, (68, 130, 92), pygame.Rect(614, 393, 52, 58))
@@ -740,6 +709,69 @@ class ReceptionMixin:
         pygame.draw.ellipse(self.screen, (50, 103, 75), pygame.Rect(614, 461, 20, 8))
         pygame.draw.ellipse(self.screen, (50, 103, 75), pygame.Rect(647, 461, 20, 8))
 
+    def draw_waiting_titus(self):
+        # draws titus
+        pygame.draw.ellipse(self.screen, (64, 125, 166), pygame.Rect(468, 338, 61, 74))
+        pygame.draw.ellipse(self.screen, (118, 190, 220), pygame.Rect(477, 344, 20, 29))
+        pygame.draw.ellipse(self.screen, (45, 95, 132), pygame.Rect(471, 390, 55, 64))
+        pygame.draw.ellipse(self.screen, (77, 148, 188), pygame.Rect(474, 393, 49, 58))
+        for eye_x, eye_y in ((484, 365), (499, 358), (514, 365)):
+            pygame.draw.circle(self.screen, (233, 246, 242), (eye_x, eye_y), 6)
+            pygame.draw.circle(self.screen, (31, 50, 70), (eye_x, eye_y), 2)
+            pygame.draw.circle(self.screen, (255, 255, 255), (eye_x - 1, eye_y - 2), 1)
+        pygame.draw.circle(self.screen, (38, 91, 132), (480, 382), 2)
+        pygame.draw.circle(self.screen, (38, 91, 132), (518, 382), 2)
+        pygame.draw.arc(self.screen, (31, 70, 104), pygame.Rect(489, 377, 20, 13), 0, math.pi, width=2)
+        pygame.draw.line(self.screen, (175, 220, 225), (477, 402), (520, 402), width=3)
+        pygame.draw.circle(self.screen, (245, 187, 87), (499, 407), 4)
+        pygame.draw.line(self.screen, (45, 95, 132), (476, 410), (460, 429), width=7)
+        pygame.draw.line(self.screen, (45, 95, 132), (521, 410), (537, 429), width=7)
+        pygame.draw.circle(self.screen, (77, 148, 188), (459, 430), 5)
+        pygame.draw.circle(self.screen, (77, 148, 188), (538, 430), 5)
+        pygame.draw.arc(self.screen, (132, 197, 219), pygame.Rect(485, 418, 28, 22), 0, math.pi * 2, width=2)
+        pygame.draw.line(self.screen, (45, 95, 132), (482, 442), (474, 466), width=8)
+        pygame.draw.line(self.screen, (45, 95, 132), (515, 442), (523, 466), width=8)
+        pygame.draw.ellipse(self.screen, (38, 83, 119), pygame.Rect(465, 461, 20, 8))
+        pygame.draw.ellipse(self.screen, (38, 83, 119), pygame.Rect(514, 461, 20, 8))
+
+    def draw_waiting_conmann(self):
+
+        # draws conmann
+        pygame.draw.ellipse(self.screen, (191, 91, 72), pygame.Rect(323, 355, 67, 62))
+        pygame.draw.ellipse(self.screen, (226, 127, 91), pygame.Rect(329, 350, 55, 48))
+        pygame.draw.ellipse(self.screen, (249, 170, 119), pygame.Rect(337, 355, 19, 12))
+        pygame.draw.circle(self.screen, (177, 75, 68), (378, 385), 5)
+        pygame.draw.circle(self.screen, (197, 88, 70), (335, 392), 3)
+        pygame.draw.circle(self.screen, (50, 39, 57), (346, 371), 4)
+        pygame.draw.circle(self.screen, (50, 39, 57), (367, 371), 4)
+        pygame.draw.circle(self.screen, (249, 235, 220), (345, 370), 1)
+        pygame.draw.circle(self.screen, (249, 235, 220), (366, 370), 1)
+        pygame.draw.arc(
+            self.screen,
+            (82, 50, 62),
+            pygame.Rect(348, 376, 18, 12),
+            0,
+            math.pi,
+            width=2,
+        )
+        pygame.draw.arc(
+            self.screen,
+            (255, 190, 125),
+            pygame.Rect(339, 393, 36, 13),
+            math.pi,
+            math.pi * 2,
+            width=3,
+        )
+        pygame.draw.circle(self.screen, (255, 211, 105), (357, 401), 3)
+        for foot_x in (334, 354, 374):
+            pygame.draw.ellipse(self.screen, (159, 70, 66), pygame.Rect(foot_x, 407, 19, 12))
+            pygame.draw.line(
+                self.screen,
+                (224, 125, 94),
+                (foot_x + 8, 410),
+                (foot_x + 8, 416),
+                width=1,
+            )
 
     def draw_reception_desk(self):
         """Draw the small reception desk, queue display, and decorative plant."""
@@ -756,7 +788,12 @@ class ReceptionMixin:
         queue = pygame.Rect(61, 464, 238, 31)
         pygame.draw.rect(self.screen, (12, 27, 34), queue, border_radius=5)
         pygame.draw.rect(self.screen, (91, 132, 132), queue, width=1, border_radius=5)
-        queue_text = "CALLING PATIENT..." if self.get_reception_transition_progress() > 0 else "PATIENTS WAITING: 4"
+        if self.get_reception_transition_progress() > 0:
+            queue_text = "CALLING PATIENT..."
+        elif self.patients_waiting() == 0:
+            queue_text = "NO PATIENTS WAITING"
+        else:
+            queue_text = f"PATIENTS WAITING: {self.patients_waiting()}"
         queue_label = self.card_font.render(queue_text, True, COLORS["accent"])
         self.screen.blit(queue_label, queue_label.get_rect(center=queue.center))
 
@@ -800,6 +837,10 @@ class ReceptionMixin:
             width=2,
         )
 
+    def patients_waiting(self):
+        """Return how many patients are still in the waiting room."""
+
+        return len(self.waiting_room_queue) - self.patients_called
 
     def draw_reception_button(self):
         """Draw the physical control that calls the patient into the exam bay."""
@@ -826,7 +867,7 @@ class ReceptionMixin:
                     for channel in range(3)
                 )
             )
-            label_text = "CALL NEXT PATIENT"
+            label_text = "CALL NEXT PATIENT" if self.patients_waiting() else "END DAY"
         pygame.draw.rect(self.screen, button_color, self.start_button, border_radius=10)
         pygame.draw.rect(
             self.screen,
@@ -843,4 +884,6 @@ class ReceptionMixin:
         )
         button_text = self.small_font.render(label_text, True, COLORS["background"])
         self.screen.blit(button_text, button_text.get_rect(center=self.start_button.center))
+
+
 
