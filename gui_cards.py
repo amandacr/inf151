@@ -110,10 +110,10 @@ class CardMixin:
                 self.selected_card_index = None
                 return
 
-        for index in reversed(range(len(self.card_rects))):
-            if self.card_rects[index].collidepoint(position):
-                self.selected_card_index = index
-                return
+        index = self.get_hovered_card_index(position)
+        if index is not None:
+            self.selected_card_index = index
+            return
 
         if self.selected_card_index is not None:
             self.selected_card_index = None
@@ -187,6 +187,8 @@ class CardMixin:
             self.card_rects[index].centerx,
             self.layout["active_hand"].bottom - 5,
         )
+        panel = self.layout["active_hand"]
+        preview.left = max(panel.left, min(preview.left, panel.right - preview.width))
         return preview
 
 
@@ -335,27 +337,24 @@ class CardMixin:
             return
 
         mouse_position = pygame.mouse.get_pos()
+        self.hovered_card_index = (
+            None
+            if self.selected_card_index is not None
+            else self.get_hovered_card_index(mouse_position)
+        )
 
         for index, card in enumerate(active_hand):
-            if index == self.selected_card_index:
+            if index == self.selected_card_index or index == self.hovered_card_index:
                 continue
-
-            card_rect = self.card_rects[index]
-            hovered = (
-                self.selected_card_index is None
-                and card_rect.collidepoint(mouse_position)
-            )
-            display_rect = (
-                self.get_hovered_card_rect(card_rect)
-                if hovered
-                else card_rect
-            )
-            if self.showing_diagnosis_hand:
-                self.draw_diagnosis_card(card, display_rect, hovered=hovered)
-            else:
-                self.draw_test_card(card, display_rect, hovered=hovered)
+            self.draw_hand_card(card, self.card_rects[index])
             if self.selected_card_index is not None:
-                self.draw_card_dimming_overlay(display_rect)
+                self.draw_card_dimming_overlay(self.card_rects[index])
+
+        if self.hovered_card_index is not None:
+            hovered_rect = self.get_hovered_card_rect(self.card_rects[self.hovered_card_index])
+            self.draw_hand_card(
+                active_hand[self.hovered_card_index], hovered_rect, hovered=True
+            )
 
         if self.selected_card_index is not None:
             selected_card = active_hand[self.selected_card_index]
@@ -424,6 +423,42 @@ class CardMixin:
             card_points,
             width=border_width,
         )
+
+    def draw_card_from_pile(self):
+        """Move the top card of the deck into the player's hand."""
+
+        if not self.deck.contents:
+            return  # checking first avoids Deck.draw's console message on every click
+
+        card = self.deck.draw()
+        self.player.draw(card)
+        self.selected_card_index = None
+        self.refresh_hand_layout()
+
+    def get_hovered_card_index(self, position):
+        """Return the single card under the mouse, or None."""
+
+        count = len(self.card_rects)
+        current = self.hovered_card_index
+
+        # Sticky: keep the lifted card while the mouse is still over its lifted shape
+        if current is not None and current < count:
+            lifted = self.get_hovered_card_rect(self.card_rects[current])
+            if lifted.collidepoint(position):
+                return current
+
+        for index in reversed(range(count)):
+            if self.card_rects[index].collidepoint(position):
+                return index
+        return None
+
+    def draw_hand_card(self, card, rect, hovered=False, selected=False):
+        """Draw a test or diagnosis card depending on the active hand."""
+
+        if self.showing_diagnosis_hand:
+            self.draw_diagnosis_card(card, rect, hovered=hovered, selected=selected)
+        else:
+            self.draw_test_card(card, rect, hovered=hovered, selected=selected)
 
 
     def draw_card_dimming_overlay(self, card_rect):

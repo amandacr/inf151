@@ -7,6 +7,10 @@ import random
 
 import pygame
 
+from Tests.AllergyTest import AllergyTest
+from Tests.TemperatureTest import TemperatureTest
+from Tests.UltrasoundTest import UltrasoundTest
+from Tests.XrayTest import XrayTest
 from gui_animations import AnimationMixin
 from gui_cards import CardMixin
 from gui_examination import ExaminationMixin
@@ -23,6 +27,7 @@ from gui_theme import (
 from PatientData import create_zorpa
 from Player import Player
 from Notebook import Notebook
+from Deck import Deck
 
 
 class AlienDoctorGUI(
@@ -41,6 +46,7 @@ class AlienDoctorGUI(
         pygame.init()
         pygame.display.set_caption("The Cosmic Clinic - GUI Prototype")
 
+        self.start_music()
         self.screen = pygame.display.set_mode(WINDOW_SIZE)
         self.clock = pygame.time.Clock()
         self.running = True
@@ -65,6 +71,9 @@ class AlienDoctorGUI(
         self.notebook_preview_progress = 0.0
         self.notebook_preview_last_tick = pygame.time.get_ticks()
         self.notebook_preview_duration = 220
+        self.deck = Deck()
+        self.deck.populate([AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()])
+        self.hovered_card_index = None
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
         self.selected_card_index = None
@@ -102,7 +111,7 @@ class AlienDoctorGUI(
         self.diagnosis_confirm_button = pygame.Rect(575, 410, 210, 48)
         self.layout = {
             "status_bar": pygame.Rect(30, 100, 1040, 50),
-            "draw_deck": pygame.Rect(45, 180, 125, 175),
+            "draw_deck": pygame.Rect(45, 180, 150, 175),
             "alien": pygame.Rect(233, 165, 230, 195),
             "id_card": pygame.Rect(510, 180, 270, 155),
             "throwaway": pygame.Rect(923, 423, 100, 125),
@@ -218,6 +227,9 @@ class AlienDoctorGUI(
             return
         if self.layout["diagnosis"].collidepoint(position):
             self.switch_active_hand(not self.showing_diagnosis_hand)
+            return
+        if self.layout["draw_deck"].collidepoint(position):
+            self.draw_card_from_pile()
             return
 
         self.handle_card_click(position)
@@ -438,8 +450,18 @@ class AlienDoctorGUI(
             lines.append(" ".join(line))
         return lines
 
+    def start_music(self):
+        """Start the looping background music."""
+
+        try:
+            pygame.mixer.music.load("assets/hyperdrive_boogie_bg_music.ogg")
+            pygame.mixer.music.set_volume(0.4)
+            pygame.mixer.music.play(loops=-1)
+        except pygame.error as error:
+            print(f"Could not begin background music: {error}")
+
 def main():
-    """Create and start the game"""
+    """Create and start the game."""
 
     AlienDoctorGUI().run()
 

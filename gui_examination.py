@@ -357,38 +357,71 @@ class ExaminationMixin:
             money.get_rect(midright=(display.right - 14, display.centery)),
         )
 
-
     def draw_draw_deck(self):
-        """Draw the placeholder test-card stack resting in a counter tray."""
+        """Draw the face-down test-card stack resting in a counter tray."""
 
         panel = self.layout["draw_deck"]
-        tray = pygame.Rect(panel.x + 14, panel.y + 28, panel.width - 28, panel.height - 34)
-        pygame.draw.rect(
-            self.screen,
-            (5, 12, 18),
-            tray.move(4, 5),
-            border_radius=10,
-        )
+        hovered = panel.collidepoint(pygame.mouse.get_pos())
+        remaining = len(self.deck.contents)
+
+        tray = pygame.Rect(panel.x + 6, panel.y + 30, panel.width - 12, panel.height - 36)
+        pygame.draw.rect(self.screen, (5, 12, 18), tray.move(4, 5), border_radius=10)
         pygame.draw.rect(self.screen, (38, 47, 60), tray, border_radius=10)
         pygame.draw.rect(
             self.screen,
-            (88, 93, 111),
+            COLORS["accent"] if hovered and remaining else (88, 93, 111),
             tray,
-            width=2,
+            width=3 if hovered and remaining else 2,
             border_radius=10,
         )
 
-        plaque = pygame.Rect(panel.x + 15, panel.y + 5, panel.width - 30, 25)
+        plaque = pygame.Rect(panel.x + 6, panel.y + 3, panel.width - 12, 25)
         pygame.draw.rect(self.screen, (43, 51, 64), plaque, border_radius=5)
         self.draw_centered_label("DRAW DECK", plaque, plaque.centery)
 
-        card = pygame.Rect(panel.x + 31, panel.y + 54, 72, 96)
-        for offset in (8, 4, 0):
-            shifted = card.move(offset, -offset)
-            pygame.draw.rect(self.screen, COLORS["card"], shifted, border_radius=5)
-            pygame.draw.rect(
-                self.screen, COLORS["card_text"], shifted, width=2, border_radius=5
-            )
+        if remaining == 0:
+            slot = pygame.Rect(0, 0, 80, 100)
+            slot.center = (tray.centerx, tray.centery - 6)
+            pygame.draw.rect(self.screen, (28, 36, 47), slot, border_radius=7)
+            pygame.draw.rect(self.screen, (66, 89, 91), slot, width=2, border_radius=7)
+            empty = self.small_font.render("EMPTY", True, COLORS["muted"])
+            self.screen.blit(empty, empty.get_rect(center=slot.center))
+            return
+
+        # Thicker stack when the deck is full, thinner as it runs down
+        layers = min(6, 1 + remaining // 6)
+        card = pygame.Rect(0, 0, 80, 100)
+        card.topleft = (tray.centerx - 40 - (layers * 3) // 2, tray.y + 8)
+
+        for layer in range(layers - 1, -1, -1):
+            rect = card.move(layer * 3, layer * 3)
+            if layer == 0:
+                if hovered:
+                    rect = rect.move(0, -4)
+                self.draw_card_back(rect, hovered)
+            else:
+                pygame.draw.rect(self.screen, (22, 44, 50), rect, border_radius=7)
+                pygame.draw.rect(self.screen, (63, 120, 110), rect, width=2, border_radius=7)
+
+        count = self.pile_font.render(f"{remaining} LEFT", True, COLORS["muted"])
+        self.screen.blit(count, count.get_rect(center=(tray.centerx, tray.bottom - 9)))
+
+    def draw_card_back(self, rect, hovered=False):
+        """Draw the generic face-down card back shown on top of the draw deck."""
+
+        border = COLORS["accent"] if hovered else COLORS["panel_border"]
+        pygame.draw.rect(self.screen, (30, 62, 66), rect, border_radius=7)
+        pygame.draw.rect(self.screen, border, rect, width=2, border_radius=7)
+        pygame.draw.rect(
+            self.screen, (63, 120, 110), rect.inflate(-12, -12), width=1, border_radius=5
+        )
+
+        # Medical-cross emblem
+        center = rect.center
+        pygame.draw.circle(self.screen, (22, 44, 50), center, 18)
+        pygame.draw.circle(self.screen, border, center, 18, width=2)
+        pygame.draw.rect(self.screen, border, pygame.Rect(center[0] - 3, center[1] - 10, 6, 20))
+        pygame.draw.rect(self.screen, border, pygame.Rect(center[0] - 10, center[1] - 3, 20, 6))
 
 
     def draw_alien_patient(self):
