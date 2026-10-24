@@ -6,9 +6,9 @@ from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
 
 
-DIAGNOSIS_REWARD = 100
-WRONG_DIAGNOSIS_PENALTY = 25
-PERFECT_DAY_BONUS = 50
+DIAGNOSIS_REWARD = 50
+WRONG_DIAGNOSIS_PENALTY = 10
+PERFECT_DAY_BONUS = 25
 
 
 def display_hand(hand):
