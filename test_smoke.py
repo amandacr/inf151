@@ -14,7 +14,12 @@ import pygame
 from Deck import Deck
 from Notebook import Notebook
 from PatientData import create_conmann, create_titus, create_zoogy, create_zorpa
-from Player import DIAGNOSIS_REWARD, Player
+from Player import (
+    DIAGNOSIS_REWARD,
+    PERFECT_DAY_BONUS,
+    WRONG_DIAGNOSIS_PENALTY,
+    Player,
+)
 from Tests.AllergyTest import AllergyTest
 from Tests.TemperatureTest import TemperatureTest
 from Tests.UltrasoundTest import UltrasoundTest
@@ -106,6 +111,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game = AlienDoctorGUI()
         self.game.finish_intro()
+        self.game.patients_called = 1
         self.game.state = GameState.PATIENT
 
     def tearDown(self):
@@ -136,8 +142,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.draw_shop_screen.__module__, "gui_shop")
         self.assertEqual(self.game.draw_day_complete_screen.__module__, "gui_shop")
 
-    def test_correct_diagnosis_reaches_shop_and_resets_round(self):
-        """A test and correct diagnosis should reward the player and reach the shop."""
+    def test_correct_diagnosis_returns_to_reception_without_early_payment(self):
+        """A resolved early case should queue its pay and return to reception."""
 
         starting_balance = self.game.player.balance
         self.game.selected_card_index = 0
@@ -186,20 +192,14 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.play_selected_diagnosis()
         self.assertEqual(self.game.state, GameState.OUTCOME)
         self.assertTrue(self.game.diagnosis_correct)
-        self.assertEqual(
-            self.game.player.balance,
-            starting_balance + DIAGNOSIS_REWARD,
-        )
+        self.assertEqual(self.game.player.balance, starting_balance)
+        self.assertEqual(self.game.daily_correct_diagnoses, 1)
 
         self.game.draw()
         self.game.handle_outcome_click(self.game.outcome_button.center)
-        self.assertEqual(self.game.state, GameState.SHOP)
-
-        earned_balance = self.game.player.balance
-        self.game.draw()
-        self.game.handle_shop_click(self.game.shop_button.center)
         self.assertEqual(self.game.state, GameState.TITLE)
-        self.assertEqual(self.game.player.balance, earned_balance)
+        self.assertEqual(self.game.patient.name, "Zoogy Zinglestar")
+        self.assertEqual(self.game.player.balance, starting_balance)
         self.assertEqual(len(self.game.player.test_hand), 5)
 
     def test_incorrect_diagnosis_returns_to_test_hand(self):
@@ -213,6 +213,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.state, GameState.OUTCOME)
         self.assertFalse(self.game.diagnosis_correct)
         self.assertEqual(self.game.player.balance, starting_balance)
+        self.assertEqual(self.game.daily_wrong_diagnoses, 1)
 
         self.game.draw()
         self.game.handle_outcome_click(self.game.outcome_button.center)
@@ -259,6 +260,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         starting_balance = self.game.player.balance
         expected_names = [entry["create"]().name for entry in self.game.waiting_room_queue]
         self.game.state = GameState.TITLE
+        self.game.patients_called = 0
+        self.game.reset_round()
 
         for index, expected_name in enumerate(expected_names):
             self.assertEqual(self.game.patient.name, expected_name)
@@ -282,23 +285,57 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.game.play_selected_diagnosis()
             self.assertTrue(self.game.diagnosis_correct)
             self.game.handle_outcome_click(self.game.outcome_button.center)
-            self.assertEqual(self.game.state, GameState.SHOP)
-            self.game.handle_shop_click(self.game.shop_button.center)
 
             if index < len(expected_names) - 1:
                 self.assertEqual(self.game.state, GameState.TITLE)
 
         self.assertEqual(self.game.state, GameState.DAY_COMPLETE)
+        self.assertEqual(self.game.player.balance, starting_balance)
         self.assertEqual(
-            self.game.player.balance,
-            starting_balance + len(expected_names) * DIAGNOSIS_REWARD,
+            self.game.get_daily_pay_breakdown(),
+            (
+                len(expected_names) * DIAGNOSIS_REWARD,
+                0,
+                PERFECT_DAY_BONUS,
+                len(expected_names) * DIAGNOSIS_REWARD + PERFECT_DAY_BONUS,
+            ),
         )
         self.game.draw()
         self.game.handle_day_complete_click(self.game.day_complete_button.center)
+        self.assertEqual(self.game.state, GameState.SHOP)
+        self.assertEqual(
+            self.game.player.balance,
+            starting_balance + len(expected_names) * DIAGNOSIS_REWARD + PERFECT_DAY_BONUS,
+        )
+        paid_balance = self.game.player.balance
+        self.game.settle_daily_pay()
+        self.assertEqual(self.game.player.balance, paid_balance)
+
+        self.game.draw()
+        self.game.handle_shop_click(self.game.shop_button.center)
         self.assertEqual(self.game.state, GameState.TITLE)
         self.assertEqual(self.game.patients_called, 0)
         self.assertEqual(self.game.patient.name, expected_names[0])
         self.assertEqual(len(self.game.deck.contents), 24)
+        self.assertEqual(self.game.daily_correct_diagnoses, 0)
+        self.assertEqual(self.game.daily_wrong_diagnoses, 0)
+
+    def test_wrong_diagnoses_reduce_end_of_day_pay(self):
+        """Mistakes should reduce pending pay and remove the perfect-day bonus."""
+
+        self.game.daily_correct_diagnoses = len(self.game.waiting_room_queue)
+        self.game.daily_wrong_diagnoses = 2
+
+        self.assertEqual(
+            self.game.get_daily_pay_breakdown(),
+            (
+                len(self.game.waiting_room_queue) * DIAGNOSIS_REWARD,
+                2 * WRONG_DIAGNOSIS_PENALTY,
+                0,
+                len(self.game.waiting_room_queue) * DIAGNOSIS_REWARD
+                - 2 * WRONG_DIAGNOSIS_PENALTY,
+            ),
+        )
 
     def test_workspace_tools_use_the_swapped_non_overlapping_layout(self):
         """Diagnosis should sit above med-waste while the larger notebook clears the hand."""

@@ -7,6 +7,8 @@ from Tests.XrayTest import XrayTest
 
 
 DIAGNOSIS_REWARD = 100
+WRONG_DIAGNOSIS_PENALTY = 25
+PERFECT_DAY_BONUS = 50
 
 
 def display_hand(hand):

@@ -94,6 +94,9 @@ class AlienDoctorGUI(
             },
         ]
         self.patients_called = 0
+        self.daily_correct_diagnoses = 0
+        self.daily_wrong_diagnoses = 0
+        self.daily_payout_applied = False
         self.patient = self.waiting_room_queue[0]["create"]()
         self.player = Player("Dr GUI")
         self.notebook = Notebook()
@@ -287,11 +290,15 @@ class AlienDoctorGUI(
                 }
 
     def handle_outcome_click(self, position):
-        """Continue a correct diagnosis to the shop or an incorrect one to the patient."""
+        """Continue to the next case, the daily recap, or the current patient."""
 
         if self.outcome_button.collidepoint(position):
             if self.diagnosis_correct:
-                self.state = GameState.SHOP
+                if self.patients_waiting() == 0:
+                    self.end_day()
+                else:
+                    self.reset_round()
+                    self.state = GameState.TITLE
             else:
                 self.switch_active_hand(False)
                 self.state = GameState.PATIENT
@@ -347,14 +354,11 @@ class AlienDoctorGUI(
                 self.patient_fade_started_at = None
 
     def handle_shop_click(self, position):
-        """Continue to the next patient, or finish the day after the final case."""
+        """Start a fresh day after the player finishes visiting the Shop."""
 
         if self.shop_button.collidepoint(position):
-            if self.patients_waiting() == 0:
-                self.end_day()
-            else:
-                self.reset_round()
-                self.state = GameState.TITLE
+            self.reset_day()
+            self.state = GameState.TITLE
 
     def end_day(self):
         """Show the completed-day summary after every queued patient is treated."""
@@ -364,16 +368,19 @@ class AlienDoctorGUI(
         self.state = GameState.DAY_COMPLETE
 
     def handle_day_complete_click(self, position):
-        """Start a fresh day when the summary-screen button is selected."""
+        """Deposit the completed shift's pay and open the end-of-day Shop."""
 
         if self.day_complete_button.collidepoint(position):
-            self.reset_day()
-            self.state = GameState.TITLE
+            self.settle_daily_pay()
+            self.state = GameState.SHOP
 
     def reset_day(self):
         """Refill the patient queue and draw deck while preserving earned money."""
 
         self.patients_called = 0
+        self.daily_correct_diagnoses = 0
+        self.daily_wrong_diagnoses = 0
+        self.daily_payout_applied = False
         self.deck.populate(
             [AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()]
         )

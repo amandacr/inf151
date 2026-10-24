@@ -5,7 +5,7 @@ import math
 import pygame
 
 from gui_theme import COLORS, TEST_SUBTITLES, WINDOW_SIZE
-from Player import DIAGNOSIS_REWARD
+from Player import DIAGNOSIS_REWARD, WRONG_DIAGNOSIS_PENALTY
 
 
 class ResultsMixin:
@@ -415,7 +415,14 @@ class ResultsMixin:
             width=2,
             border_radius=8,
         )
-        button_label = "CONTINUE TO SHOP" if correct else "RETURN TO PATIENT"
+        if correct:
+            button_label = (
+                "VIEW SHIFT RECAP"
+                if self.patients_waiting() == 0
+                else "NEXT PATIENT"
+            )
+        else:
+            button_label = "RETURN TO PATIENT"
         button_text = self.small_font.render(button_label, True, COLORS["background"])
         self.screen.blit(button_text, button_text.get_rect(center=self.outcome_button.center))
 
@@ -621,7 +628,7 @@ class ResultsMixin:
 
 
     def draw_outcome_reward(self, footer, correct, status_color):
-        """Draw the diagnosis reward and updated balance in the outcome footer."""
+        """Draw pending case pay or the fee added to the end-of-day calculation."""
 
         coin_center = (footer.x + 31, footer.centery)
         pygame.draw.circle(self.screen, (255, 198, 75), coin_center, 17)
@@ -629,16 +636,18 @@ class ResultsMixin:
         coin = self.small_font.render("$", True, (80, 61, 36))
         self.screen.blit(coin, coin.get_rect(center=coin_center))
         reward_text = (
-            f"CASE REWARD  +${DIAGNOSIS_REWARD}" if correct else "NO CASE REWARD"
+            f"PENDING CASE PAY  +${DIAGNOSIS_REWARD}"
+            if correct
+            else f"DIAGNOSIS FEE  -${WRONG_DIAGNOSIS_PENALTY}"
         )
         reward = self.card_font.render(reward_text, True, status_color)
-        balance = self.card_font.render(
-            "CURRENT BALANCE  $" + str(self.player.balance),
+        payment_note = self.card_font.render(
+            "PAID AT END OF DAY" if correct else "DEDUCTED FROM SHIFT PAY",
             True,
             COLORS["muted"],
         )
         self.screen.blit(reward, (footer.x + 58, footer.y + 17))
-        self.screen.blit(balance, (footer.x + 58, footer.y + 37))
+        self.screen.blit(payment_note, (footer.x + 58, footer.y + 37))
 
     def draw_outcome_exam_sprite(self, panel, platform, entry, correct, status_color):
         """Draw the current patient's exam sprite, scaled up, standing on the recovery platform."""

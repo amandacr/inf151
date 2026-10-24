@@ -12,7 +12,6 @@ from gui_theme import (
     TEST_SUBTITLES,
     WINDOW_SIZE,
 )
-from Player import DIAGNOSIS_REWARD
 
 
 class CardMixin:
@@ -237,7 +236,9 @@ class CardMixin:
         self.player.play(card)
         self.diagnosis_correct = self.patient.receive_diagnosis(card.value)
         if self.diagnosis_correct:
-            self.player.earn(DIAGNOSIS_REWARD)
+            self.daily_correct_diagnoses += 1
+        else:
+            self.daily_wrong_diagnoses += 1
         self.selected_card_index = None
         self.play_diagnosis_button = None
         self.state = GameState.OUTCOME

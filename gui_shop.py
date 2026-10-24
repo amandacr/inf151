@@ -3,6 +3,7 @@
 import pygame
 
 from gui_theme import COLORS
+from Player import DIAGNOSIS_REWARD, PERFECT_DAY_BONUS, WRONG_DIAGNOSIS_PENALTY
 
 
 class ShopMixin:
@@ -61,7 +62,7 @@ class ShopMixin:
             border_radius=8,
         )
         button_text = self.body_font.render(
-            "END DAY" if self.patients_waiting() == 0 else "CONTINUE / NEXT PATIENT",
+            "START NEXT DAY",
             True,
             COLORS["background"],
         )
@@ -71,7 +72,7 @@ class ShopMixin:
         )
 
     def draw_day_complete_screen(self):
-        """Draw a compact summary after the final patient of the day."""
+        """Draw the end-of-day earnings recap before opening the Shop."""
 
         panel = pygame.Rect(170, 135, 760, 390)
         self.draw_panel(panel)
@@ -80,7 +81,7 @@ class ShopMixin:
         self.screen.blit(heading, heading.get_rect(center=(panel.centerx, panel.y + 65)))
 
         subheading = self.body_font.render(
-            "Every patient in today's waiting room has been treated.",
+            "All patients treated — calculating today's clinic pay.",
             True,
             COLORS["text"],
         )
@@ -89,7 +90,7 @@ class ShopMixin:
             subheading.get_rect(center=(panel.centerx, panel.y + 112)),
         )
 
-        summary = pygame.Rect(panel.centerx - 245, panel.y + 150, 490, 120)
+        summary = pygame.Rect(panel.centerx - 245, panel.y + 125, 490, 180)
         pygame.draw.rect(self.screen, COLORS["background"], summary, border_radius=10)
         pygame.draw.rect(
             self.screen,
@@ -99,18 +100,29 @@ class ShopMixin:
             border_radius=10,
         )
 
-        patients = self.body_font.render(
-            f"PATIENTS TREATED: {len(self.waiting_room_queue)}",
-            True,
-            COLORS["text"],
+        base_pay, penalties, bonus, total = self.get_daily_pay_breakdown()
+        mistake_label = (
+            "WRONG DIAGNOSIS"
+            if self.daily_wrong_diagnoses == 1
+            else "WRONG DIAGNOSES"
         )
-        balance = self.body_font.render(
-            f"CURRENT MONEY: ${self.player.balance}",
-            True,
-            COLORS["accent"],
+        recap_lines = (
+            (f"{self.daily_correct_diagnoses} PATIENTS × ${DIAGNOSIS_REWARD}", f"+${base_pay}"),
+            (
+                f"{self.daily_wrong_diagnoses} {mistake_label} × ${WRONG_DIAGNOSIS_PENALTY}",
+                f"-${penalties}",
+            ),
+            ("PERFECT SHIFT BONUS", f"+${bonus}"),
+            ("TOTAL SHIFT PAY", f"${total}"),
+            ("BALANCE AFTER PAY", f"${self.player.balance + total}"),
         )
-        self.screen.blit(patients, patients.get_rect(center=(summary.centerx, summary.y + 40)))
-        self.screen.blit(balance, balance.get_rect(center=(summary.centerx, summary.y + 80)))
+        for index, (label_text, amount_text) in enumerate(recap_lines):
+            y = summary.y + 20 + index * 32
+            color = COLORS["accent"] if index >= len(recap_lines) - 2 else COLORS["text"]
+            label = self.small_font.render(label_text, True, color)
+            amount = self.small_font.render(amount_text, True, color)
+            self.screen.blit(label, (summary.x + 24, y))
+            self.screen.blit(amount, amount.get_rect(topright=(summary.right - 24, y)))
 
         hovered = self.day_complete_button.collidepoint(pygame.mouse.get_pos())
         button_color = COLORS["accent"] if hovered else COLORS["panel_border"]
@@ -121,7 +133,7 @@ class ShopMixin:
             border_radius=8,
         )
         button_text = self.body_font.render(
-            "START NEW DAY",
+            "COLLECT PAY & OPEN SHOP",
             True,
             COLORS["background"],
         )
@@ -129,6 +141,27 @@ class ShopMixin:
             button_text,
             button_text.get_rect(center=self.day_complete_button.center),
         )
+
+    def get_daily_pay_breakdown(self):
+        """Return base pay, mistake deductions, perfect bonus, and final payout."""
+
+        base_pay = self.daily_correct_diagnoses * DIAGNOSIS_REWARD
+        penalties = self.daily_wrong_diagnoses * WRONG_DIAGNOSIS_PENALTY
+        perfect_day = (
+            self.daily_correct_diagnoses == len(self.waiting_room_queue)
+            and self.daily_wrong_diagnoses == 0
+        )
+        bonus = PERFECT_DAY_BONUS if perfect_day else 0
+        total = max(0, base_pay - penalties + bonus)
+        return base_pay, penalties, bonus, total
+
+    def settle_daily_pay(self):
+        """Deposit the calculated shift pay exactly once."""
+
+        if self.daily_payout_applied:
+            return
+        self.player.earn(self.get_daily_pay_breakdown()[3])
+        self.daily_payout_applied = True
 
 
     def draw_shop_shelf(self, label, shelf):
