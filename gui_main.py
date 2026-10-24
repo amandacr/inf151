@@ -139,6 +139,7 @@ class AlienDoctorGUI(
         self.continue_button = pygame.Rect(700, 472, 220, 44)
         self.outcome_button = pygame.Rect(410, 455, 280, 52)
         self.shop_button = pygame.Rect(400, 465, 300, 52)
+        self.day_complete_button = pygame.Rect(400, 455, 300, 52)
         self.diagnosis_cancel_button = pygame.Rect(315, 410, 210, 48)
         self.diagnosis_confirm_button = pygame.Rect(575, 410, 210, 48)
         self.layout = {
@@ -203,6 +204,8 @@ class AlienDoctorGUI(
                     self.handle_outcome_click(event.pos)
                 elif self.state == GameState.SHOP:
                     self.handle_shop_click(event.pos)
+                elif self.state == GameState.DAY_COMPLETE:
+                    self.handle_day_complete_click(event.pos)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     if self.state == GameState.PATIENT and self.diagnosis_confirmation_open:
@@ -225,6 +228,8 @@ class AlienDoctorGUI(
                     self.handle_outcome_click(self.outcome_button.center)
                 elif event.key == pygame.K_RETURN and self.state == GameState.SHOP:
                     self.handle_shop_click(self.shop_button.center)
+                elif event.key == pygame.K_RETURN and self.state == GameState.DAY_COMPLETE:
+                    self.handle_day_complete_click(self.day_complete_button.center)
                 elif event.key == pygame.K_LEFT and self.state == GameState.NOTEBOOK:
                     self.flip_notebook(-1)
                 elif event.key == pygame.K_RIGHT and self.state == GameState.NOTEBOOK:
@@ -342,11 +347,37 @@ class AlienDoctorGUI(
                 self.patient_fade_started_at = None
 
     def handle_shop_click(self, position):
-        """Return to the main screen when the player continues from the shop."""
+        """Continue to the next patient, or finish the day after the final case."""
 
         if self.shop_button.collidepoint(position):
-            self.reset_round()
+            if self.patients_waiting() == 0:
+                self.end_day()
+            else:
+                self.reset_round()
+                self.state = GameState.TITLE
+
+    def end_day(self):
+        """Show the completed-day summary after every queued patient is treated."""
+
+        self.reception_transition_started_at = None
+        self.patient_fade_started_at = None
+        self.state = GameState.DAY_COMPLETE
+
+    def handle_day_complete_click(self, position):
+        """Start a fresh day when the summary-screen button is selected."""
+
+        if self.day_complete_button.collidepoint(position):
+            self.reset_day()
             self.state = GameState.TITLE
+
+    def reset_day(self):
+        """Refill the patient queue and draw deck while preserving earned money."""
+
+        self.patients_called = 0
+        self.deck.populate(
+            [AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()]
+        )
+        self.reset_round()
 
     def reset_round(self):
         """Prepare a fresh patient encounter while preserving earned money."""
@@ -415,6 +446,8 @@ class AlienDoctorGUI(
             self.draw_diagnosis_outcome()
         elif self.state == GameState.SHOP:
             self.draw_shop_screen()
+        elif self.state == GameState.DAY_COMPLETE:
+            self.draw_day_complete_screen()
 
         footer_text = (
             "Press Esc to go back"

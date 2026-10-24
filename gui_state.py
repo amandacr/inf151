@@ -13,3 +13,4 @@ class GameState(Enum):
     OUTCOME = auto()
     NOTEBOOK = auto()
     SHOP = auto()
+    DAY_COMPLETE = auto()

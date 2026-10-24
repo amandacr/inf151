@@ -61,13 +61,73 @@ class ShopMixin:
             border_radius=8,
         )
         button_text = self.body_font.render(
-            "CONTINUE / NEXT SHIFT",
+            "END DAY" if self.patients_waiting() == 0 else "CONTINUE / NEXT PATIENT",
             True,
             COLORS["background"],
         )
         self.screen.blit(
             button_text,
             button_text.get_rect(center=self.shop_button.center),
+        )
+
+    def draw_day_complete_screen(self):
+        """Draw a compact summary after the final patient of the day."""
+
+        panel = pygame.Rect(170, 135, 760, 390)
+        self.draw_panel(panel)
+
+        heading = self.heading_font.render("SHIFT COMPLETE", True, COLORS["accent"])
+        self.screen.blit(heading, heading.get_rect(center=(panel.centerx, panel.y + 65)))
+
+        subheading = self.body_font.render(
+            "Every patient in today's waiting room has been treated.",
+            True,
+            COLORS["text"],
+        )
+        self.screen.blit(
+            subheading,
+            subheading.get_rect(center=(panel.centerx, panel.y + 112)),
+        )
+
+        summary = pygame.Rect(panel.centerx - 245, panel.y + 150, 490, 120)
+        pygame.draw.rect(self.screen, COLORS["background"], summary, border_radius=10)
+        pygame.draw.rect(
+            self.screen,
+            COLORS["panel_border"],
+            summary,
+            width=2,
+            border_radius=10,
+        )
+
+        patients = self.body_font.render(
+            f"PATIENTS TREATED: {len(self.waiting_room_queue)}",
+            True,
+            COLORS["text"],
+        )
+        balance = self.body_font.render(
+            f"CURRENT MONEY: ${self.player.balance}",
+            True,
+            COLORS["accent"],
+        )
+        self.screen.blit(patients, patients.get_rect(center=(summary.centerx, summary.y + 40)))
+        self.screen.blit(balance, balance.get_rect(center=(summary.centerx, summary.y + 80)))
+
+        hovered = self.day_complete_button.collidepoint(pygame.mouse.get_pos())
+        button_color = COLORS["accent"] if hovered else COLORS["panel_border"]
+        pygame.draw.rect(
+            self.screen,
+            button_color,
+            self.day_complete_button,
+            border_radius=8,
+        )
+        button_text = self.body_font.render(
+            "START NEW DAY",
+            True,
+            COLORS["background"],
+        )
+        self.screen.blit(
+            button_text,
+            button_text.get_rect(center=self.day_complete_button.center),
         )
 
 

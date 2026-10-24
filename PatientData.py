@@ -30,8 +30,10 @@ def create_zorpa():
         },
     )
 
+
 def create_zoogy():
-    return Patient("Zoogy Zinglestar",
+    return Patient(
+        "Zoogy Zinglestar",
         None,
         None,
         "straining, shaking",
@@ -54,6 +56,7 @@ def create_zoogy():
             "Known allergy": "Mice",
         },
     )
+
 
 def create_titus():
     return Patient(
@@ -80,6 +83,7 @@ def create_titus():
             "Known allergy": "None",
         },
     )
+
 
 def create_conmann():
     return Patient(

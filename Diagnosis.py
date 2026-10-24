@@ -46,10 +46,10 @@ DIAGNOSES = {
     ),
     "lactose_intolerance": Diagnosis(
         "Lactose Intolerance",
-        "The patient's digestive track cannot process lactose, a sugar "
-        "found commonly in the milk of mammalia across the galaxy.",
-        "Dietary changes: no more cheese (or other dairy products)!"
-    )
+        "The patient's digestive tract cannot process lactose, a sugar "
+        "commonly found in mammalian milk across the galaxy.",
+        "Remove cheese and other dairy products from the patient's diet.",
+    ),
 }
 
 

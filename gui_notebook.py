@@ -614,7 +614,7 @@ class NotebookMixin:
 
         entry = self.get_current_entry()
         if entry["exam"] is None:
-            self.draw_zorpa_notebook_stamp(portrait)
+            self.draw_zorpa_patient_stamp(portrait)
             return
 
         background, border = entry["portrait"][0], entry["portrait"][1]

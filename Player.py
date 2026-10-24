@@ -32,11 +32,10 @@ class Player:
         ]
         self.diagnosis_hand = [
             Card("Diagnosis", DIAGNOSES["hypothermia"]),
-            Card("Diagnosis", DIAGNOSES["missing_intestine"]),
             Card("Diagnosis", DIAGNOSES["acute_water_reaction"]),
             Card("Diagnosis", DIAGNOSES["skeletal_resonance"]),
             Card("Diagnosis", DIAGNOSES["lava_flow_blockage"]),
-            Card("Diagnosis", DIAGNOSES["lactose_intolerance"])
+            Card("Diagnosis", DIAGNOSES["lactose_intolerance"]),
         ]
 
     def draw(self, card):

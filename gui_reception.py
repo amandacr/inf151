@@ -885,5 +885,3 @@ class ReceptionMixin:
         button_text = self.small_font.render(label_text, True, COLORS["background"])
         self.screen.blit(button_text, button_text.get_rect(center=self.start_button.center))
 
-
-

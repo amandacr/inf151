@@ -13,7 +13,7 @@ import pygame
 
 from Deck import Deck
 from Notebook import Notebook
-from PatientData import create_zorpa
+from PatientData import create_conmann, create_titus, create_zoogy, create_zorpa
 from Player import DIAGNOSIS_REWARD, Player
 from Tests.AllergyTest import AllergyTest
 from Tests.TemperatureTest import TemperatureTest
@@ -68,8 +68,8 @@ class SharedModelSmokeTests(unittest.TestCase):
         )
         self.assertEqual(len(deck.contents), 24)
 
-    def test_starting_diagnosis_hand_has_five_options_and_the_correct_answer(self):
-        """The fixed prototype hand should contain five unique diagnoses including Hypothermia."""
+    def test_starting_diagnosis_hand_has_five_options_and_all_patient_answers(self):
+        """The fixed hand should contain five unique options and every current correct answer."""
 
         player = Player("Test Doctor")
         diagnosis_names = [card.value.name for card in player.diagnosis_hand]
@@ -80,17 +80,22 @@ class SharedModelSmokeTests(unittest.TestCase):
             diagnosis_names,
             [
                 "Hypothermia",
-                "Missing Intestine",
                 "Acute Water Reaction",
                 "Skeletal Resonance",
                 "Lava-Flow Blockage",
+                "Lactose Intolerance",
             ],
         )
-        correct_diagnosis = create_zorpa().diagnosis
-        self.assertEqual(
-            sum(card.value == correct_diagnosis for card in player.diagnosis_hand),
-            1,
-        )
+        for patient in (
+            create_zorpa(),
+            create_zoogy(),
+            create_titus(),
+            create_conmann(),
+        ):
+            self.assertEqual(
+                sum(card.value == patient.diagnosis for card in player.diagnosis_hand),
+                1,
+            )
 
 
 class GuiFlowSmokeTests(unittest.TestCase):
@@ -129,6 +134,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.draw_test_result_screen.__module__, "gui_results")
         self.assertEqual(self.game.draw_diagnosis_outcome.__module__, "gui_results")
         self.assertEqual(self.game.draw_shop_screen.__module__, "gui_shop")
+        self.assertEqual(self.game.draw_day_complete_screen.__module__, "gui_shop")
 
     def test_correct_diagnosis_reaches_shop_and_resets_round(self):
         """A test and correct diagnosis should reward the player and reach the shop."""
@@ -240,6 +246,59 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertTrue(self.game.notebook_has_test_results())
         self.game.notebook.add_test(self.game.patient, "X-RAY", "No damage found.")
         self.assertEqual(self.game.get_notebook_test_count_label(), "2 TESTS")
+
+    def test_zorpa_notebook_portrait_renders_without_crashing(self):
+        """Opening the first patient's notebook should render Zorpa's portrait."""
+
+        portrait = pygame.Rect(0, 0, 44, 44)
+        self.game.draw_notebook_patient_stamp(portrait)
+
+    def test_four_patient_day_reaches_summary_and_restarts(self):
+        """Every queued patient should be playable before a fresh day begins."""
+
+        starting_balance = self.game.player.balance
+        expected_names = [entry["create"]().name for entry in self.game.waiting_room_queue]
+        self.game.state = GameState.TITLE
+
+        for index, expected_name in enumerate(expected_names):
+            self.assertEqual(self.game.patient.name, expected_name)
+            self.game.begin_reception_transition()
+            self.game.reception_transition_started_at = (
+                pygame.time.get_ticks() - self.game.reception_transition_duration - 1
+            )
+            self.game.update()
+
+            self.assertEqual(self.game.state, GameState.PATIENT)
+            self.assertEqual(self.game.patients_called, index + 1)
+            self.game.draw()
+            self.game.draw_notebook_patient_stamp(pygame.Rect(0, 0, 44, 44))
+
+            self.game.switch_active_hand(True)
+            self.game.selected_card_index = next(
+                card_index
+                for card_index, card in enumerate(self.game.player.diagnosis_hand)
+                if card.value == self.game.patient.diagnosis
+            )
+            self.game.play_selected_diagnosis()
+            self.assertTrue(self.game.diagnosis_correct)
+            self.game.handle_outcome_click(self.game.outcome_button.center)
+            self.assertEqual(self.game.state, GameState.SHOP)
+            self.game.handle_shop_click(self.game.shop_button.center)
+
+            if index < len(expected_names) - 1:
+                self.assertEqual(self.game.state, GameState.TITLE)
+
+        self.assertEqual(self.game.state, GameState.DAY_COMPLETE)
+        self.assertEqual(
+            self.game.player.balance,
+            starting_balance + len(expected_names) * DIAGNOSIS_REWARD,
+        )
+        self.game.draw()
+        self.game.handle_day_complete_click(self.game.day_complete_button.center)
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertEqual(self.game.patients_called, 0)
+        self.assertEqual(self.game.patient.name, expected_names[0])
+        self.assertEqual(len(self.game.deck.contents), 24)
 
     def test_workspace_tools_use_the_swapped_non_overlapping_layout(self):
         """Diagnosis should sit above med-waste while the larger notebook clears the hand."""
