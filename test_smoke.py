@@ -201,6 +201,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.patient.name, "Zoogy Zinglestar")
         self.assertEqual(self.game.player.balance, starting_balance)
         self.assertEqual(len(self.game.player.test_hand), 5)
+        self.assertIsNotNone(self.game.queue_shift_started_at)
 
     def test_incorrect_diagnosis_returns_to_test_hand(self):
         """A wrong diagnosis should keep the case open and return to test cards."""
@@ -288,6 +289,12 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
             if index < len(expected_names) - 1:
                 self.assertEqual(self.game.state, GameState.TITLE)
+                self.assertIsNotNone(self.game.queue_shift_started_at)
+                self.game.queue_shift_started_at = (
+                    pygame.time.get_ticks() - self.game.queue_shift_duration - 1
+                )
+                self.game.update()
+                self.assertIsNone(self.game.queue_shift_started_at)
 
         self.assertEqual(self.game.state, GameState.DAY_COMPLETE)
         self.assertEqual(self.game.player.balance, starting_balance)
@@ -319,6 +326,41 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(len(self.game.deck.contents), 24)
         self.assertEqual(self.game.daily_correct_diagnoses, 0)
         self.assertEqual(self.game.daily_wrong_diagnoses, 0)
+
+    def test_remaining_patients_slide_forward_before_the_next_call(self):
+        """After Zorpa, the other three patients should move into the open chairs."""
+
+        self.game.state = GameState.TITLE
+        self.game.patients_called = 1
+        self.game.begin_queue_shift()
+
+        self.assertEqual(self.game.patients_waiting(), 3)
+        self.assertIsNotNone(self.game.queue_shift_started_at)
+        self.game.queue_shift_started_at = pygame.time.get_ticks()
+        self.assertLessEqual(self.game.get_waiting_patient_x(1), 642)
+
+        self.game.queue_shift_started_at = (
+            pygame.time.get_ticks() - self.game.queue_shift_duration // 2
+        )
+        halfway_x = self.game.get_waiting_patient_x(1)
+        self.assertGreater(halfway_x, 640)
+        self.assertLess(halfway_x, 782)
+        self.game.draw()
+
+        self.game.begin_reception_transition()
+        self.assertIsNone(self.game.reception_transition_started_at)
+
+        self.game.queue_shift_started_at = (
+            pygame.time.get_ticks() - self.game.queue_shift_duration - 1
+        )
+        self.game.update()
+        self.assertIsNone(self.game.queue_shift_started_at)
+        self.assertEqual(self.game.get_waiting_patient_x(1), 782)
+        self.assertEqual(self.game.get_waiting_patient_x(2), 640)
+        self.assertEqual(self.game.get_waiting_patient_x(3), 498)
+
+        self.game.begin_reception_transition()
+        self.assertIsNotNone(self.game.reception_transition_started_at)
 
     def test_wrong_diagnoses_reduce_end_of_day_pay(self):
         """Mistakes should reduce pending pay and remove the perfect-day bonus."""

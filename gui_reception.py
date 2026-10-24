@@ -19,6 +19,8 @@ class ReceptionMixin:
     def begin_reception_transition(self):
         """Call the next patient, or end the day if the room is empty."""
 
+        if self.queue_shift_started_at is not None:
+            return
         if self.patients_waiting() == 0:
             self.end_day()
             return
@@ -33,6 +35,35 @@ class ReceptionMixin:
             return 0.0
         elapsed = pygame.time.get_ticks() - self.reception_transition_started_at
         return max(0.0, min(1.0, elapsed / self.reception_transition_duration))
+
+    def begin_queue_shift(self):
+        """Begin sliding every remaining patient one chair toward the exam door."""
+
+        if self.patients_waiting() > 0:
+            self.queue_shift_started_at = pygame.time.get_ticks()
+
+    def get_queue_shift_progress(self):
+        """Return zero-to-one progress for the active waiting-room queue movement."""
+
+        if self.queue_shift_started_at is None:
+            return 1.0
+        elapsed = pygame.time.get_ticks() - self.queue_shift_started_at
+        progress = max(0.0, min(1.0, elapsed / self.queue_shift_duration))
+        return progress * progress * (3 - 2 * progress)
+
+    def get_waiting_patient_x(self, slot):
+        """Return a remaining patient's animated chair position."""
+
+        chair_positions = [entry["chair_x"] for entry in self.waiting_room_queue]
+        remaining_index = slot - self.patients_called
+        target_x = chair_positions[remaining_index]
+        if self.queue_shift_started_at is None:
+            return target_x
+
+        start_index = min(remaining_index + 1, len(chair_positions) - 1)
+        start_x = chair_positions[start_index]
+        progress = self.get_queue_shift_progress()
+        return round(start_x + (target_x - start_x) * progress)
 
 
     def create_game_logo_surface(self):
@@ -389,7 +420,12 @@ class ReceptionMixin:
         pygame.draw.rect(self.screen, (5, 19, 24), display, border_radius=7)
 
         progress = self.get_reception_transition_progress()
-        waiting_color = COLORS["accent"] if progress > 0 else (255, 198, 75)
+        queue_moving = self.queue_shift_started_at is not None
+        waiting_color = (
+            (117, 190, 255)
+            if queue_moving
+            else COLORS["accent"] if progress > 0 else (255, 198, 75)
+        )
         pulse = 2 if (pygame.time.get_ticks() // 450) % 2 == 0 else 0
         pygame.draw.circle(
             self.screen,
@@ -400,7 +436,9 @@ class ReceptionMixin:
 
         left = self.body_font.render("RECEPTION", True, COLORS["text"])
         waiting = self.patients_waiting()
-        if progress > 0:
+        if queue_moving:
+            middle_text = f"PATIENTS WAITING: {waiting} • MOVING FORWARD"
+        elif progress > 0:
             middle_text = "CALLING NEXT PATIENT"
         elif waiting == 0:
             middle_text = "ALL PATIENTS SEEN"
@@ -549,18 +587,27 @@ class ReceptionMixin:
         """Draw patients still waiting; walk the called one to the exam door."""
 
         progress = self.get_reception_transition_progress()
+        shift_progress = self.get_queue_shift_progress()
         for slot, entry in enumerate(self.waiting_room_queue):
             if slot < self.patients_called:
                 continue  # already seen, so the chair stays empty
 
+            waiting_x = self.get_waiting_patient_x(slot)
             if slot == self.patients_called and progress > 0:
                 walk = min(1.0, progress / 0.92)
                 eased = walk * walk * (3 - 2 * walk)
-                dx = round((930 - entry["chair_x"]) * eased)
+                current_x = round(waiting_x + (930 - waiting_x) * eased)
+                dx = current_x - entry["chair_x"]
                 dy = round(-5 * math.sin(walk * math.pi * 5))
                 self.draw_with_offset(entry["draw"], dx, dy)
             else:
-                entry["draw"]()
+                dx = waiting_x - entry["chair_x"]
+                dy = (
+                    -round(5 * math.sin(shift_progress * math.pi))
+                    if self.queue_shift_started_at is not None
+                    else 0
+                )
+                self.draw_with_offset(entry["draw"], dx, dy)
 
     def draw_with_offset(self, draw_method, dx, dy):
         """Run a draw method onto a temporary layer, then blit it shifted."""
@@ -788,7 +835,9 @@ class ReceptionMixin:
         queue = pygame.Rect(61, 464, 238, 31)
         pygame.draw.rect(self.screen, (12, 27, 34), queue, border_radius=5)
         pygame.draw.rect(self.screen, (91, 132, 132), queue, width=1, border_radius=5)
-        if self.get_reception_transition_progress() > 0:
+        if self.queue_shift_started_at is not None:
+            queue_text = f"{self.patients_waiting()} WAITING • MOVING UP"
+        elif self.get_reception_transition_progress() > 0:
             queue_text = "CALLING PATIENT..."
         elif self.patients_waiting() == 0:
             queue_text = "NO PATIENTS WAITING"
@@ -846,10 +895,18 @@ class ReceptionMixin:
         """Draw the physical control that calls the patient into the exam bay."""
 
         progress = self.get_reception_transition_progress()
-        hovered = self.start_button.collidepoint(pygame.mouse.get_pos()) and progress == 0
+        queue_moving = self.queue_shift_started_at is not None
+        hovered = (
+            self.start_button.collidepoint(pygame.mouse.get_pos())
+            and progress == 0
+            and not queue_moving
+        )
         shadow = self.start_button.move(0, 5)
         pygame.draw.rect(self.screen, (26, 31, 45), shadow, border_radius=10)
-        if progress > 0:
+        if queue_moving:
+            button_color = (74, 96, 110)
+            label_text = "MOVING QUEUE..."
+        elif progress > 0:
             button_color = (96, 119, 123)
             label_text = "PATIENT CALLED"
         else:

@@ -136,6 +136,8 @@ class AlienDoctorGUI(
         self.reception_transition_started_at = None
         self.reception_transition_duration = 3350
         self.reception_fade_duration = 650
+        self.queue_shift_started_at = None
+        self.queue_shift_duration = 900
         self.patient_fade_started_at = None
         self.patient_fade_duration = 650
         self.start_button = pygame.Rect(61, 505, 238, 43)
@@ -298,6 +300,7 @@ class AlienDoctorGUI(
                     self.end_day()
                 else:
                     self.reset_round()
+                    self.begin_queue_shift()
                     self.state = GameState.TITLE
             else:
                 self.switch_active_hand(False)
@@ -339,6 +342,12 @@ class AlienDoctorGUI(
                     self.discard_pile.append(self.discard_animation["card"])
                 self.discard_animation = None
 
+        if self.state == GameState.TITLE and self.queue_shift_started_at is not None:
+            elapsed = pygame.time.get_ticks() - self.queue_shift_started_at
+            if elapsed >= self.queue_shift_duration:
+                self.queue_shift_started_at = None
+            return
+
         if self.state == GameState.TITLE and self.reception_transition_started_at is not None:
             elapsed = pygame.time.get_ticks() - self.reception_transition_started_at
             if elapsed >= self.reception_transition_duration:
@@ -364,6 +373,7 @@ class AlienDoctorGUI(
         """Show the completed-day summary after every queued patient is treated."""
 
         self.reception_transition_started_at = None
+        self.queue_shift_started_at = None
         self.patient_fade_started_at = None
         self.state = GameState.DAY_COMPLETE
 
@@ -378,6 +388,7 @@ class AlienDoctorGUI(
         """Refill the patient queue and draw deck while preserving earned money."""
 
         self.patients_called = 0
+        self.queue_shift_started_at = None
         self.daily_correct_diagnoses = 0
         self.daily_wrong_diagnoses = 0
         self.daily_payout_applied = False
