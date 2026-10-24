@@ -801,6 +801,7 @@ class NotebookMixin:
     def open_notebook(self):
         """Rebuild the current notes and open the notebook at its first spread."""
 
+        self.play_sfx("notebook")
         self.build_notebook_columns()
         self.notebook_spread = 0
         self.state = GameState.NOTEBOOK
@@ -816,8 +817,11 @@ class NotebookMixin:
         """Handle notebook close and page-navigation button clicks."""
 
         if self.notebook_layout["close"].collidepoint(position):
+            self.play_sfx("button")
             self.state = GameState.PATIENT
         elif self.notebook_layout["prev"].collidepoint(position):
+            self.play_sfx("button")
             self.flip_notebook(-1)
         elif self.notebook_layout["next"].collidepoint(position):
+            self.play_sfx("button")
             self.flip_notebook(1)

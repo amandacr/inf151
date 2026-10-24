@@ -232,8 +232,10 @@ class EndingMixin:
         """Replay the slice or close the game from the final report."""
 
         if self.final_replay_button.collidepoint(position):
+            self.play_sfx("button")
             self.restart_vertical_slice()
         elif self.final_quit_button.collidepoint(position):
+            self.play_sfx("button")
             self.running = False
 
     def open_exit_confirmation(self):
@@ -278,10 +280,13 @@ class EndingMixin:
         """Continue, restart at reception, or quit from the exit confirmation."""
 
         if self.exit_continue_button.collidepoint(position):
+            self.play_sfx("button")
             self.close_exit_confirmation()
         elif self.exit_reception_button.collidepoint(position):
+            self.play_sfx("button")
             self.restart_vertical_slice()
         elif self.exit_quit_button.collidepoint(position):
+            self.play_sfx("button")
             self.running = False
 
     def restart_vertical_slice(self):

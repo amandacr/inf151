@@ -25,6 +25,7 @@ class ReceptionMixin:
             self.end_day()
             return
         if self.reception_transition_started_at is None:
+            self.play_sfx("door")
             self.patient_fade_started_at = None
             self.reception_transition_started_at = pygame.time.get_ticks()
 

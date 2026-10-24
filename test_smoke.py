@@ -27,6 +27,7 @@ from Tests.TemperatureTest import TemperatureTest
 from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
 from gui_animations import AnimationMixin
+from gui_audio import AudioMixin
 from gui_cards import CardMixin
 from gui_ending import EndingMixin
 from gui_examination import ExaminationMixin
@@ -135,6 +136,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         """The main GUI should receive extracted feature behavior from mixins."""
 
         self.assertIsInstance(self.game, AnimationMixin)
+        self.assertIsInstance(self.game, AudioMixin)
         self.assertIsInstance(self.game, CardMixin)
         self.assertIsInstance(self.game, EndingMixin)
         self.assertIsInstance(self.game, ExaminationMixin)
@@ -143,6 +145,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIsInstance(self.game, ResultsMixin)
         self.assertIsInstance(self.game, ShopMixin)
         self.assertEqual(self.game.draw_discard_animation.__module__, "gui_animations")
+        self.assertEqual(self.game.draw_audio_button.__module__, "gui_audio")
         self.assertEqual(self.game.draw_test_card.__module__, "gui_cards")
         self.assertEqual(self.game.run_selected_test.__module__, "gui_cards")
         self.assertEqual(self.game.draw_patient_screen.__module__, "gui_examination")
@@ -156,6 +159,49 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.draw_day_complete_screen.__module__, "gui_shop")
         self.assertEqual(self.game.draw_ending_screen.__module__, "gui_ending")
         self.assertEqual(self.game.draw_exit_confirmation.__module__, "gui_ending")
+
+    def test_audio_controls_balance_music_and_cover_core_interactions(self):
+        """The slice should expose every requested effect and a working global mute."""
+
+        self.assertTrue(self.game.audio_available)
+        self.assertLess(self.game.music_volume, self.game.sfx_volume)
+        self.assertEqual(
+            set(self.game.sound_effects),
+            {
+                "button",
+                "card_select",
+                "scan",
+                "waste",
+                "notebook",
+                "correct",
+                "incorrect",
+                "door",
+            },
+        )
+
+        self.game.draw()
+        self.assertFalse(self.game.audio_muted)
+        self.game.toggle_audio_muted()
+        self.assertTrue(self.game.audio_muted)
+        self.assertEqual(pygame.mixer.music.get_volume(), 0.0)
+        self.game.toggle_audio_muted()
+        self.assertFalse(self.game.audio_muted)
+        self.assertAlmostEqual(
+            pygame.mixer.music.get_volume(),
+            self.game.music_volume,
+            delta=0.01,
+        )
+
+    def test_cards_and_tests_request_their_distinct_sound_effects(self):
+        """Card focus should click lightly while running a test starts its scanner."""
+
+        with patch.object(self.game, "play_sfx") as play_sfx:
+            self.game.handle_card_click(self.game.card_rects[0].center)
+            play_sfx.assert_called_once_with("card_select")
+
+        with patch.object(self.game, "play_sfx") as play_sfx:
+            self.game.run_selected_test()
+            play_sfx.assert_called_once_with("scan")
 
     def test_correct_diagnosis_returns_to_reception_without_early_payment(self):
         """A resolved early case should queue its pay and return to reception."""

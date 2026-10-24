@@ -12,6 +12,7 @@ from Tests.TemperatureTest import TemperatureTest
 from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
 from gui_animations import AnimationMixin
+from gui_audio import AudioMixin
 from gui_cards import CardMixin
 from gui_ending import EndingMixin
 from gui_examination import ExaminationMixin
@@ -33,6 +34,7 @@ from Deck import Deck
 
 class CosmicClinicGUI(
     AnimationMixin,
+    AudioMixin,
     CardMixin,
     EndingMixin,
     ExaminationMixin,
@@ -48,6 +50,7 @@ class CosmicClinicGUI(
         pygame.init()
         pygame.display.set_caption("The Cosmic Clinic - GUI Prototype")
 
+        self.setup_audio()
         self.start_music()
         self.screen = pygame.display.set_mode(WINDOW_SIZE)
         self.clock = pygame.time.Clock()
@@ -212,9 +215,13 @@ class CosmicClinicGUI(
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if self.exit_confirmation_open:
                     self.handle_exit_confirmation_click(event.pos)
+                elif self.audio_button.collidepoint(event.pos):
+                    self.toggle_audio_muted()
                 elif self.state == GameState.INTRO:
+                    self.play_sfx("button")
                     self.finish_intro()
                 elif self.state == GameState.TITLE and self.start_button.collidepoint(event.pos):
+                    self.play_sfx("button")
                     self.begin_reception_transition()
                 elif self.state == GameState.PATIENT:
                     self.handle_patient_click(event.pos)
@@ -229,16 +236,21 @@ class CosmicClinicGUI(
                 elif self.state == GameState.DAY_COMPLETE:
                     self.handle_day_complete_click(event.pos)
                 elif self.state == GameState.ENDING:
+                    self.play_sfx("button")
                     self.finish_ending_sequence()
                 elif self.state == GameState.FINAL:
                     self.handle_final_screen_click(event.pos)
             elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_m:
+                    self.toggle_audio_muted()
+                    continue
                 if self.exit_confirmation_open:
                     if event.key == pygame.K_ESCAPE:
                         self.close_exit_confirmation()
                     continue
                 if event.key == pygame.K_ESCAPE:
                     if self.state == GameState.PATIENT and self.diagnosis_confirmation_open:
+                        self.play_sfx("button")
                         self.diagnosis_confirmation_open = False
                     else:
                         self.open_exit_confirmation()
@@ -249,8 +261,10 @@ class CosmicClinicGUI(
                 ):
                     self.confirm_selected_diagnosis()
                 elif event.key == pygame.K_RETURN and self.state == GameState.INTRO:
+                    self.play_sfx("button")
                     self.finish_intro()
                 elif event.key == pygame.K_RETURN and self.state == GameState.TITLE:
+                    self.play_sfx("button")
                     self.begin_reception_transition()
                 elif event.key == pygame.K_RETURN and self.state == GameState.TEST_RESULT:
                     self.handle_test_result_click(self.continue_button.center)
@@ -261,6 +275,7 @@ class CosmicClinicGUI(
                 elif event.key == pygame.K_RETURN and self.state == GameState.DAY_COMPLETE:
                     self.handle_day_complete_click(self.day_complete_button.center)
                 elif event.key == pygame.K_RETURN and self.state == GameState.ENDING:
+                    self.play_sfx("button")
                     self.finish_ending_sequence()
                 elif event.key == pygame.K_LEFT and self.state == GameState.NOTEBOOK:
                     self.flip_notebook(-1)
@@ -289,15 +304,18 @@ class CosmicClinicGUI(
             self.handle_diagnosis_confirmation_click(position)
             return
         if self.layout["id_card"].collidepoint(position):
+            self.play_sfx("button")
             self.showing_health_id = not self.showing_health_id
             return
         if self.layout["notebook"].collidepoint(position):
             self.open_notebook()
             return
         if self.layout["diagnosis"].collidepoint(position):
+            self.play_sfx("button")
             self.switch_active_hand(not self.showing_diagnosis_hand)
             return
         if self.layout["draw_deck"].collidepoint(position):
+            self.play_sfx("card_select")
             self.draw_card_from_pile()
             return
 
@@ -310,6 +328,7 @@ class CosmicClinicGUI(
             self.get_test_result_reveal_progress() >= 1.0
             and self.continue_button.collidepoint(position)
         ):
+            self.play_sfx("button")
             self.state = GameState.PATIENT
             if self.pending_test_discard is not None:
                 self.note_transfer_animation = {
@@ -322,6 +341,7 @@ class CosmicClinicGUI(
         """Continue to the next case, the daily recap, or the current patient."""
 
         if self.outcome_button.collidepoint(position):
+            self.play_sfx("button")
             if self.diagnosis_correct:
                 if self.patients_waiting() == 0:
                     self.end_day()
@@ -377,6 +397,7 @@ class CosmicClinicGUI(
             if elapsed >= duration:
                 if self.discard_animation.get("add_to_pile_on_complete"):
                     self.discard_pile.append(self.discard_animation["card"])
+                self.play_sfx("waste")
                 self.discard_animation = None
 
         if self.state == GameState.TITLE and self.queue_shift_started_at is not None:
@@ -403,6 +424,7 @@ class CosmicClinicGUI(
         """Handle placeholder purchases or finish the vertical-slice shift."""
 
         if self.shop_button.collidepoint(position):
+            self.play_sfx("button")
             self.begin_ending_sequence()
             return
         self.handle_shop_upgrade_click(position)
@@ -419,6 +441,7 @@ class CosmicClinicGUI(
         """Deposit the completed shift's pay and open the end-of-day Shop."""
 
         if self.day_complete_button.collidepoint(position):
+            self.play_sfx("button")
             self.settle_daily_pay()
             self.state = GameState.SHOP
 
@@ -478,18 +501,21 @@ class CosmicClinicGUI(
 
         if self.state == GameState.INTRO:
             self.draw_intro_screen()
+            self.draw_audio_button()
             if self.exit_confirmation_open:
                 self.draw_exit_confirmation()
             return
 
         if self.state == GameState.ENDING:
             self.draw_ending_screen()
+            self.draw_audio_button()
             if self.exit_confirmation_open:
                 self.draw_exit_confirmation()
             return
 
         if self.state == GameState.FINAL:
             self.draw_final_screen()
+            self.draw_audio_button()
             if self.exit_confirmation_open:
                 self.draw_exit_confirmation()
             return
@@ -529,6 +555,7 @@ class CosmicClinicGUI(
         quit_hint = self.small_font.render(footer_text, True, COLORS["muted"])
         self.screen.blit(quit_hint, quit_hint.get_rect(center=(WINDOW_SIZE[0] // 2, 635)))
         self.draw_reception_transition_fade()
+        self.draw_audio_button()
         if self.exit_confirmation_open:
             self.draw_exit_confirmation()
 
@@ -590,16 +617,6 @@ class CosmicClinicGUI(
                     line = [word]
             lines.append(" ".join(line))
         return lines
-
-    def start_music(self):
-        """Start the looping background music."""
-
-        try:
-            pygame.mixer.music.load("assets/hyperdrive_boogie_bg_music.ogg")
-            pygame.mixer.music.set_volume(0.4)
-            pygame.mixer.music.play(loops=-1)
-        except pygame.error:
-            return
 
 def main():
     """Create and start the game."""

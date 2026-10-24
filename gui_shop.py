@@ -252,6 +252,7 @@ class ShopMixin:
 
         for upgrade, rect in zip(SHOP_UPGRADES, self.get_shop_upgrade_rects()):
             if rect.collidepoint(position):
+                self.play_sfx("button")
                 self.selected_shop_upgrade = upgrade["id"]
                 if upgrade["id"] in self.purchased_shop_upgrades:
                     self.shop_message = f"{upgrade['name']} is already owned."
@@ -261,6 +262,7 @@ class ShopMixin:
 
         if not self.shop_purchase_button.collidepoint(position):
             return
+        self.play_sfx("button")
         selected = self.get_selected_shop_upgrade()
         if selected is None:
             self.shop_message = "Select an upgrade placeholder first."

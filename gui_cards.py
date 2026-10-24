@@ -95,13 +95,16 @@ class CardMixin:
             if self.showing_diagnosis_hand:
                 action_button = self.get_card_action_button(selected_rect)
                 if action_button.collidepoint(position):
+                    self.play_sfx("button")
                     self.open_diagnosis_confirmation()
                     return
             else:
                 if self.get_run_test_button(selected_rect).collidepoint(position):
+                    self.play_sfx("button")
                     self.run_selected_test()
                     return
                 if self.get_discard_button(selected_rect).collidepoint(position):
+                    self.play_sfx("button")
                     self.discard_selected_test()
                     return
 
@@ -112,6 +115,7 @@ class CardMixin:
         index = self.get_hovered_card_index(position)
         if index is not None:
             self.selected_card_index = index
+            self.play_sfx("card_select")
             return
 
         if self.selected_card_index is not None:
@@ -139,6 +143,7 @@ class CardMixin:
         self.test_result_started_at = pygame.time.get_ticks()
         self.state = GameState.TEST_RESULT
         self.notebook.add_test(self.patient, self.last_test_name, self.last_test_result)
+        self.play_sfx("scan")
 
 
     def discard_selected_test(self):
@@ -237,8 +242,10 @@ class CardMixin:
         self.diagnosis_correct = self.patient.receive_diagnosis(card.value)
         if self.diagnosis_correct:
             self.daily_correct_diagnoses += 1
+            self.play_sfx("correct")
         else:
             self.daily_wrong_diagnoses += 1
+            self.play_sfx("incorrect")
         self.selected_card_index = None
         self.play_diagnosis_button = None
         self.state = GameState.OUTCOME
@@ -256,6 +263,7 @@ class CardMixin:
 
         if not self.diagnosis_confirmation_open:
             return
+        self.play_sfx("button")
         self.diagnosis_confirmation_open = False
         self.play_selected_diagnosis()
 
@@ -266,6 +274,7 @@ class CardMixin:
         if self.diagnosis_confirm_button.collidepoint(position):
             self.confirm_selected_diagnosis()
         elif self.diagnosis_cancel_button.collidepoint(position):
+            self.play_sfx("button")
             self.diagnosis_confirmation_open = False
 
 
