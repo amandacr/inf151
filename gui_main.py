@@ -143,8 +143,12 @@ class AlienDoctorGUI(
         self.start_button = pygame.Rect(61, 505, 238, 43)
         self.continue_button = pygame.Rect(700, 472, 220, 44)
         self.outcome_button = pygame.Rect(410, 455, 280, 52)
-        self.shop_button = pygame.Rect(400, 465, 300, 52)
+        self.shop_purchase_button = pygame.Rect(400, 402, 300, 40)
+        self.shop_button = pygame.Rect(400, 490, 300, 42)
         self.day_complete_button = pygame.Rect(400, 455, 300, 52)
+        self.selected_shop_upgrade = None
+        self.purchased_shop_upgrades = set()
+        self.shop_message = "Select an upgrade placeholder to inspect it."
         self.diagnosis_cancel_button = pygame.Rect(315, 410, 210, 48)
         self.diagnosis_confirm_button = pygame.Rect(575, 410, 210, 48)
         self.layout = {
@@ -363,11 +367,13 @@ class AlienDoctorGUI(
                 self.patient_fade_started_at = None
 
     def handle_shop_click(self, position):
-        """Start a fresh day after the player finishes visiting the Shop."""
+        """Handle placeholder purchases or start a fresh four-patient day."""
 
         if self.shop_button.collidepoint(position):
             self.reset_day()
             self.state = GameState.TITLE
+            return
+        self.handle_shop_upgrade_click(position)
 
     def end_day(self):
         """Show the completed-day summary after every queued patient is treated."""
@@ -392,6 +398,8 @@ class AlienDoctorGUI(
         self.daily_correct_diagnoses = 0
         self.daily_wrong_diagnoses = 0
         self.daily_payout_applied = False
+        self.selected_shop_upgrade = None
+        self.shop_message = "Select an upgrade placeholder to inspect it."
         self.deck.populate(
             [AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()]
         )

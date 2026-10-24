@@ -31,7 +31,7 @@ from gui_main import AlienDoctorGUI, GameState
 from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
 from gui_results import ResultsMixin
-from gui_shop import ShopMixin
+from gui_shop import SHOP_UPGRADES, ShopMixin
 
 
 class SharedModelSmokeTests(unittest.TestCase):
@@ -319,6 +319,17 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.player.balance, paid_balance)
 
         self.game.draw()
+        placeholder = SHOP_UPGRADES[-1]
+        placeholder_rect = self.game.get_shop_upgrade_rects()[-1]
+        self.game.handle_shop_click(placeholder_rect.center)
+        self.assertEqual(self.game.selected_shop_upgrade, placeholder["id"])
+        self.game.handle_shop_click(self.game.shop_purchase_button.center)
+        self.assertIn(placeholder["id"], self.game.purchased_shop_upgrades)
+        self.assertEqual(
+            self.game.player.balance,
+            paid_balance - placeholder["cost"],
+        )
+
         self.game.handle_shop_click(self.game.shop_button.center)
         self.assertEqual(self.game.state, GameState.TITLE)
         self.assertEqual(self.game.patients_called, 0)
@@ -326,6 +337,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(len(self.game.deck.contents), 24)
         self.assertEqual(self.game.daily_correct_diagnoses, 0)
         self.assertEqual(self.game.daily_wrong_diagnoses, 0)
+        self.assertIsNone(self.game.selected_shop_upgrade)
+        self.assertIn(placeholder["id"], self.game.purchased_shop_upgrades)
 
     def test_remaining_patients_slide_forward_before_the_next_call(self):
         """After Zorpa, the other three patients should move into the open chairs."""
@@ -378,6 +391,23 @@ class GuiFlowSmokeTests(unittest.TestCase):
                 - 2 * WRONG_DIAGNOSIS_PENALTY,
             ),
         )
+
+    def test_shop_blocks_an_unaffordable_placeholder_purchase(self):
+        """A selected placeholder should not charge or unlock when money is too low."""
+
+        self.game.state = GameState.SHOP
+        upgrade = SHOP_UPGRADES[0]
+        upgrade_rect = self.game.get_shop_upgrade_rects()[0]
+        self.game.handle_shop_click(upgrade_rect.center)
+        self.assertEqual(self.game.selected_shop_upgrade, upgrade["id"])
+
+        self.game.player.balance = upgrade["cost"] - 1
+        starting_balance = self.game.player.balance
+        self.game.handle_shop_click(self.game.shop_purchase_button.center)
+
+        self.assertEqual(self.game.player.balance, starting_balance)
+        self.assertNotIn(upgrade["id"], self.game.purchased_shop_upgrades)
+        self.assertIn("Not enough money", self.game.shop_message)
 
     def test_workspace_tools_use_the_swapped_non_overlapping_layout(self):
         """Diagnosis should sit above med-waste while the larger notebook clears the hand."""
