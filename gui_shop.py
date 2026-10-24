@@ -129,7 +129,7 @@ class ShopMixin:
             border_radius=8,
         )
         button_text = self.body_font.render(
-            "START NEXT DAY",
+            "FINISH SHIFT",
             True,
             COLORS["background"],
         )

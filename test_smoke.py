@@ -28,6 +28,7 @@ from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
 from gui_animations import AnimationMixin
 from gui_cards import CardMixin
+from gui_ending import EndingMixin
 from gui_examination import ExaminationMixin
 from gui_main import CosmicClinicGUI, GameState
 from gui_notebook import NotebookMixin
@@ -135,6 +136,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.assertIsInstance(self.game, AnimationMixin)
         self.assertIsInstance(self.game, CardMixin)
+        self.assertIsInstance(self.game, EndingMixin)
         self.assertIsInstance(self.game, ExaminationMixin)
         self.assertIsInstance(self.game, NotebookMixin)
         self.assertIsInstance(self.game, ReceptionMixin)
@@ -152,6 +154,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.draw_diagnosis_outcome.__module__, "gui_results")
         self.assertEqual(self.game.draw_shop_screen.__module__, "gui_shop")
         self.assertEqual(self.game.draw_day_complete_screen.__module__, "gui_shop")
+        self.assertEqual(self.game.draw_ending_screen.__module__, "gui_ending")
+        self.assertEqual(self.game.draw_exit_confirmation.__module__, "gui_ending")
 
     def test_correct_diagnosis_returns_to_reception_without_early_payment(self):
         """A resolved early case should queue its pay and return to reception."""
@@ -266,8 +270,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         portrait = pygame.Rect(0, 0, 44, 44)
         self.game.draw_notebook_patient_stamp(portrait)
 
-    def test_four_patient_day_reaches_summary_and_restarts(self):
-        """Every queued patient should be playable before a fresh day begins."""
+    def test_four_patient_day_reaches_the_shop_and_slice_ending(self):
+        """A full shift should end after the Shop and support a clean replay."""
 
         starting_balance = self.game.player.balance
         expected_names = [entry["create"]().name for entry in self.game.waiting_room_queue]
@@ -342,14 +346,72 @@ class GuiFlowSmokeTests(unittest.TestCase):
         )
 
         self.game.handle_shop_click(self.game.shop_button.center)
+        self.assertEqual(self.game.state, GameState.ENDING)
+        self.game.draw()
+        self.game.ending_started_at = (
+            pygame.time.get_ticks() - self.game.ending_duration - 1
+        )
+        self.game.update()
+        self.assertEqual(self.game.state, GameState.FINAL)
+        self.game.draw()
+        self.assertEqual(self.game.daily_correct_diagnoses, len(expected_names))
+        self.assertIn(placeholder["id"], self.game.purchased_shop_upgrades)
+
+        self.game.handle_final_screen_click(self.game.final_replay_button.center)
         self.assertEqual(self.game.state, GameState.TITLE)
         self.assertEqual(self.game.patients_called, 0)
         self.assertEqual(self.game.patient.name, expected_names[0])
+        self.assertEqual(self.game.player.balance, starting_balance)
         self.assertEqual(len(self.game.deck.contents), 24)
         self.assertEqual(self.game.daily_correct_diagnoses, 0)
         self.assertEqual(self.game.daily_wrong_diagnoses, 0)
         self.assertIsNone(self.game.selected_shop_upgrade)
-        self.assertIn(placeholder["id"], self.game.purchased_shop_upgrades)
+        self.assertNotIn(placeholder["id"], self.game.purchased_shop_upgrades)
+
+    def test_escape_confirmation_can_continue_restart_or_quit(self):
+        """The exit modal should safely expose all three promised choices."""
+
+        original_state = self.game.state
+        self.game.open_exit_confirmation()
+        self.assertTrue(self.game.exit_confirmation_open)
+        self.game.draw()
+        self.game.handle_exit_confirmation_click(self.game.exit_continue_button.center)
+        self.assertFalse(self.game.exit_confirmation_open)
+        self.assertEqual(self.game.state, original_state)
+
+        self.game.state = GameState.SHOP
+        self.game.open_exit_confirmation()
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.game.handle_events()
+        self.assertTrue(self.game.exit_confirmation_open)
+        self.assertEqual(self.game.state, GameState.SHOP)
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+        self.game.handle_events()
+        self.assertFalse(self.game.exit_confirmation_open)
+
+        self.game.begin_ending_sequence()
+        original_ending_start = self.game.ending_started_at
+        self.game.open_exit_confirmation()
+        self.game.exit_confirmation_opened_at -= 1000
+        self.game.close_exit_confirmation()
+        self.assertGreaterEqual(
+            self.game.ending_started_at,
+            original_ending_start + 1000,
+        )
+
+        self.game.player.balance = 725
+        self.game.daily_correct_diagnoses = 3
+        self.game.purchased_shop_upgrades.add(SHOP_UPGRADES[0]["id"])
+        self.game.open_exit_confirmation()
+        self.game.handle_exit_confirmation_click(self.game.exit_reception_button.center)
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertEqual(self.game.player.balance, 500)
+        self.assertEqual(self.game.daily_correct_diagnoses, 0)
+        self.assertFalse(self.game.purchased_shop_upgrades)
+
+        self.game.open_exit_confirmation()
+        self.game.handle_exit_confirmation_click(self.game.exit_quit_button.center)
+        self.assertFalse(self.game.running)
 
     def test_remaining_patients_slide_forward_before_the_next_call(self):
         """After Zorpa, the other three patients should move into the open chairs."""

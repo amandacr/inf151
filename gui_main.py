@@ -13,6 +13,7 @@ from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
 from gui_animations import AnimationMixin
 from gui_cards import CardMixin
+from gui_ending import EndingMixin
 from gui_examination import ExaminationMixin
 from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
@@ -33,6 +34,7 @@ from Deck import Deck
 class CosmicClinicGUI(
     AnimationMixin,
     CardMixin,
+    EndingMixin,
     ExaminationMixin,
     NotebookMixin,
     ReceptionMixin,
@@ -149,6 +151,15 @@ class CosmicClinicGUI(
         self.selected_shop_upgrade = None
         self.purchased_shop_upgrades = set()
         self.shop_message = "Select an upgrade placeholder to inspect it."
+        self.ending_started_at = None
+        self.ending_duration = 4200
+        self.exit_confirmation_open = False
+        self.exit_confirmation_opened_at = None
+        self.exit_continue_button = pygame.Rect(365, 300, 370, 46)
+        self.exit_reception_button = pygame.Rect(365, 360, 370, 46)
+        self.exit_quit_button = pygame.Rect(365, 420, 370, 46)
+        self.final_replay_button = pygame.Rect(300, 500, 235, 48)
+        self.final_quit_button = pygame.Rect(565, 500, 235, 48)
         self.diagnosis_cancel_button = pygame.Rect(315, 410, 210, 48)
         self.diagnosis_confirm_button = pygame.Rect(575, 410, 210, 48)
         self.layout = {
@@ -199,7 +210,9 @@ class CosmicClinicGUI(
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if self.state == GameState.INTRO:
+                if self.exit_confirmation_open:
+                    self.handle_exit_confirmation_click(event.pos)
+                elif self.state == GameState.INTRO:
                     self.finish_intro()
                 elif self.state == GameState.TITLE and self.start_button.collidepoint(event.pos):
                     self.begin_reception_transition()
@@ -215,12 +228,20 @@ class CosmicClinicGUI(
                     self.handle_shop_click(event.pos)
                 elif self.state == GameState.DAY_COMPLETE:
                     self.handle_day_complete_click(event.pos)
+                elif self.state == GameState.ENDING:
+                    self.finish_ending_sequence()
+                elif self.state == GameState.FINAL:
+                    self.handle_final_screen_click(event.pos)
             elif event.type == pygame.KEYDOWN:
+                if self.exit_confirmation_open:
+                    if event.key == pygame.K_ESCAPE:
+                        self.close_exit_confirmation()
+                    continue
                 if event.key == pygame.K_ESCAPE:
                     if self.state == GameState.PATIENT and self.diagnosis_confirmation_open:
                         self.diagnosis_confirmation_open = False
                     else:
-                        self.running = False
+                        self.open_exit_confirmation()
                 elif (
                     event.key == pygame.K_RETURN
                     and self.state == GameState.PATIENT
@@ -239,6 +260,8 @@ class CosmicClinicGUI(
                     self.handle_shop_click(self.shop_button.center)
                 elif event.key == pygame.K_RETURN and self.state == GameState.DAY_COMPLETE:
                     self.handle_day_complete_click(self.day_complete_button.center)
+                elif event.key == pygame.K_RETURN and self.state == GameState.ENDING:
+                    self.finish_ending_sequence()
                 elif event.key == pygame.K_LEFT and self.state == GameState.NOTEBOOK:
                     self.flip_notebook(-1)
                 elif event.key == pygame.K_RIGHT and self.state == GameState.NOTEBOOK:
@@ -313,6 +336,16 @@ class CosmicClinicGUI(
     def update(self):
         """Advance timed GUI transitions without pausing the event loop."""
 
+        if self.exit_confirmation_open:
+            return
+
+        if self.state == GameState.ENDING:
+            self.update_ending_sequence()
+            return
+
+        if self.state == GameState.FINAL:
+            return
+
         if self.state == GameState.INTRO:
             elapsed = pygame.time.get_ticks() - self.intro_started_at
             if elapsed >= self.intro_duration:
@@ -367,11 +400,10 @@ class CosmicClinicGUI(
                 self.patient_fade_started_at = None
 
     def handle_shop_click(self, position):
-        """Handle placeholder purchases or start a fresh four-patient day."""
+        """Handle placeholder purchases or finish the vertical-slice shift."""
 
         if self.shop_button.collidepoint(position):
-            self.reset_day()
-            self.state = GameState.TITLE
+            self.begin_ending_sequence()
             return
         self.handle_shop_upgrade_click(position)
 
@@ -446,6 +478,20 @@ class CosmicClinicGUI(
 
         if self.state == GameState.INTRO:
             self.draw_intro_screen()
+            if self.exit_confirmation_open:
+                self.draw_exit_confirmation()
+            return
+
+        if self.state == GameState.ENDING:
+            self.draw_ending_screen()
+            if self.exit_confirmation_open:
+                self.draw_exit_confirmation()
+            return
+
+        if self.state == GameState.FINAL:
+            self.draw_final_screen()
+            if self.exit_confirmation_open:
+                self.draw_exit_confirmation()
             return
 
         self.screen.fill(COLORS["background"])
@@ -478,11 +524,13 @@ class CosmicClinicGUI(
         footer_text = (
             "Press Esc to go back"
             if self.diagnosis_confirmation_open
-            else "Press Esc to quit"
+            else "Press Esc for exit options"
         )
         quit_hint = self.small_font.render(footer_text, True, COLORS["muted"])
         self.screen.blit(quit_hint, quit_hint.get_rect(center=(WINDOW_SIZE[0] // 2, 635)))
         self.draw_reception_transition_fade()
+        if self.exit_confirmation_open:
+            self.draw_exit_confirmation()
 
     def draw_centered_label(self, text, panel, y):
         """Draw a text label centered horizontally inside a panel."""
