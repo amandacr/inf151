@@ -1,4 +1,4 @@
-"""Patient data shared by both the text-based and GUI versions of the game."""
+"""Patient records used by The Cosmic Clinic GUI."""
 
 from Diagnosis import DIAGNOSES
 from Patient import Patient

@@ -21,5 +21,5 @@ class Test:
     def upgrade(self):
         if self.max_level >= self.upgrade_level + 1:
             self.upgrade_level += 1
-        else:
-            print("This upgrade is fully maxed!")
+            return True
+        return False

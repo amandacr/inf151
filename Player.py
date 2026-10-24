@@ -11,11 +11,6 @@ WRONG_DIAGNOSIS_PENALTY = 10
 PERFECT_DAY_BONUS = 25
 
 
-def display_hand(hand):
-    for i in range(1, len(hand) + 1):
-        print(f"{i}. {hand[i - 1].value.name}")
-
-
 class Player:
 
     def __init__(self, name):
@@ -24,7 +19,7 @@ class Player:
         Players start with $500, five diagnosis cards, and five test cards.
         """
         self.name = name
-        self.balance = 500 # start with 500 alien dollars
+        self.balance = 500  # start with 500 alien dollars
         self.test_hand = [
             Card("Test", TemperatureTest()),
             Card("Test", TemperatureTest()),
@@ -41,18 +36,16 @@ class Player:
         ]
 
     def draw(self, card):
-        print(f"You have drawn a {card.value.name} card!")
         self.test_hand.append(card)
 
     def play(self, card):
         if card in self.test_hand:
-            print(f"You have played your {card.value.name} card!")
             self.test_hand.remove(card)
-        elif card in self.diagnosis_hand:
-            print(f"You have played your {card.value.name} card!")
+            return True
+        if card in self.diagnosis_hand:
             # doesn't remove card so diagnoses can be reused
-        else:
-            print("You do not have this card!")
+            return True
+        return False
 
     def pay(self, amt):
         # player can go into debt / negative money so no need to have a balance check

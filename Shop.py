@@ -1,3 +1,0 @@
-"""
-placeholder for shop class
-"""

@@ -23,10 +23,8 @@ class Deck:
 
     def draw(self):
         if len(self.contents) <= 0:
-            print("The draw deck is empty! You cannot draw any more cards.")
             return None
-        else:
-            return self.contents.pop()
+        return self.contents.pop()
 
     def add_card(self, test):
         """

@@ -2,6 +2,7 @@
 
 import os
 import unittest
+from unittest.mock import patch
 
 
 # Pygame can render into memory during tests, so no game window or audio device is needed.
@@ -11,6 +12,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame
 
+import main as game_launcher
 from Deck import Deck
 from Notebook import Notebook
 from PatientData import create_conmann, create_titus, create_zoogy, create_zorpa
@@ -27,7 +29,7 @@ from Tests.XrayTest import XrayTest
 from gui_animations import AnimationMixin
 from gui_cards import CardMixin
 from gui_examination import ExaminationMixin
-from gui_main import AlienDoctorGUI, GameState
+from gui_main import CosmicClinicGUI, GameState
 from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
 from gui_results import ResultsMixin
@@ -50,6 +52,15 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertEqual(result, "Current temperature: 1700°F")
         self.assertEqual(patient.medical_info["Normal temperature"], "2,000°F")
         self.assertEqual(notebook.get_entries(patient), {"TEMPERATURE": result})
+
+    def test_main_launches_the_cosmic_clinic_gui(self):
+        """The official main.py entry point should start the GUI build."""
+
+        with patch.object(game_launcher, "CosmicClinicGUI") as gui_class:
+            game_launcher.main()
+
+        gui_class.assert_called_once_with()
+        gui_class.return_value.run.assert_called_once_with()
 
     def test_deck_rarity_counts_match_the_design(self):
         """The generated deck should contain each test according to its rarity."""
@@ -109,7 +120,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
     def setUp(self):
         """Create a fresh GUI session for every flow test."""
 
-        self.game = AlienDoctorGUI()
+        self.game = CosmicClinicGUI()
         self.game.finish_intro()
         self.game.patients_called = 1
         self.game.state = GameState.PATIENT

@@ -1,6 +1,6 @@
 """Pygame interface for The Cosmic Clinic vertical-slice prototype.
 
-You can run this file independently from the older text-based version.
+Run the game through main.py or launch this module directly.
 """
 
 import random
@@ -30,7 +30,7 @@ from Notebook import Notebook
 from Deck import Deck
 
 
-class AlienDoctorGUI(
+class CosmicClinicGUI(
     AnimationMixin,
     CardMixin,
     ExaminationMixin,
@@ -550,13 +550,13 @@ class AlienDoctorGUI(
             pygame.mixer.music.load("assets/hyperdrive_boogie_bg_music.ogg")
             pygame.mixer.music.set_volume(0.4)
             pygame.mixer.music.play(loops=-1)
-        except pygame.error as error:
-            print(f"Could not begin background music: {error}")
+        except pygame.error:
+            return
 
 def main():
     """Create and start the game."""
 
-    AlienDoctorGUI().run()
+    CosmicClinicGUI().run()
 
 
 if __name__ == "__main__":
