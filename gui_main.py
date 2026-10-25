@@ -21,6 +21,7 @@ from gui_reception import ReceptionMixin
 from gui_results import ResultsMixin
 from gui_shop import ShopMixin
 from gui_state import GameState
+from gui_tutorial import TutorialMixin
 from gui_theme import (
     COLORS,
     FPS,
@@ -42,6 +43,7 @@ class CosmicClinicGUI(
     ReceptionMixin,
     ResultsMixin,
     ShopMixin,
+    TutorialMixin,
 ):
 
     def __init__(self):
@@ -101,6 +103,8 @@ class CosmicClinicGUI(
         self.patients_called = 0
         self.daily_correct_diagnoses = 0
         self.daily_wrong_diagnoses = 0
+        self.daily_test_count = 0
+        self.daily_test_expenses = 0
         self.daily_payout_applied = False
         self.patient = self.waiting_room_queue[0]["create"]()
         self.player = Player("Dr GUI")
@@ -134,6 +138,7 @@ class CosmicClinicGUI(
         self.notebook_attention_duration = 420
         self.last_test_name = ""
         self.last_test_result = ""
+        self.last_test_cost = 0
         self.test_result_started_at = None
         self.test_result_reveal_duration = 1400
         self.last_diagnosis = None
@@ -163,6 +168,10 @@ class CosmicClinicGUI(
         self.exit_quit_button = pygame.Rect(365, 420, 370, 46)
         self.final_replay_button = pygame.Rect(300, 500, 235, 48)
         self.final_quit_button = pygame.Rect(565, 500, 235, 48)
+        self.tutorial_open = True
+        self.tutorial_opened_at = None
+        self.help_button = pygame.Rect(976, 16, 108, 31)
+        self.tutorial_begin_button = pygame.Rect(400, 510, 300, 48)
         self.diagnosis_cancel_button = pygame.Rect(315, 410, 210, 48)
         self.diagnosis_confirm_button = pygame.Rect(575, 410, 210, 48)
         self.layout = {
@@ -192,6 +201,11 @@ class CosmicClinicGUI(
         self.notebook_body_font = pygame.font.Font(None, 22)
         self.logo_font = pygame.font.SysFont("Arial", 54, bold=True)
         self.logo_small_font = pygame.font.SysFont("Arial", 18, bold=True)
+        self.tutorial_title_font = pygame.font.SysFont("Arial", 32, bold=True)
+        self.tutorial_subtitle_font = pygame.font.SysFont("Arial", 16, bold=True)
+        self.tutorial_step_font = pygame.font.SysFont("Arial", 17, bold=True)
+        self.tutorial_body_font = pygame.font.SysFont("Arial", 15)
+        self.tutorial_label_font = pygame.font.SysFont("Arial", 13, bold=True)
         self.game_logo = self.create_game_logo_surface()
 
     def run(self):
@@ -215,8 +229,13 @@ class CosmicClinicGUI(
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if self.exit_confirmation_open:
                     self.handle_exit_confirmation_click(event.pos)
+                elif self.state != GameState.INTRO and self.tutorial_open:
+                    self.handle_tutorial_click(event.pos)
                 elif self.audio_button.collidepoint(event.pos):
                     self.toggle_audio_muted()
+                elif self.state != GameState.INTRO and self.help_button.collidepoint(event.pos):
+                    self.play_sfx("button")
+                    self.open_tutorial()
                 elif self.state == GameState.INTRO:
                     self.play_sfx("button")
                     self.finish_intro()
@@ -243,6 +262,10 @@ class CosmicClinicGUI(
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_m:
                     self.toggle_audio_muted()
+                    continue
+                if self.state != GameState.INTRO and self.tutorial_open:
+                    if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
+                        self.close_tutorial()
                     continue
                 if self.exit_confirmation_open:
                     if event.key == pygame.K_ESCAPE:
@@ -359,6 +382,9 @@ class CosmicClinicGUI(
         if self.exit_confirmation_open:
             return
 
+        if self.state != GameState.INTRO and self.tutorial_open:
+            return
+
         if self.state == GameState.ENDING:
             self.update_ending_sequence()
             return
@@ -452,6 +478,8 @@ class CosmicClinicGUI(
         self.queue_shift_started_at = None
         self.daily_correct_diagnoses = 0
         self.daily_wrong_diagnoses = 0
+        self.daily_test_count = 0
+        self.daily_test_expenses = 0
         self.daily_payout_applied = False
         self.selected_shop_upgrade = None
         self.shop_message = "Select an upgrade placeholder to inspect it."
@@ -489,6 +517,7 @@ class CosmicClinicGUI(
         self.notebook_attention_started_at = None
         self.last_test_name = ""
         self.last_test_result = ""
+        self.last_test_cost = 0
         self.test_result_started_at = None
         self.last_diagnosis = None
         self.diagnosis_correct = None
@@ -508,14 +537,20 @@ class CosmicClinicGUI(
 
         if self.state == GameState.ENDING:
             self.draw_ending_screen()
+            self.draw_help_button()
             self.draw_audio_button()
+            if self.tutorial_open:
+                self.draw_tutorial_overlay()
             if self.exit_confirmation_open:
                 self.draw_exit_confirmation()
             return
 
         if self.state == GameState.FINAL:
             self.draw_final_screen()
+            self.draw_help_button()
             self.draw_audio_button()
+            if self.tutorial_open:
+                self.draw_tutorial_overlay()
             if self.exit_confirmation_open:
                 self.draw_exit_confirmation()
             return
@@ -555,7 +590,11 @@ class CosmicClinicGUI(
         quit_hint = self.small_font.render(footer_text, True, COLORS["muted"])
         self.screen.blit(quit_hint, quit_hint.get_rect(center=(WINDOW_SIZE[0] // 2, 635)))
         self.draw_reception_transition_fade()
+        if self.state != GameState.INTRO:
+            self.draw_help_button()
         self.draw_audio_button()
+        if self.state != GameState.INTRO and self.tutorial_open:
+            self.draw_tutorial_overlay()
         if self.exit_confirmation_open:
             self.draw_exit_confirmation()
 

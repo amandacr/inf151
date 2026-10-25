@@ -26,6 +26,7 @@ from Tests.AllergyTest import AllergyTest
 from Tests.TemperatureTest import TemperatureTest
 from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
+from Test import TEST_COSTS_BY_RARITY, get_test_cost
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
 from gui_cards import CardMixin
@@ -36,6 +37,7 @@ from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
 from gui_results import ResultsMixin
 from gui_shop import SHOP_UPGRADES, ShopMixin
+from gui_tutorial import TutorialMixin
 
 
 class SharedModelSmokeTests(unittest.TestCase):
@@ -124,6 +126,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game = CosmicClinicGUI()
         self.game.finish_intro()
+        self.game.tutorial_open = False
+        self.game.tutorial_opened_at = None
         self.game.patients_called = 1
         self.game.state = GameState.PATIENT
 
@@ -144,6 +148,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIsInstance(self.game, ReceptionMixin)
         self.assertIsInstance(self.game, ResultsMixin)
         self.assertIsInstance(self.game, ShopMixin)
+        self.assertIsInstance(self.game, TutorialMixin)
         self.assertEqual(self.game.draw_discard_animation.__module__, "gui_animations")
         self.assertEqual(self.game.draw_audio_button.__module__, "gui_audio")
         self.assertEqual(self.game.draw_test_card.__module__, "gui_cards")
@@ -159,6 +164,126 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.draw_day_complete_screen.__module__, "gui_shop")
         self.assertEqual(self.game.draw_ending_screen.__module__, "gui_ending")
         self.assertEqual(self.game.draw_exit_confirmation.__module__, "gui_ending")
+        self.assertEqual(self.game.draw_tutorial_overlay.__module__, "gui_tutorial")
+
+    def test_first_launch_briefing_blocks_reception_until_dismissed(self):
+        """The tutorial should appear once and remain available from gameplay Help."""
+
+        self.game.state = GameState.TITLE
+        self.game.patients_called = 0
+        self.game.tutorial_open = True
+        self.game.tutorial_opened_at = None
+        self.game.reception_transition_started_at = None
+        self.assertTrue(self.game.tutorial_open)
+        self.assertEqual(self.game.get_tutorial_action_label(), "BEGIN SHIFT")
+        self.game.draw()
+
+        self.game.handle_tutorial_click(self.game.start_button.center)
+        self.assertTrue(self.game.tutorial_open)
+        self.assertIsNone(self.game.reception_transition_started_at)
+
+        self.game.handle_tutorial_click(self.game.tutorial_begin_button.center)
+        self.assertFalse(self.game.tutorial_open)
+        self.game.open_tutorial()
+        self.assertTrue(self.game.tutorial_open)
+        self.game.close_tutorial()
+        self.assertFalse(self.game.tutorial_open)
+
+        self.game.state = GameState.PATIENT
+        self.game.patients_called = 1
+        self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO PATIENT")
+        pygame.event.post(
+            pygame.event.Event(
+                pygame.MOUSEBUTTONDOWN,
+                {"button": 1, "pos": self.game.help_button.center},
+            )
+        )
+        self.game.handle_events()
+        self.assertTrue(self.game.tutorial_open)
+        self.game.draw()
+        self.game.handle_tutorial_click(self.game.tutorial_begin_button.center)
+        self.assertFalse(self.game.tutorial_open)
+        self.assertEqual(self.game.state, GameState.PATIENT)
+
+        self.game.state = GameState.TITLE
+        self.game.patients_called = 1
+        self.assertEqual(self.game.get_tutorial_action_label(), "CONTINUE SHIFT")
+        self.game.state = GameState.TEST_RESULT
+        self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO TEST RESULT")
+        self.game.state = GameState.NOTEBOOK
+        self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO NOTEBOOK")
+        self.game.state = GameState.SHOP
+        self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO SHOP")
+
+    def test_gameplay_help_pauses_timers_and_works_on_ending_screens(self):
+        """Help should freeze transitions and remain visible through the finale."""
+
+        self.game.tutorial_open = False
+        self.game.state = GameState.TITLE
+        self.game.reception_transition_started_at = (
+            pygame.time.get_ticks() - self.game.reception_transition_duration - 1
+        )
+        self.game.open_tutorial()
+        self.game.update()
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertIsNotNone(self.game.reception_transition_started_at)
+
+        self.game.close_tutorial()
+        self.game.reception_transition_started_at = None
+        self.game.state = GameState.ENDING
+        self.game.ending_started_at = pygame.time.get_ticks()
+        pygame.event.post(
+            pygame.event.Event(
+                pygame.MOUSEBUTTONDOWN,
+                {"button": 1, "pos": self.game.help_button.center},
+            )
+        )
+        self.game.handle_events()
+        self.assertTrue(self.game.tutorial_open)
+        self.assertEqual(self.game.get_tutorial_action_label(), "CONTINUE ENDING")
+        self.game.draw()
+
+        pygame.event.post(
+            pygame.event.Event(
+                pygame.MOUSEBUTTONDOWN,
+                {"button": 1, "pos": self.game.tutorial_begin_button.center},
+            )
+        )
+        self.game.handle_events()
+        self.assertFalse(self.game.tutorial_open)
+        self.assertEqual(self.game.state, GameState.ENDING)
+
+        self.game.state = GameState.FINAL
+        self.game.draw()
+
+    def test_test_cards_accumulate_end_of_day_operating_expenses(self):
+        """Running machines should charge by rarity without changing cash immediately."""
+
+        starting_balance = self.game.player.balance
+        self.assertEqual(
+            TEST_COSTS_BY_RARITY,
+            {"Common": 10, "Uncommon": 15, "Rare": 20},
+        )
+
+        self.game.selected_card_index = 0
+        first_test = self.game.player.test_hand[0].value
+        self.game.run_selected_test()
+        self.assertEqual(self.game.daily_test_count, 1)
+        self.assertEqual(self.game.daily_test_expenses, get_test_cost(first_test))
+        self.assertEqual(self.game.player.balance, starting_balance)
+
+        self.game.daily_correct_diagnoses = len(self.game.waiting_room_queue)
+        self.assertEqual(
+            self.game.get_daily_pay_breakdown()[3],
+            len(self.game.waiting_room_queue) * DIAGNOSIS_REWARD
+            - get_test_cost(first_test)
+            + PERFECT_DAY_BONUS,
+        )
+
+        self.game.daily_wrong_diagnoses = 1
+        self.game.daily_test_count = 16
+        self.game.daily_test_expenses = 220
+        self.assertLess(self.game.get_daily_pay_breakdown()[3], 0)
 
     def test_audio_controls_balance_music_and_cover_core_interactions(self):
         """The slice should expose every requested effect and a working global mute."""

@@ -12,6 +12,7 @@ from gui_theme import (
     TEST_SUBTITLES,
     WINDOW_SIZE,
 )
+from Test import get_test_cost
 
 
 class CardMixin:
@@ -132,6 +133,9 @@ class CardMixin:
 
         card = self.player.test_hand[self.selected_card_index]
         self.last_test_name = card.value.name
+        self.last_test_cost = get_test_cost(card.value)
+        self.daily_test_count += 1
+        self.daily_test_expenses += self.last_test_cost
         result = self.patient.perform_test(self.last_test_name)
         self.last_test_result = result.replace("RESULTS: ", "", 1)
 
@@ -547,7 +551,11 @@ class CardMixin:
         else:
             pygame.draw.circle(self.screen, rarity_color, symbol_center, 4)
 
-        rarity_text = self.pile_font.render(rarity.upper(), True, rarity_color)
+        rarity_text = self.tiny_font.render(
+            f"{rarity.upper()}  ${get_test_cost(rarity)}",
+            True,
+            rarity_color,
+        )
         self.screen.blit(
             rarity_text,
             rarity_text.get_rect(midleft=(badge.x + 20, badge.centery)),
@@ -829,7 +837,11 @@ class CardMixin:
         pygame.draw.rect(self.screen, header_color, header, border_radius=7)
         self.draw_fitted_card_title(test.name, header, selected=True)
 
-        rarity = self.card_font.render(test.rarity.upper(), True, rarity_color)
+        rarity = self.card_font.render(
+            f"{test.rarity.upper()}  •  TEST COST ${get_test_cost(test)}",
+            True,
+            rarity_color,
+        )
         self.screen.blit(rarity, rarity.get_rect(center=(card_rect.centerx, card_rect.y + 55)))
 
         icon = pygame.Rect(card_rect.x + 16, card_rect.y + 65, 58, 58)
@@ -864,7 +876,11 @@ class CardMixin:
         pygame.draw.rect(
             self.screen, COLORS["panel_border"], self.run_test_button, border_radius=5
         )
-        run_text = self.small_font.render("RUN TEST", True, COLORS["background"])
+        run_text = self.small_font.render(
+            f"RUN  ${get_test_cost(test)}",
+            True,
+            COLORS["background"],
+        )
         self.screen.blit(run_text, run_text.get_rect(center=self.run_test_button.center))
 
         self.discard_button = self.get_discard_button(card_rect)

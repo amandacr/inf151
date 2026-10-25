@@ -2,6 +2,20 @@
 Parent class for tests.
 """
 
+
+TEST_COSTS_BY_RARITY = {
+    "Common": 10,
+    "Uncommon": 15,
+    "Rare": 20,
+}
+
+
+def get_test_cost(test_or_rarity):
+    """Return the operating cost for a test object or rarity label."""
+
+    rarity = getattr(test_or_rarity, "rarity", test_or_rarity)
+    return TEST_COSTS_BY_RARITY.get(rarity, TEST_COSTS_BY_RARITY["Common"])
+
 class Test:
 
     def __init__(self, name, description, rarity, max_level, upgrade_level = 1):

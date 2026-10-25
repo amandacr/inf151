@@ -64,8 +64,9 @@ class ShopMixin:
         self.screen.blit(balance, balance.get_rect(center=balance_box.center))
 
         shift_pay = self.get_daily_pay_breakdown()[3]
+        shift_pay_label = f"-${abs(shift_pay)}" if shift_pay < 0 else f"${shift_pay}"
         shift_summary = self.small_font.render(
-            f"SHIFT RECAP: {self.daily_correct_diagnoses} PATIENTS TREATED  •  ${shift_pay} EARNED",
+            f"SHIFT RECAP: {self.daily_correct_diagnoses} PATIENTS TREATED  •  NET {shift_pay_label}",
             True,
             COLORS["muted"],
         )
@@ -176,15 +177,25 @@ class ShopMixin:
         recap_lines = (
             (f"{self.daily_correct_diagnoses} PATIENTS × ${DIAGNOSIS_REWARD}", f"+${base_pay}"),
             (
+                f"{self.daily_test_count} TESTS PERFORMED",
+                f"-${self.daily_test_expenses}",
+            ),
+            (
                 f"{self.daily_wrong_diagnoses} {mistake_label} × ${WRONG_DIAGNOSIS_PENALTY}",
                 f"-${penalties}",
             ),
             ("PERFECT SHIFT BONUS", f"+${bonus}"),
-            ("TOTAL SHIFT PAY", f"${total}"),
-            ("BALANCE AFTER PAY", f"${self.player.balance + total}"),
+            (
+                "TOTAL SHIFT PAY",
+                f"-${abs(total)}" if total < 0 else f"${total}",
+            ),
+            (
+                "BALANCE AFTER PAY",
+                f"${self.player.balance + total}",
+            ),
         )
         for index, (label_text, amount_text) in enumerate(recap_lines):
-            y = summary.y + 20 + index * 32
+            y = summary.y + 14 + index * 27
             color = COLORS["accent"] if index >= len(recap_lines) - 2 else COLORS["text"]
             label = self.small_font.render(label_text, True, color)
             amount = self.small_font.render(amount_text, True, color)
@@ -210,7 +221,7 @@ class ShopMixin:
         )
 
     def get_daily_pay_breakdown(self):
-        """Return base pay, mistake deductions, perfect bonus, and final payout."""
+        """Return earnings, diagnosis penalties, bonus, and net shift payout."""
 
         base_pay = self.daily_correct_diagnoses * DIAGNOSIS_REWARD
         penalties = self.daily_wrong_diagnoses * WRONG_DIAGNOSIS_PENALTY
@@ -219,7 +230,7 @@ class ShopMixin:
             and self.daily_wrong_diagnoses == 0
         )
         bonus = PERFECT_DAY_BONUS if perfect_day else 0
-        total = max(0, base_pay - penalties + bonus)
+        total = base_pay - penalties - self.daily_test_expenses + bonus
         return base_pay, penalties, bonus, total
 
     def settle_daily_pay(self):

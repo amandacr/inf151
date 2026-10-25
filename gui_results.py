@@ -288,7 +288,7 @@ class ResultsMixin:
         self.screen.blit(warning, warning.get_rect(center=bin_rect.center))
         waste_title = self.card_font.render("CARD READY FOR MED-WASTE", True, COLORS["text"])
         waste_detail = self.card_font.render(
-            "CONTINUE TO DISPOSE OF THE USED TEST CARD",
+            f"TEST COST ${self.last_test_cost} ADDED TO END-OF-DAY EXPENSES",
             True,
             COLORS["muted"],
         )

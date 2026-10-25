@@ -122,19 +122,36 @@ class EndingMixin:
         """Draw tiny colorful patients waving from the departing clinic dome."""
 
         wave = round(5 * math.sin(elapsed / 140))
+        head_y = 166
         for x, color, direction in (
             (474, (151, 99, 211), -1),
             (550, (103, 173, 124), 1),
             (626, (64, 125, 166), -1),
         ):
-            pygame.draw.circle(surface, color, (x, 260), 13)
-            pygame.draw.ellipse(surface, color, pygame.Rect(x - 10, 271, 20, 25))
-            arm_start = (x + direction * 8, 277)
-            arm_end = (x + direction * (19 + wave), 263)
+            pygame.draw.circle(surface, color, (x, head_y), 13)
+            pygame.draw.ellipse(
+                surface,
+                color,
+                pygame.Rect(x - 10, head_y + 11, 20, 30),
+            )
+            arm_start = (x + direction * 8, head_y + 17)
+            arm_end = (x + direction * (19 + wave), head_y + 3)
             pygame.draw.line(surface, color, arm_start, arm_end, width=5)
             pygame.draw.circle(surface, color, arm_end, 3)
-            pygame.draw.circle(surface, (17, 27, 39), (x - 4, 259), 2)
-            pygame.draw.circle(surface, (17, 27, 39), (x + 4, 259), 2)
+            pygame.draw.circle(surface, (17, 27, 39), (x - 4, head_y - 1), 2)
+            pygame.draw.circle(surface, (17, 27, 39), (x + 4, head_y - 1), 2)
+
+        # A small cabin console masks their lower bodies and places them behind
+        # the dome glass instead of making them appear to stand on the hull.
+        console = pygame.Rect(436, 198, 228, 20)
+        pygame.draw.rect(surface, (28, 48, 65), console, border_radius=9)
+        pygame.draw.line(
+            surface,
+            (151, 219, 221),
+            (console.x + 10, console.y + 2),
+            (console.right - 10, console.y + 2),
+            width=2,
+        )
 
     def draw_clinic_shutdown_lights(self, surface, progress):
         """Switch the saucer's exterior lights off one at a time."""
@@ -183,12 +200,15 @@ class EndingMixin:
         self.screen.blit(thanks, thanks.get_rect(center=(panel.centerx, 186)))
 
         total_earned = self.get_daily_pay_breakdown()[3]
+        total_earned_label = (
+            f"-${abs(total_earned)}" if total_earned < 0 else f"${total_earned}"
+        )
         summary = pygame.Rect(panel.x + 105, 220, panel.width - 210, 210)
         pygame.draw.rect(self.screen, (7, 22, 28), summary, border_radius=12)
         pygame.draw.rect(self.screen, (65, 101, 98), summary, width=2, border_radius=12)
         stats = (
             ("PATIENTS TREATED", str(self.daily_correct_diagnoses)),
-            ("SHIFT EARNINGS", f"${total_earned}"),
+            ("SHIFT EARNINGS", total_earned_label),
             ("INCORRECT DIAGNOSES", str(self.daily_wrong_diagnoses)),
             ("UPGRADES PURCHASED", str(len(self.purchased_shop_upgrades))),
             ("FINAL BALANCE", f"${self.player.balance}"),
