@@ -6,6 +6,7 @@ import pygame
 
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
+from Player import STARTING_BALANCE
 
 
 class EndingMixin:
@@ -312,7 +313,7 @@ class EndingMixin:
     def restart_vertical_slice(self):
         """Reset progress and return to reception without replaying the intro."""
 
-        self.player.balance = 500
+        self.player.balance = STARTING_BALANCE
         self.player.machine_levels.clear()
         self.player.test_discount = 0
         self.purchased_shop_upgrades.clear()

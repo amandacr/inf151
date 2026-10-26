@@ -4,7 +4,11 @@ import pygame
 
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
-from Player import DIAGNOSIS_REWARD, WRONG_DIAGNOSIS_PENALTY
+from Player import (
+    CLINIC_OPERATING_FEE,
+    DIAGNOSIS_REWARD,
+    WRONG_DIAGNOSIS_PENALTY,
+)
 from Test import TEST_COSTS_BY_RARITY
 
 
@@ -142,8 +146,8 @@ class TutorialMixin:
             (
                 "4",
                 "COMPLETE THE SHIFT",
-                "Finish all four cases, review your net pay, and continue to the Shop.",
-                "4 PATIENTS   →   SHIFT RECAP",
+                "Finish all four cases. Clinic overhead is deducted before you visit the Shop.",
+                f"4 PATIENTS   •   ${CLINIC_OPERATING_FEE} CLINIC OVERHEAD",
                 (192, 124, 46),
             ),
         )

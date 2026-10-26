@@ -186,6 +186,23 @@ class CardMixin:
         self.pending_test_discard = None
 
 
+    def start_pending_diagnosis_discard_animation(self):
+        """Throw a rejected diagnosis card into med-waste on return to the bay."""
+
+        if self.pending_diagnosis_discard is None:
+            return
+        self.discard_animation = {
+            "card": self.pending_diagnosis_discard["card"],
+            "start": self.pending_diagnosis_discard["start"],
+            "started_at": pygame.time.get_ticks(),
+            "duration": self.test_discard_animation_duration,
+            "add_to_pile_on_complete": True,
+            "locks_input": True,
+            "arc_height": 105,
+        }
+        self.pending_diagnosis_discard = None
+
+
     def get_selected_card_rect(self, index):
         """Return the larger rectangle used to display a selected test card."""
 
@@ -238,7 +255,9 @@ class CardMixin:
         if not self.showing_diagnosis_hand or self.selected_card_index is None:
             return
 
-        card = self.player.diagnosis_hand[self.selected_card_index]
+        selected_index = self.selected_card_index
+        selected_rect = self.get_selected_card_rect(selected_index)
+        card = self.player.diagnosis_hand[selected_index]
         self.diagnosis_confirmation_open = False
         self.last_diagnosis = card.value
         self.player.play(card)
@@ -248,9 +267,15 @@ class CardMixin:
             self.play_sfx("correct")
         else:
             self.daily_wrong_diagnoses += 1
+            self.player.diagnosis_hand.pop(selected_index)
+            self.pending_diagnosis_discard = {
+                "card": card,
+                "start": selected_rect.center,
+            }
             self.play_sfx("incorrect")
         self.selected_card_index = None
         self.play_diagnosis_button = None
+        self.refresh_hand_layout()
         self.state = GameState.OUTCOME
 
 
@@ -553,7 +578,7 @@ class CardMixin:
             pygame.draw.circle(self.screen, rarity_color, symbol_center, 4)
 
         rarity_text = self.tiny_font.render(
-            f"LV.{test.upgrade_level} {rarity.upper()}  ${self.player.get_test_cost(test)}",
+            f"LV.{self.player.get_machine_level(test)} {rarity.upper()}  ${self.player.get_test_cost(test)}",
             True,
             rarity_color,
         )
@@ -839,7 +864,7 @@ class CardMixin:
         self.draw_fitted_card_title(test.name, header, selected=True)
 
         rarity = self.card_font.render(
-            f"LV.{test.upgrade_level} {test.rarity.upper()}  •  COST ${self.player.get_test_cost(test)}",
+            f"LV.{self.player.get_machine_level(test)} {test.rarity.upper()}  •  COST ${self.player.get_test_cost(test)}",
             True,
             rarity_color,
         )
@@ -1154,7 +1179,7 @@ class CardMixin:
         self.screen.blit(question, question.get_rect(center=(panel.centerx, panel.y + 186)))
 
         warning = self.small_font.render(
-            "An incorrect diagnosis will return you to the examination.",
+            "An incorrect diagnosis will be discarded before you return.",
             True,
             COLORS["muted"],
         )

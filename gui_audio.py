@@ -205,13 +205,12 @@ class AudioMixin:
 
         rect = self.audio_button
         hovered = rect.collidepoint(pygame.mouse.get_pos())
-        active_color = COLORS["accent"] if not self.audio_muted else (225, 111, 100)
-        fill = (23, 49, 54) if hovered and not self.audio_muted else (21, 27, 39)
-        if hovered and self.audio_muted:
-            fill = (63, 34, 42)
+        active_color = (232, 211, 242)
+        border = (206, 158, 233) if hovered else (155, 116, 190)
+        fill = (50, 37, 68) if hovered else (27, 29, 45)
         pygame.draw.rect(self.screen, (3, 8, 13), rect.move(2, 3), border_radius=8)
         pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-        pygame.draw.rect(self.screen, active_color, rect, width=2, border_radius=8)
+        pygame.draw.rect(self.screen, border, rect, width=2, border_radius=8)
 
         speaker_x = rect.x + 13
         speaker_y = rect.centery

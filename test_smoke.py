@@ -17,8 +17,10 @@ from Deck import Deck
 from Notebook import Notebook
 from PatientData import create_conmann, create_titus, create_zoogy, create_zorpa
 from Player import (
+    CLINIC_OPERATING_FEE,
     DIAGNOSIS_REWARD,
     PERFECT_DAY_BONUS,
+    STARTING_BALANCE,
     WRONG_DIAGNOSIS_PENALTY,
     Player,
 )
@@ -30,6 +32,7 @@ from Test import TEST_COSTS_BY_RARITY, get_test_cost
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
 from gui_cards import CardMixin
+from gui_developer import DeveloperMixin
 from gui_ending import EndingMixin
 from gui_examination import ExaminationMixin
 from gui_main import CosmicClinicGUI, GameState
@@ -142,6 +145,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIsInstance(self.game, AnimationMixin)
         self.assertIsInstance(self.game, AudioMixin)
         self.assertIsInstance(self.game, CardMixin)
+        self.assertIsInstance(self.game, DeveloperMixin)
         self.assertIsInstance(self.game, EndingMixin)
         self.assertIsInstance(self.game, ExaminationMixin)
         self.assertIsInstance(self.game, NotebookMixin)
@@ -152,6 +156,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.draw_discard_animation.__module__, "gui_animations")
         self.assertEqual(self.game.draw_audio_button.__module__, "gui_audio")
         self.assertEqual(self.game.draw_test_card.__module__, "gui_cards")
+        self.assertEqual(
+            self.game.draw_developer_navigator.__module__,
+            "gui_developer",
+        )
         self.assertEqual(self.game.run_selected_test.__module__, "gui_cards")
         self.assertEqual(self.game.draw_patient_screen.__module__, "gui_examination")
         self.assertEqual(self.game.draw_id_card.__module__, "gui_examination")
@@ -256,6 +264,49 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.state = GameState.FINAL
         self.game.draw()
 
+    def test_f10_developer_navigator_previews_late_game_screens(self):
+        """The hidden navigator should safely prepare recap and shop previews."""
+
+        pygame.event.post(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_F10})
+        )
+        self.game.handle_events()
+        self.assertTrue(self.game.developer_navigator_open)
+        self.game.draw()
+
+        pygame.event.post(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_6})
+        )
+        self.game.handle_events()
+        self.assertEqual(self.game.state, GameState.DAY_COMPLETE)
+        self.assertFalse(self.game.developer_navigator_open)
+        self.assertEqual(self.game.daily_correct_diagnoses, 4)
+        self.assertEqual(self.game.get_daily_pay_breakdown()[3], 95)
+        self.game.draw()
+
+        pygame.event.post(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_F10})
+        )
+        self.game.handle_events()
+        pygame.event.post(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_7})
+        )
+        self.game.handle_events()
+        self.assertEqual(self.game.state, GameState.SHOP)
+        self.assertTrue(self.game.daily_payout_applied)
+        self.assertEqual(self.game.player.balance, 195)
+        self.game.draw()
+
+        pygame.event.post(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_F10})
+        )
+        self.game.handle_events()
+        pygame.event.post(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_ESCAPE})
+        )
+        self.game.handle_events()
+        self.assertFalse(self.game.developer_navigator_open)
+
     def test_test_cards_accumulate_end_of_day_operating_expenses(self):
         """Running machines should charge by rarity without changing cash immediately."""
 
@@ -277,6 +328,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.game.get_daily_pay_breakdown()[3],
             len(self.game.waiting_room_queue) * DIAGNOSIS_REWARD
             - get_test_cost(first_test)
+            - CLINIC_OPERATING_FEE
             + PERFECT_DAY_BONUS,
         )
 
@@ -284,6 +336,30 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.daily_test_count = 16
         self.game.daily_test_expenses = 220
         self.assertLess(self.game.get_daily_pay_breakdown()[3], 0)
+
+    def test_rebalanced_economy_allows_one_efficient_shift_upgrade(self):
+        """An efficient first shift should fund one upgrade, not a shopping spree."""
+
+        self.assertEqual(self.game.player.balance, STARTING_BALANCE)
+        self.assertEqual(STARTING_BALANCE, 100)
+        self.assertEqual(DIAGNOSIS_REWARD, 40)
+        self.assertEqual(WRONG_DIAGNOSIS_PENALTY, 25)
+        self.assertEqual(CLINIC_OPERATING_FEE, 50)
+
+        self.game.daily_correct_diagnoses = len(self.game.waiting_room_queue)
+        self.game.daily_test_count = 4
+        self.game.daily_test_expenses = 40
+        self.assertEqual(
+            self.game.get_daily_pay_breakdown(),
+            (160, 0, PERFECT_DAY_BONUS, 95),
+        )
+
+        projected_balance = STARTING_BALANCE + 95
+        two_cheapest_upgrades = sorted(
+            upgrade["cost"] for upgrade in SHOP_UPGRADES
+        )[:2]
+        self.assertLessEqual(two_cheapest_upgrades[0], projected_balance)
+        self.assertGreater(sum(two_cheapest_upgrades), projected_balance)
 
     def test_audio_controls_balance_music_and_cover_core_interactions(self):
         """The slice should expose every requested effect and a working global mute."""
@@ -390,22 +466,36 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIsNotNone(self.game.queue_shift_started_at)
 
     def test_incorrect_diagnosis_returns_to_test_hand(self):
-        """A wrong diagnosis should keep the case open and return to test cards."""
+        """A wrong diagnosis should be discarded before returning to test cards."""
 
         starting_balance = self.game.player.balance
         self.game.switch_active_hand(True)
         self.game.selected_card_index = 1
+        wrong_card = self.game.player.diagnosis_hand[1]
         self.game.play_selected_diagnosis()
 
         self.assertEqual(self.game.state, GameState.OUTCOME)
         self.assertFalse(self.game.diagnosis_correct)
         self.assertEqual(self.game.player.balance, starting_balance)
         self.assertEqual(self.game.daily_wrong_diagnoses, 1)
+        self.assertNotIn(wrong_card, self.game.player.diagnosis_hand)
+        self.assertEqual(len(self.game.player.diagnosis_hand), 4)
+        self.assertIsNotNone(self.game.pending_diagnosis_discard)
 
         self.game.draw()
         self.game.handle_outcome_click(self.game.outcome_button.center)
         self.assertEqual(self.game.state, GameState.PATIENT)
         self.assertFalse(self.game.showing_diagnosis_hand)
+        self.assertIsNone(self.game.pending_diagnosis_discard)
+        self.assertIsNotNone(self.game.discard_animation)
+        self.assertIs(self.game.discard_animation["card"], wrong_card)
+        self.game.draw()
+        self.game.discard_animation["started_at"] = (
+            pygame.time.get_ticks() - self.game.test_discard_animation_duration - 1
+        )
+        self.game.update()
+        self.assertIsNone(self.game.discard_animation)
+        self.assertIs(self.game.discard_pile[-1], wrong_card)
 
     def test_reception_transition_reaches_the_patient_workspace(self):
         """Calling the next patient should finish in the examination workspace."""
@@ -490,7 +580,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
                 len(expected_names) * DIAGNOSIS_REWARD,
                 0,
                 PERFECT_DAY_BONUS,
-                len(expected_names) * DIAGNOSIS_REWARD + PERFECT_DAY_BONUS,
+                len(expected_names) * DIAGNOSIS_REWARD
+                - CLINIC_OPERATING_FEE
+                + PERFECT_DAY_BONUS,
             ),
         )
         self.game.draw()
@@ -498,7 +590,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.state, GameState.SHOP)
         self.assertEqual(
             self.game.player.balance,
-            starting_balance + len(expected_names) * DIAGNOSIS_REWARD + PERFECT_DAY_BONUS,
+            starting_balance
+            + len(expected_names) * DIAGNOSIS_REWARD
+            - CLINIC_OPERATING_FEE
+            + PERFECT_DAY_BONUS,
         )
         paid_balance = self.game.player.balance
         self.game.settle_daily_pay()
@@ -576,7 +671,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.open_exit_confirmation()
         self.game.handle_exit_confirmation_click(self.game.exit_reception_button.center)
         self.assertEqual(self.game.state, GameState.TITLE)
-        self.assertEqual(self.game.player.balance, 500)
+        self.assertEqual(self.game.player.balance, STARTING_BALANCE)
         self.assertEqual(self.game.daily_correct_diagnoses, 0)
         self.assertFalse(self.game.purchased_shop_upgrades)
 
@@ -632,28 +727,29 @@ class GuiFlowSmokeTests(unittest.TestCase):
                 2 * WRONG_DIAGNOSIS_PENALTY,
                 0,
                 len(self.game.waiting_room_queue) * DIAGNOSIS_REWARD
-                - 2 * WRONG_DIAGNOSIS_PENALTY,
+                - 2 * WRONG_DIAGNOSIS_PENALTY
+                - CLINIC_OPERATING_FEE,
             ),
         )
 
     def test_machine_purchase_updates_cards_costs_and_survives_resets(self):
         self.game.state = GameState.SHOP
         upgrade = SHOP_UPGRADES[0]
+        self.game.player.balance = upgrade["cost"] + 100
         balance = self.game.player.balance
         self.game.handle_shop_click(self.game.get_shop_upgrade_rects()[0].center)
         self.game.handle_shop_click(self.game.shop_purchase_button.center)
         self.assertEqual(self.game.player.balance, balance - upgrade["cost"])
         for card in self.game.player.test_hand + self.game.deck.contents:
             if card.value.name == "TEMPERATURE":
-                self.assertEqual(card.value.upgrade_level, 2)
+                self.assertEqual(self.game.player.get_machine_level(card.value), 2)
                 self.assertEqual(self.game.player.get_test_cost(card.value), 5)
         self.game.handle_shop_click(self.game.shop_purchase_button.center)
         self.assertEqual(self.game.player.balance, balance - upgrade["cost"])
-        self.game.handle_shop_click(self.game.shop_next_day_button.center)
-        self.assertEqual(self.game.state, GameState.TITLE)
+        self.game.reset_day()
         for card in self.game.player.test_hand + self.game.deck.contents:
             if card.value.name == "TEMPERATURE":
-                self.assertEqual(card.value.upgrade_level, 2)
+                self.assertEqual(self.game.player.get_machine_level(card.value), 2)
         self.game.selected_card_index = 0
         before = self.game.daily_test_expenses
         self.game.run_selected_test()
@@ -662,15 +758,17 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
     def test_shared_upgrades_stack_and_apply_to_future_draws(self):
         self.game.state = GameState.SHOP
+        purchase_cost = sum(SHOP_UPGRADES[index]["cost"] for index in (0, 4, 5))
+        self.game.player.balance = purchase_cost + 100
         for index in (0, 4, 5):
             self.game.handle_shop_click(self.game.get_shop_upgrade_rects()[index].center)
             self.game.handle_shop_click(self.game.shop_purchase_button.center)
-        self.assertEqual(self.game.player.balance, 200)
+        self.assertEqual(self.game.player.balance, 100)
         self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 2)
         self.assertEqual(self.game.player.get_test_cost(AllergyTest()), 17)
         card = __import__("Card").Card("Test", TemperatureTest())
         self.game.player.draw(card)
-        self.assertEqual(card.value.upgrade_level, 2)
+        self.assertEqual(self.game.player.get_machine_level(card.value), 2)
         self.game.reset_round()
         self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 2)
         rects = self.game.get_shop_upgrade_rects()
@@ -684,8 +782,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.player.machine_levels, {})
         self.assertEqual(self.game.player.test_discount, 0)
 
-    def test_shop_blocks_an_unaffordable_placeholder_purchase(self):
-        """A selected placeholder should not charge or unlock when money is too low."""
+    def test_shop_blocks_an_unaffordable_upgrade_purchase(self):
+        """A selected upgrade should not charge or unlock when money is too low."""
 
         self.game.state = GameState.SHOP
         upgrade = SHOP_UPGRADES[0]

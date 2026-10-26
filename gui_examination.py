@@ -1023,26 +1023,30 @@ class ExaminationMixin:
         self.screen.blit(label, label.get_rect(center=label_plate.center))
 
         if self.discard_pile:
-            last_test = self.discard_pile[-1].value.name
+            last_card = self.discard_pile[-1]
+            last_card_name = last_card.value.name
+            diagnosis_card = last_card.type == "Diagnosis"
+            card_fill = (235, 220, 239) if diagnosis_card else COLORS["card"]
+            card_outline = (205, 100, 235) if diagnosis_card else COLORS["card_text"]
             visible_card = pygame.Rect(panel.centerx - 22, panel.y + 25, 44, 29)
             pygame.draw.rect(
                 self.screen,
-                COLORS["card"],
+                card_fill,
                 visible_card,
                 border_radius=4,
             )
             pygame.draw.rect(
                 self.screen,
-                COLORS["card_text"],
+                card_outline,
                 visible_card,
                 width=2,
                 border_radius=4,
             )
             waste_card_font = self.pile_font
-            if waste_card_font.size(last_test)[0] > visible_card.width - 4:
+            if waste_card_font.size(last_card_name)[0] > visible_card.width - 4:
                 waste_card_font = self.tiny_font
             card_name = waste_card_font.render(
-                last_test,
+                last_card_name,
                 True,
                 COLORS["card_text"],
             )

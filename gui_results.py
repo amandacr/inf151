@@ -391,7 +391,7 @@ class ResultsMixin:
             line_spacing=6,
         )
         filing_note = self.card_font.render(
-            "CASE FILE UPDATED" if correct else "CASE FILE REMAINS OPEN",
+            "CASE FILE UPDATED" if correct else "REJECTED CARD MARKED FOR MED-WASTE",
             True,
             status_color,
         )
@@ -422,7 +422,7 @@ class ResultsMixin:
                 else "NEXT PATIENT"
             )
         else:
-            button_label = "RETURN TO PATIENT"
+            button_label = "DISCARD & RETURN"
         button_text = self.small_font.render(button_label, True, COLORS["background"])
         self.screen.blit(button_text, button_text.get_rect(center=self.outcome_button.center))
 

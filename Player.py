@@ -1,15 +1,17 @@
 from Diagnosis import DIAGNOSES
 from Tests.AllergyTest import AllergyTest
 from Card import Card
-from Test import get_test_cost
+from Test import get_test_cost as get_base_test_cost
 from Tests.TemperatureTest import TemperatureTest
 from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
 
 
-DIAGNOSIS_REWARD = 50
-WRONG_DIAGNOSIS_PENALTY = 10
+STARTING_BALANCE = 100
+DIAGNOSIS_REWARD = 40
+WRONG_DIAGNOSIS_PENALTY = 25
 PERFECT_DAY_BONUS = 25
+CLINIC_OPERATING_FEE = 50
 
 
 class Player:
@@ -17,12 +19,12 @@ class Player:
     def __init__(self, name):
         """
         Initializes a player at the beginning of the game.
-        Players start with $500, five diagnosis cards, and five test cards.
+        Players start with $100, five diagnosis cards, and five test cards.
         """
         self.name = name
         self.machine_levels = {}
         self.test_discount = 0
-        self.balance = 500  # start with 500 alien dollars
+        self.balance = STARTING_BALANCE
         self.test_hand = [
             Card("Test", TemperatureTest()),
             Card("Test", TemperatureTest()),
@@ -38,21 +40,22 @@ class Player:
             Card("Diagnosis", DIAGNOSES["lactose_intolerance"]),
         ]
 
-    def sync_machine_levels(self, cards):
-        for card in cards:
-            if card.type == "Test":
-                target = self.machine_levels.get(card.value.name, 1)
-                while card.value.upgrade_level < target:
-                    if not card.value.upgrade():
-                        break
+    def get_machine_level(self, test):
+        """Return the installed level for a test machine.
+
+        Machine upgrades belong to the clinic, not to individual cards. Keeping
+        this as the single source of truth prevents a card label and its billed
+        cost from disagreeing after a new hand or deck is created.
+        """
+
+        return self.machine_levels.get(getattr(test, "name", ""), 1)
 
     def get_test_cost(self, test):
-        base = get_test_cost(test)
-        level = self.machine_levels.get(getattr(test, "name", ""), 1)
+        base = get_base_test_cost(test)
+        level = self.get_machine_level(test)
         return max(1, (base + 1) // 2 - self.test_discount) if level > 1 else max(1, base - self.test_discount)
 
     def draw(self, card):
-        self.sync_machine_levels([card])
         self.test_hand.append(card)
 
     def play(self, card):

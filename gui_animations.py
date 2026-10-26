@@ -93,11 +93,24 @@ class AnimationMixin:
         )
 
     def create_discard_card_surface(self, card):
-        """Create a compact snapshot so the flying object is recognizably the used card."""
+        """Create a compact snapshot of a discarded test or diagnosis card."""
 
-        test = card.value
-        rarity_color = RARITY_COLORS.get(test.rarity, COLORS["panel_border"])
-        fill_color = RARITY_CARD_COLORS.get(test.rarity, COLORS["card"])
+        card_value = card.value
+        is_diagnosis = card.type == "Diagnosis"
+        if is_diagnosis:
+            rarity_color = (205, 100, 235)
+            fill_color = (235, 220, 239)
+            footer_text = "DIAGNOSIS"
+        else:
+            rarity_color = RARITY_COLORS.get(
+                card_value.rarity,
+                COLORS["panel_border"],
+            )
+            fill_color = RARITY_CARD_COLORS.get(
+                card_value.rarity,
+                COLORS["card"],
+            )
+            footer_text = card_value.rarity.upper()
         card_surface = pygame.Surface((96, 118), pygame.SRCALPHA)
         shape = self.get_card_shape_points(card_surface.get_rect(), 7)
         pygame.draw.polygon(card_surface, fill_color, shape)
@@ -107,19 +120,23 @@ class AnimationMixin:
         header_color = tuple(max(0, channel - 18) for channel in fill_color)
         pygame.draw.rect(card_surface, header_color, header, border_radius=5)
         title_font = self.card_font
-        if title_font.size(test.name)[0] > header.width - 6:
+        if title_font.size(card_value.name)[0] > header.width - 6:
             title_font = self.pile_font
-        title = title_font.render(test.name, True, COLORS["card_text"])
+        title = title_font.render(card_value.name, True, COLORS["card_text"])
         card_surface.blit(title, title.get_rect(center=header.center))
 
         icon = pygame.Rect(28, 40, 40, 40)
         pygame.draw.rect(card_surface, (201, 214, 205), icon, border_radius=6)
         pygame.draw.rect(card_surface, rarity_color, icon, width=2, border_radius=6)
-        initial = self.body_font.render(test.name[0], True, COLORS["card_text"])
+        initial = self.body_font.render(
+            "D" if is_diagnosis else card_value.name[0],
+            True,
+            COLORS["card_text"],
+        )
         card_surface.blit(initial, initial.get_rect(center=icon.center))
 
-        rarity = self.pile_font.render(test.rarity.upper(), True, rarity_color)
-        card_surface.blit(rarity, rarity.get_rect(center=(48, 101)))
+        footer = self.pile_font.render(footer_text, True, rarity_color)
+        card_surface.blit(footer, footer.get_rect(center=(48, 101)))
         return card_surface
 
     def draw_med_waste_slot_lip(self):
