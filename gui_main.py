@@ -153,12 +153,13 @@ class CosmicClinicGUI(
         self.start_button = pygame.Rect(61, 505, 238, 43)
         self.continue_button = pygame.Rect(700, 472, 220, 44)
         self.outcome_button = pygame.Rect(410, 455, 280, 52)
-        self.shop_purchase_button = pygame.Rect(400, 402, 300, 40)
-        self.shop_button = pygame.Rect(400, 490, 300, 42)
+        self.shop_purchase_button = pygame.Rect(95, 538, 290, 34)
+        self.shop_button = pygame.Rect(715, 538, 290, 34)
+        self.shop_next_day_button = pygame.Rect(405, 538, 290, 34)
         self.day_complete_button = pygame.Rect(400, 455, 300, 52)
         self.selected_shop_upgrade = None
         self.purchased_shop_upgrades = set()
-        self.shop_message = "Select an upgrade placeholder to inspect it."
+        self.shop_message = "Select an upgrade to inspect it."
         self.ending_started_at = None
         self.ending_duration = 4200
         self.exit_confirmation_open = False
@@ -447,8 +448,13 @@ class CosmicClinicGUI(
                 self.patient_fade_started_at = None
 
     def handle_shop_click(self, position):
-        """Handle placeholder purchases or finish the vertical-slice shift."""
+        """Handle upgrade purchases or finish the vertical-slice shift."""
 
+        if self.shop_next_day_button.collidepoint(position):
+            self.play_sfx("button")
+            self.reset_day()
+            self.state = GameState.TITLE
+            return
         if self.shop_button.collidepoint(position):
             self.play_sfx("button")
             self.begin_ending_sequence()
@@ -482,7 +488,7 @@ class CosmicClinicGUI(
         self.daily_test_expenses = 0
         self.daily_payout_applied = False
         self.selected_shop_upgrade = None
-        self.shop_message = "Select an upgrade placeholder to inspect it."
+        self.shop_message = "Select an upgrade to inspect it."
         self.deck.populate(
             [AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()]
         )
@@ -494,8 +500,13 @@ class CosmicClinicGUI(
         current_balance = self.player.balance
         next_slot = min(self.patients_called, len(self.waiting_room_queue) - 1)
         self.patient = self.waiting_room_queue[next_slot]["create"]()
+        machine_levels = self.player.machine_levels.copy()
+        test_discount = self.player.test_discount
         self.player = Player(self.player.name)
         self.player.balance = current_balance
+        self.player.machine_levels = machine_levels
+        self.player.test_discount = test_discount
+        self.player.sync_machine_levels(self.player.test_hand + self.deck.contents)
         self.notebook = Notebook()
         self.notebook.add_patient(self.patient)
         self.notebook_columns = []

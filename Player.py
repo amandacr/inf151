@@ -1,6 +1,7 @@
 from Diagnosis import DIAGNOSES
 from Tests.AllergyTest import AllergyTest
 from Card import Card
+from Test import get_test_cost
 from Tests.TemperatureTest import TemperatureTest
 from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
@@ -19,6 +20,8 @@ class Player:
         Players start with $500, five diagnosis cards, and five test cards.
         """
         self.name = name
+        self.machine_levels = {}
+        self.test_discount = 0
         self.balance = 500  # start with 500 alien dollars
         self.test_hand = [
             Card("Test", TemperatureTest()),
@@ -35,7 +38,21 @@ class Player:
             Card("Diagnosis", DIAGNOSES["lactose_intolerance"]),
         ]
 
+    def sync_machine_levels(self, cards):
+        for card in cards:
+            if card.type == "Test":
+                target = self.machine_levels.get(card.value.name, 1)
+                while card.value.upgrade_level < target:
+                    if not card.value.upgrade():
+                        break
+
+    def get_test_cost(self, test):
+        base = get_test_cost(test)
+        level = self.machine_levels.get(getattr(test, "name", ""), 1)
+        return max(1, (base + 1) // 2 - self.test_discount) if level > 1 else max(1, base - self.test_discount)
+
     def draw(self, card):
+        self.sync_machine_levels([card])
         self.test_hand.append(card)
 
     def play(self, card):

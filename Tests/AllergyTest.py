@@ -10,5 +10,5 @@ class AllergyTest(Test):
                       "ALLERGY",
                       "Allergy tests your patient. Tests for common species' allergens as well as allergens within this hospital. Also determines the severity of any allergies.",
                       'Rare',
-                      1,
+                      2,
                       upgrade_level)

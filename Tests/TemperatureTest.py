@@ -10,5 +10,5 @@ class TemperatureTest(Test):
                       "TEMPERATURE",
                       "Takes the temperature of your patient. Can reveal fevers as well as hypothermic temperatures. Automatically adjusted for each species' normal range.",
                       'Common',
-                      1,
+                      2,
                       upgrade_level)

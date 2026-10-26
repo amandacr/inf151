@@ -313,6 +313,8 @@ class EndingMixin:
         """Reset progress and return to reception without replaying the intro."""
 
         self.player.balance = 500
+        self.player.machine_levels.clear()
+        self.player.test_discount = 0
         self.purchased_shop_upgrades.clear()
         self.ending_started_at = None
         self.exit_confirmation_open = False

@@ -9,5 +9,5 @@ class XrayTest(Test):
                       "X-RAY",
                       "Performs a full body X-RAY of your patient. Shows broken/fractured bones and tissue damage.",
                       'Common',
-                      1,
+                      2,
                       upgrade_level)

@@ -7,137 +7,48 @@ from Player import DIAGNOSIS_REWARD, PERFECT_DAY_BONUS, WRONG_DIAGNOSIS_PENALTY
 
 
 SHOP_UPGRADES = (
-    {
-        "id": "scanner",
-        "name": "SCANNER CALIBRATION",
-        "category": "TEST MACHINES",
-        "cost": 150,
-    },
-    {
-        "id": "card_case",
-        "name": "EXPANDED CARD CASE",
-        "category": "CARD STORAGE",
-        "cost": 125,
-    },
-    {
-        "id": "nebula_plant",
-        "name": "NEBULA DESK PLANT",
-        "category": "CLINIC DECOR",
-        "cost": 75,
-    },
+    {"id": "temperature", "name": "THERMAL CALIBRATION", "category": "TEMPERATURE", "cost": 100,
+     "description": "Upgrade to level 2. Halves the operating cost of every temperature card.", "machine": "TEMPERATURE"},
+    {"id": "xray", "name": "FOCUSED X-RAY", "category": "X-RAY", "cost": 100,
+     "description": "Upgrade to level 2. Halves the operating cost of every X-ray card.", "machine": "X-RAY"},
+    {"id": "ultrasound", "name": "SONIC AMPLIFIER", "category": "ULTRASOUND", "cost": 150,
+     "description": "Upgrade to level 2. Halves the operating cost of every ultrasound card.", "machine": "ULTRASOUND"},
+    {"id": "allergy", "name": "ALLERGEN ANALYZER", "category": "ALLERGY", "cost": 175,
+     "description": "Upgrade to level 2. Halves the operating cost of every allergy card.", "machine": "ALLERGY"},
+    {"id": "power", "name": "EFFICIENT POWER CORE", "category": "ALL MACHINES", "cost": 125,
+     "description": "Save another $2 on every test. Works with all machine calibrations.", "discount": 2},
+    {"id": "recycling", "name": "SUPPLY RECYCLER", "category": "ALL MACHINES", "cost": 75,
+     "description": "Save another $1 on every test. Stacks with the efficient power core.", "discount": 1},
 )
 
 
 class ShopMixin:
     def draw_shop_screen(self):
-        """Draw selectable upgrade placeholders and the next-day control."""
-
-        panel = pygame.Rect(100, 115, 900, 435)
-        self.draw_panel(panel)
-
-        heading = self.heading_font.render(
-            "INTERGALACTIC SUPPLY SHOP",
-            True,
-            COLORS["text"],
-        )
-        self.screen.blit(heading, heading.get_rect(center=(panel.centerx, 150)))
-
-        balance_box = pygame.Rect(panel.right - 210, 130, 175, 42)
-        pygame.draw.rect(
-            self.screen,
-            COLORS["background"],
-            balance_box,
-            border_radius=8,
-        )
-        pygame.draw.rect(
-            self.screen,
-            COLORS["panel_border"],
-            balance_box,
-            width=2,
-            border_radius=8,
-        )
-        balance = self.small_font.render(
-            "CURRENT MONEY: $" + str(self.player.balance),
-            True,
-            COLORS["accent"],
-        )
-        self.screen.blit(balance, balance.get_rect(center=balance_box.center))
-
-        shift_pay = self.get_daily_pay_breakdown()[3]
-        shift_pay_label = f"-${abs(shift_pay)}" if shift_pay < 0 else f"${shift_pay}"
-        shift_summary = self.small_font.render(
-            f"SHIFT RECAP: {self.daily_correct_diagnoses} PATIENTS TREATED  •  NET {shift_pay_label}",
-            True,
-            COLORS["muted"],
-        )
-        self.screen.blit(shift_summary, shift_summary.get_rect(center=(panel.centerx, 188)))
-
-        coming_soon = self.body_font.render(
-            "PLACEHOLDER UPGRADES — EFFECTS COMING SOON",
-            True,
-            COLORS["accent"],
-        )
-        self.screen.blit(coming_soon, coming_soon.get_rect(center=(panel.centerx, 216)))
-
-        for upgrade, shelf in zip(SHOP_UPGRADES, self.get_shop_upgrade_rects()):
-            self.draw_shop_shelf(upgrade, shelf)
-
+        """Draw the six-card machine supply shop."""
+        panel = pygame.Rect(70, 108, 960, 508)
+        pygame.draw.rect(self.screen, COLORS["panel"], panel)
+        pygame.draw.rect(self.screen, COLORS["panel_border"], panel, width=2)
+        title = self.heading_font.render("INTERGALACTIC SUPPLY SHOP", True, COLORS["accent"])
+        self.screen.blit(title, (95, 125))
+        balance = self.body_font.render(f"BALANCE: ${self.player.balance}", True, COLORS["accent"])
+        self.screen.blit(balance, balance.get_rect(topright=(1005, 132)))
+        hint = self.small_font.render("Permanent upgrades for this run. Select a machine, then buy to install.", True, COLORS["muted"])
+        self.screen.blit(hint, (95, 165))
+        for upgrade, rect in zip(SHOP_UPGRADES, self.get_shop_upgrade_rects()):
+            self.draw_shop_shelf(upgrade, rect)
         selected = self.get_selected_shop_upgrade()
-        can_buy = (
-            selected is not None
-            and selected["id"] not in self.purchased_shop_upgrades
-            and self.player.balance >= selected["cost"]
-        )
-        purchase_hovered = self.shop_purchase_button.collidepoint(pygame.mouse.get_pos())
-        purchase_color = (
-            COLORS["accent"]
-            if can_buy and purchase_hovered
-            else COLORS["panel_border"] if can_buy else (71, 83, 91)
-        )
-        pygame.draw.rect(
-            self.screen,
-            purchase_color,
-            self.shop_purchase_button,
-            border_radius=8,
-        )
-        if selected is None:
-            purchase_label = "SELECT AN UPGRADE"
-        elif selected["id"] in self.purchased_shop_upgrades:
-            purchase_label = "PLACEHOLDER OWNED"
-        elif self.player.balance < selected["cost"]:
-            purchase_label = f"NEED ${selected['cost']}"
-        else:
-            purchase_label = f"BUY PLACEHOLDER  ${selected['cost']}"
-        purchase_text = self.small_font.render(
-            purchase_label,
-            True,
-            COLORS["background"] if can_buy else COLORS["muted"],
-        )
-        self.screen.blit(
-            purchase_text,
-            purchase_text.get_rect(center=self.shop_purchase_button.center),
-        )
-
-        message = self.card_font.render(self.shop_message, True, COLORS["muted"])
-        self.screen.blit(message, message.get_rect(center=(panel.centerx, 462)))
-
-        hovered = self.shop_button.collidepoint(pygame.mouse.get_pos())
-        button_color = COLORS["accent"] if hovered else COLORS["panel_border"]
-        pygame.draw.rect(
-            self.screen,
-            button_color,
-            self.shop_button,
-            border_radius=8,
-        )
-        button_text = self.body_font.render(
-            "FINISH SHIFT",
-            True,
-            COLORS["background"],
-        )
-        self.screen.blit(
-            button_text,
-            button_text.get_rect(center=self.shop_button.center),
-        )
+        owned = selected and selected["id"] in self.purchased_shop_upgrades
+        can_buy = selected and not owned and self.player.balance >= selected["cost"]
+        label = "SELECT AN UPGRADE"
+        if selected:
+            label = "INSTALLED" if owned else (f"BUY & INSTALL  ${selected['cost']}" if can_buy else f"NEED ${selected['cost'] - self.player.balance} MORE")
+        for rect, text, enabled in ((self.shop_purchase_button, label, can_buy), (self.shop_next_day_button, "NEXT SHIFT", True), (self.shop_button, "FINISH SHIFT", True)):
+            color = COLORS["accent"] if enabled else (71, 83, 91)
+            pygame.draw.rect(self.screen, color, rect)
+            rendered = self.small_font.render(text, True, COLORS["background"] if enabled else COLORS["muted"])
+            self.screen.blit(rendered, rendered.get_rect(center=rect.center))
+        message = self.card_font.render(self.shop_message, True, COLORS["text"])
+        self.screen.blit(message, message.get_rect(center=(550, 588)))
 
     def draw_day_complete_screen(self):
         """Draw the end-of-day earnings recap before opening the Shop."""
@@ -242,107 +153,60 @@ class ShopMixin:
         self.daily_payout_applied = True
 
     def get_shop_upgrade_rects(self):
-        """Return the three stable clickable rectangles used by placeholder upgrades."""
-
-        return [pygame.Rect(x, 235, 210, 145) for x in (170, 445, 720)]
+        """Stable three-column, two-row layout matching the concept art."""
+        return [pygame.Rect(x, y, 290, 154) for y in (198, 367) for x in (95, 405, 715)]
 
     def get_selected_shop_upgrade(self):
-        """Return the selected placeholder's data, or None when nothing is selected."""
-
-        return next(
-            (
-                upgrade
-                for upgrade in SHOP_UPGRADES
-                if upgrade["id"] == self.selected_shop_upgrade
-            ),
-            None,
-        )
+        return next((item for item in SHOP_UPGRADES if item["id"] == self.selected_shop_upgrade), None)
 
     def handle_shop_upgrade_click(self, position):
-        """Select or purchase an upgrade placeholder without applying an effect yet."""
-
         for upgrade, rect in zip(SHOP_UPGRADES, self.get_shop_upgrade_rects()):
             if rect.collidepoint(position):
                 self.play_sfx("button")
                 self.selected_shop_upgrade = upgrade["id"]
-                if upgrade["id"] in self.purchased_shop_upgrades:
-                    self.shop_message = f"{upgrade['name']} is already owned."
-                else:
-                    self.shop_message = f"{upgrade['name']} selected — effect coming soon."
+                self.shop_message = f"{upgrade['name']} " + ("is installed." if upgrade["id"] in self.purchased_shop_upgrades else "selected. Buy to install immediately.")
                 return
-
         if not self.shop_purchase_button.collidepoint(position):
             return
         self.play_sfx("button")
-        selected = self.get_selected_shop_upgrade()
-        if selected is None:
-            self.shop_message = "Select an upgrade placeholder first."
-        elif selected["id"] in self.purchased_shop_upgrades:
-            self.shop_message = f"{selected['name']} is already owned."
-        elif self.player.balance < selected["cost"]:
-            self.shop_message = (
-                f"Not enough money for {selected['name']} — need ${selected['cost']}."
-            )
+        upgrade = self.get_selected_shop_upgrade()
+        if upgrade is None:
+            self.shop_message = "Select an upgrade first."
+        elif upgrade["id"] in self.purchased_shop_upgrades:
+            self.shop_message = f"{upgrade['name']} is already installed."
+        elif self.player.balance < upgrade["cost"]:
+            self.shop_message = f"Not enough money for {upgrade['name']} — need ${upgrade['cost']}."
         else:
-            self.player.pay(selected["cost"])
-            self.purchased_shop_upgrades.add(selected["id"])
-            self.shop_message = f"Purchased {selected['name']} — effect coming soon."
+            self.player.pay(upgrade["cost"])
+            if "machine" in upgrade:
+                self.player.machine_levels[upgrade["machine"]] = 2
+            else:
+                self.player.test_discount += upgrade["discount"]
+            self.player.sync_machine_levels(self.player.test_hand + self.deck.contents + self.discard_pile)
+            self.purchased_shop_upgrades.add(upgrade["id"])
+            self.shop_message = f"Installed {upgrade['name']}. Test costs updated!"
 
     def draw_shop_shelf(self, upgrade, shelf):
-        """Draw one selectable placeholder upgrade shelf."""
-
         selected = upgrade["id"] == self.selected_shop_upgrade
         owned = upgrade["id"] in self.purchased_shop_upgrades
-        pygame.draw.rect(
-            self.screen,
-            COLORS["background"],
-            shelf,
-            border_radius=10,
-        )
-        pygame.draw.rect(
-            self.screen,
-            COLORS["accent"] if selected else COLORS["muted"],
-            shelf,
-            width=3 if selected else 2,
-            border_radius=10,
-        )
-
-        shelf_label = self.card_font.render(upgrade["category"], True, COLORS["muted"])
-        self.screen.blit(
-            shelf_label,
-            shelf_label.get_rect(center=(shelf.centerx, shelf.y + 18)),
-        )
-
-        icon_center = (shelf.centerx, shelf.y + 62)
-        pygame.draw.circle(
-            self.screen,
-            (34, 61, 66),
-            icon_center,
-            25,
-        )
-        pygame.draw.circle(
-            self.screen,
-            COLORS["accent"] if selected or owned else COLORS["muted"],
-            icon_center,
-            25,
-            width=2,
-        )
-        symbol = self.small_font.render("OK" if owned else "+", True, COLORS["accent"])
-        self.screen.blit(symbol, symbol.get_rect(center=icon_center))
-
-        name = self.card_font.render(upgrade["name"], True, COLORS["text"])
-        self.screen.blit(name, name.get_rect(center=(shelf.centerx, shelf.y + 101)))
-        status_text = "OWNED" if owned else f"${upgrade['cost']}  •  SELECT"
-        status = self.card_font.render(
-            status_text,
-            True,
-            COLORS["accent"] if owned or selected else COLORS["muted"],
-        )
-        self.screen.blit(
-            status,
-            status.get_rect(center=(shelf.centerx, shelf.bottom - 19)),
-        )
-
-        shelf_board = pygame.Rect(shelf.x - 8, shelf.bottom - 5, shelf.width + 16, 8)
-        pygame.draw.rect(self.screen, (72, 101, 91), shelf_board, border_radius=3)
-
+        color = COLORS["accent"] if selected or owned else COLORS["muted"]
+        pygame.draw.rect(self.screen, COLORS["background"], shelf)
+        pygame.draw.rect(self.screen, color, shelf, width=3 if selected else 1)
+        category = self.card_font.render(upgrade["category"] + (" / LV.2" if owned and "machine" in upgrade else ""), True, color)
+        self.screen.blit(category, (shelf.x + 15, shelf.y + 12))
+        name = self.small_font.render(upgrade["name"], True, COLORS["text"])
+        self.screen.blit(name, (shelf.x + 15, shelf.y + 34))
+        words = upgrade["description"].split()
+        line, y = "", shelf.y + 61
+        for word in words + [None]:
+            candidate = f"{line} {word}".strip() if word else ""
+            if word is None or self.card_font.size(candidate)[0] > shelf.width - 30:
+                self.screen.blit(self.card_font.render(line, True, COLORS["muted"]), (shelf.x + 15, y))
+                y += 17
+                line = word or ""
+            else:
+                line = candidate
+        pygame.draw.line(self.screen, color, (shelf.x + 1, shelf.bottom - 32), (shelf.right - 2, shelf.bottom - 32))
+        status = "INSTALLED" if owned else f"${upgrade['cost']}  /  " + ("SELECT" if self.player.balance >= upgrade["cost"] else "INSUFFICIENT FUNDS")
+        text = self.card_font.render(status, True, color)
+        self.screen.blit(text, text.get_rect(center=(shelf.centerx, shelf.bottom - 16)))

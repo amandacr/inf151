@@ -12,7 +12,6 @@ from gui_theme import (
     TEST_SUBTITLES,
     WINDOW_SIZE,
 )
-from Test import get_test_cost
 
 
 class CardMixin:
@@ -133,7 +132,7 @@ class CardMixin:
 
         card = self.player.test_hand[self.selected_card_index]
         self.last_test_name = card.value.name
-        self.last_test_cost = get_test_cost(card.value)
+        self.last_test_cost = self.player.get_test_cost(card.value)
         self.daily_test_count += 1
         self.daily_test_expenses += self.last_test_cost
         result = self.patient.perform_test(self.last_test_name)
@@ -505,8 +504,10 @@ class CardMixin:
         self.screen.blit(title_surface, title_surface.get_rect(center=area.center))
 
 
-    def draw_rarity_badge(self, rarity, card_rect):
-        """Show card rarity with both text and a shape so color is not the only cue."""
+    def draw_rarity_badge(self, test, card_rect):
+        """Show machine level, rarity, and the current operating cost."""
+
+        rarity = test.rarity
 
         rarity_color = RARITY_COLORS.get(rarity, COLORS["panel_border"])
         badge = pygame.Rect(
@@ -552,7 +553,7 @@ class CardMixin:
             pygame.draw.circle(self.screen, rarity_color, symbol_center, 4)
 
         rarity_text = self.tiny_font.render(
-            f"{rarity.upper()}  ${get_test_cost(rarity)}",
+            f"LV.{test.upgrade_level} {rarity.upper()}  ${self.player.get_test_cost(test)}",
             True,
             rarity_color,
         )
@@ -823,7 +824,7 @@ class CardMixin:
             subtitle,
             subtitle.get_rect(center=(card_rect.centerx, card_rect.y + 88)),
         )
-        self.draw_rarity_badge(test.rarity, card_rect)
+        self.draw_rarity_badge(test, card_rect)
 
 
     def draw_selected_card_details(self, test, card_rect, rarity_color):
@@ -838,7 +839,7 @@ class CardMixin:
         self.draw_fitted_card_title(test.name, header, selected=True)
 
         rarity = self.card_font.render(
-            f"{test.rarity.upper()}  •  TEST COST ${get_test_cost(test)}",
+            f"LV.{test.upgrade_level} {test.rarity.upper()}  •  COST ${self.player.get_test_cost(test)}",
             True,
             rarity_color,
         )
@@ -877,7 +878,7 @@ class CardMixin:
             self.screen, COLORS["panel_border"], self.run_test_button, border_radius=5
         )
         run_text = self.small_font.render(
-            f"RUN  ${get_test_cost(test)}",
+            f"RUN  ${self.player.get_test_cost(test)}",
             True,
             COLORS["background"],
         )

@@ -636,6 +636,54 @@ class GuiFlowSmokeTests(unittest.TestCase):
             ),
         )
 
+    def test_machine_purchase_updates_cards_costs_and_survives_resets(self):
+        self.game.state = GameState.SHOP
+        upgrade = SHOP_UPGRADES[0]
+        balance = self.game.player.balance
+        self.game.handle_shop_click(self.game.get_shop_upgrade_rects()[0].center)
+        self.game.handle_shop_click(self.game.shop_purchase_button.center)
+        self.assertEqual(self.game.player.balance, balance - upgrade["cost"])
+        for card in self.game.player.test_hand + self.game.deck.contents:
+            if card.value.name == "TEMPERATURE":
+                self.assertEqual(card.value.upgrade_level, 2)
+                self.assertEqual(self.game.player.get_test_cost(card.value), 5)
+        self.game.handle_shop_click(self.game.shop_purchase_button.center)
+        self.assertEqual(self.game.player.balance, balance - upgrade["cost"])
+        self.game.handle_shop_click(self.game.shop_next_day_button.center)
+        self.assertEqual(self.game.state, GameState.TITLE)
+        for card in self.game.player.test_hand + self.game.deck.contents:
+            if card.value.name == "TEMPERATURE":
+                self.assertEqual(card.value.upgrade_level, 2)
+        self.game.selected_card_index = 0
+        before = self.game.daily_test_expenses
+        self.game.run_selected_test()
+        self.assertEqual(self.game.daily_test_expenses - before, 5)
+        self.assertEqual(self.game.last_test_cost, 5)
+
+    def test_shared_upgrades_stack_and_apply_to_future_draws(self):
+        self.game.state = GameState.SHOP
+        for index in (0, 4, 5):
+            self.game.handle_shop_click(self.game.get_shop_upgrade_rects()[index].center)
+            self.game.handle_shop_click(self.game.shop_purchase_button.center)
+        self.assertEqual(self.game.player.balance, 200)
+        self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 2)
+        self.assertEqual(self.game.player.get_test_cost(AllergyTest()), 17)
+        card = __import__("Card").Card("Test", TemperatureTest())
+        self.game.player.draw(card)
+        self.assertEqual(card.value.upgrade_level, 2)
+        self.game.reset_round()
+        self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 2)
+        rects = self.game.get_shop_upgrade_rects()
+        self.assertEqual(len(rects), 6)
+        for index, rect in enumerate(rects):
+            self.assertFalse(rect.colliderect(self.game.shop_purchase_button))
+            self.assertFalse(rect.colliderect(self.game.shop_button))
+            self.assertFalse(any(rect.colliderect(other) for other in rects[index + 1:]))
+        self.game.draw_shop_screen()
+        self.game.restart_vertical_slice()
+        self.assertEqual(self.game.player.machine_levels, {})
+        self.assertEqual(self.game.player.test_discount, 0)
+
     def test_shop_blocks_an_unaffordable_placeholder_purchase(self):
         """A selected placeholder should not charge or unlock when money is too low."""
 

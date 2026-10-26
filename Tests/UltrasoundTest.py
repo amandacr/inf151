@@ -10,5 +10,5 @@ class UltrasoundTest(Test):
                       "ULTRASOUND",
                       "Performs a full abdominal ultrasound on your patient. Shows internal organs, blood flow, or fetal growth.",
                       'Uncommon',
-                      1,
+                      2,
                       upgrade_level)
