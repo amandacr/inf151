@@ -33,6 +33,7 @@ from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
 from gui_cards import CardMixin
 from gui_developer import DeveloperMixin
+from gui_display import DisplayMixin
 from gui_ending import EndingMixin
 from gui_examination import ExaminationMixin
 from gui_main import CosmicClinicGUI, GameState
@@ -146,6 +147,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIsInstance(self.game, AudioMixin)
         self.assertIsInstance(self.game, CardMixin)
         self.assertIsInstance(self.game, DeveloperMixin)
+        self.assertIsInstance(self.game, DisplayMixin)
         self.assertIsInstance(self.game, EndingMixin)
         self.assertIsInstance(self.game, ExaminationMixin)
         self.assertIsInstance(self.game, NotebookMixin)
@@ -160,6 +162,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.game.draw_developer_navigator.__module__,
             "gui_developer",
         )
+        self.assertEqual(self.game.present_frame.__module__, "gui_display")
         self.assertEqual(self.game.run_selected_test.__module__, "gui_cards")
         self.assertEqual(self.game.draw_patient_screen.__module__, "gui_examination")
         self.assertEqual(self.game.draw_id_card.__module__, "gui_examination")
@@ -173,6 +176,37 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.draw_ending_screen.__module__, "gui_ending")
         self.assertEqual(self.game.draw_exit_confirmation.__module__, "gui_ending")
         self.assertEqual(self.game.draw_tutorial_overlay.__module__, "gui_tutorial")
+
+    def test_resizable_window_maps_input_and_f11_toggles_fullscreen(self):
+        """Scaling should preserve click coordinates in windowed and fullscreen modes."""
+
+        self.game.resize_display((1500, 900))
+        logical_position = (550, 325)
+        window_position = self.game.game_to_window_position(logical_position)
+        mapped_position = self.game.window_to_game_position(window_position)
+        self.assertAlmostEqual(mapped_position[0], logical_position[0], delta=1)
+        self.assertAlmostEqual(mapped_position[1], logical_position[1], delta=1)
+        self.assertEqual(
+            self.game.window_to_game_position((0, 0)),
+            (-10000, -10000),
+        )
+
+        self.game.draw()
+        self.game.present_frame()
+        pygame.event.post(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_F11})
+        )
+        self.game.handle_events()
+        self.assertTrue(self.game.fullscreen)
+        self.game.draw()
+        self.game.present_frame()
+
+        pygame.event.post(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_F11})
+        )
+        self.game.handle_events()
+        self.assertFalse(self.game.fullscreen)
+        self.assertEqual(self.game.windowed_size, (1500, 900))
 
     def test_first_launch_briefing_blocks_reception_until_dismissed(self):
         """The tutorial should appear once and remain available from gameplay Help."""
@@ -203,7 +237,12 @@ class GuiFlowSmokeTests(unittest.TestCase):
         pygame.event.post(
             pygame.event.Event(
                 pygame.MOUSEBUTTONDOWN,
-                {"button": 1, "pos": self.game.help_button.center},
+                {
+                    "button": 1,
+                    "pos": self.game.game_to_window_position(
+                        self.game.help_button.center
+                    ),
+                },
             )
         )
         self.game.handle_events()
@@ -243,7 +282,12 @@ class GuiFlowSmokeTests(unittest.TestCase):
         pygame.event.post(
             pygame.event.Event(
                 pygame.MOUSEBUTTONDOWN,
-                {"button": 1, "pos": self.game.help_button.center},
+                {
+                    "button": 1,
+                    "pos": self.game.game_to_window_position(
+                        self.game.help_button.center
+                    ),
+                },
             )
         )
         self.game.handle_events()
@@ -254,7 +298,12 @@ class GuiFlowSmokeTests(unittest.TestCase):
         pygame.event.post(
             pygame.event.Event(
                 pygame.MOUSEBUTTONDOWN,
-                {"button": 1, "pos": self.game.tutorial_begin_button.center},
+                {
+                    "button": 1,
+                    "pos": self.game.game_to_window_position(
+                        self.game.tutorial_begin_button.center
+                    ),
+                },
             )
         )
         self.game.handle_events()

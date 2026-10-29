@@ -161,7 +161,7 @@ class DeveloperMixin:
         )
         self.screen.blit(hint, hint.get_rect(center=(panel.centerx, panel.y + 88)))
 
-        mouse_position = pygame.mouse.get_pos()
+        mouse_position = self.get_mouse_position()
         self.developer_button_rects = self.get_developer_screen_rects()
         for (number, label, target_state), rect in zip(
             DEVELOPER_SCREENS,

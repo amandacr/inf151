@@ -204,7 +204,7 @@ class AudioMixin:
         """Draw a compact global sound toggle in the upper-left corner."""
 
         rect = self.audio_button
-        hovered = rect.collidepoint(pygame.mouse.get_pos())
+        hovered = rect.collidepoint(self.get_mouse_position())
         active_color = (232, 211, 242)
         border = (206, 158, 233) if hovered else (155, 116, 190)
         fill = (50, 37, 68) if hovered else (27, 29, 45)

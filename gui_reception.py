@@ -898,7 +898,7 @@ class ReceptionMixin:
         progress = self.get_reception_transition_progress()
         queue_moving = self.queue_shift_started_at is not None
         hovered = (
-            self.start_button.collidepoint(pygame.mouse.get_pos())
+            self.start_button.collidepoint(self.get_mouse_position())
             and progress == 0
             and not queue_moving
         )

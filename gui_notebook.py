@@ -63,7 +63,7 @@ class NotebookMixin:
         """Draw notes that open on hover, then stay open after the first test."""
 
         panel = self.layout["notebook"]
-        hovered = panel.collidepoint(pygame.mouse.get_pos())
+        hovered = panel.collidepoint(self.get_mouse_position())
         has_results = self.notebook_has_test_results()
         stays_open = has_results and self.state != GameState.TEST_RESULT
         progress = self.update_notebook_preview_animation(hovered or stays_open)
@@ -412,7 +412,7 @@ class NotebookMixin:
                 label.get_rect(center=(layout[key].centerx, book.bottom - 22)),
             )
 
-        mouse = pygame.mouse.get_pos()
+        mouse = self.get_mouse_position()
         buttons = [
             ("CLOSE", layout["close"], True, COLORS["panel_border"]),
             ("< PREV", layout["prev"], self.notebook_spread > 0, (151, 101, 180)),

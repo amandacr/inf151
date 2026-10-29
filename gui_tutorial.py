@@ -58,7 +58,7 @@ class TutorialMixin:
         """Draw the top-right control that reopens instructions during gameplay."""
 
         rect = self.help_button
-        hovered = rect.collidepoint(pygame.mouse.get_pos())
+        hovered = rect.collidepoint(self.get_mouse_position())
         border = (206, 158, 233) if hovered else (155, 116, 190)
         fill = (50, 37, 68) if hovered else (27, 29, 45)
         pygame.draw.rect(self.screen, (3, 8, 13), rect.move(2, 3), border_radius=8)
@@ -205,7 +205,7 @@ class TutorialMixin:
                 footer_label.get_rect(center=footer_rect.center),
             )
 
-        hovered = self.tutorial_begin_button.collidepoint(pygame.mouse.get_pos())
+        hovered = self.tutorial_begin_button.collidepoint(self.get_mouse_position())
         button_color = COLORS["accent"] if hovered else COLORS["panel_border"]
         pygame.draw.rect(
             self.screen,

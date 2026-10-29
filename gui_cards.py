@@ -374,7 +374,7 @@ class CardMixin:
             self.screen.blit(empty, empty.get_rect(center=panel.center))
             return
 
-        mouse_position = pygame.mouse.get_pos()
+        mouse_position = self.get_mouse_position()
         self.hovered_card_index = (
             None
             if self.selected_card_index is not None
@@ -1005,7 +1005,7 @@ class CardMixin:
         """Draw the diagnosis folder standing in a compact desktop file rack."""
 
         panel = self.layout["diagnosis"]
-        mouse_position = pygame.mouse.get_pos()
+        mouse_position = self.get_mouse_position()
         hovered = panel.collidepoint(mouse_position)
         folder_lift = 5 if hovered and not self.showing_diagnosis_hand else 0
         progress = self.get_diagnosis_folder_progress()
@@ -1185,7 +1185,7 @@ class CardMixin:
         )
         self.screen.blit(warning, warning.get_rect(center=(panel.centerx, panel.y + 222)))
 
-        mouse_position = pygame.mouse.get_pos()
+        mouse_position = self.get_mouse_position()
         cancel_color = (
             (120, 126, 139)
             if self.diagnosis_cancel_button.collidepoint(mouse_position)

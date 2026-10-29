@@ -361,7 +361,7 @@ class ExaminationMixin:
         """Draw the face-down test-card stack resting in a counter tray."""
 
         panel = self.layout["draw_deck"]
-        hovered = panel.collidepoint(pygame.mouse.get_pos())
+        hovered = panel.collidepoint(self.get_mouse_position())
         remaining = len(self.deck.contents)
 
         tray = pygame.Rect(panel.x + 6, panel.y + 30, panel.width - 12, panel.height - 36)
@@ -789,7 +789,7 @@ class ExaminationMixin:
         )
         border_color = (
             COLORS["accent"]
-            if panel.collidepoint(pygame.mouse.get_pos())
+            if panel.collidepoint(self.get_mouse_position())
             else COLORS["panel_border"]
         )
 

@@ -172,7 +172,7 @@ class ResultsMixin:
         self.draw_med_waste_notice(footer)
 
         self.continue_button = pygame.Rect(footer.right - 226, footer.y + 11, 208, 44)
-        mouse_position = pygame.mouse.get_pos()
+        mouse_position = self.get_mouse_position()
         hovered = revealed and self.continue_button.collidepoint(mouse_position)
         button_color = (
             COLORS["accent"]
@@ -403,7 +403,7 @@ class ResultsMixin:
         self.draw_outcome_reward(footer, correct, status_color)
 
         self.outcome_button = pygame.Rect(footer.right - 226, footer.y + 11, 208, 44)
-        hovered = self.outcome_button.collidepoint(pygame.mouse.get_pos())
+        hovered = self.outcome_button.collidepoint(self.get_mouse_position())
         button_color = status_color if hovered else (
             COLORS["panel_border"] if correct else (195, 95, 88)
         )

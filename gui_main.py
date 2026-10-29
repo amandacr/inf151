@@ -15,6 +15,7 @@ from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
 from gui_cards import CardMixin
 from gui_developer import DeveloperMixin
+from gui_display import DisplayMixin
 from gui_ending import EndingMixin
 from gui_examination import ExaminationMixin
 from gui_notebook import NotebookMixin
@@ -39,6 +40,7 @@ class CosmicClinicGUI(
     AudioMixin,
     CardMixin,
     DeveloperMixin,
+    DisplayMixin,
     EndingMixin,
     ExaminationMixin,
     NotebookMixin,
@@ -56,7 +58,7 @@ class CosmicClinicGUI(
 
         self.setup_audio()
         self.start_music()
-        self.screen = pygame.display.set_mode(WINDOW_SIZE)
+        self.setup_display()
         self.clock = pygame.time.Clock()
         self.running = True
         self.state = GameState.INTRO
@@ -219,7 +221,7 @@ class CosmicClinicGUI(
             self.handle_events()
             self.update()
             self.draw()
-            pygame.display.flip()
+            self.present_frame()
             self.clock.tick(FPS)
 
         pygame.quit()
@@ -230,42 +232,48 @@ class CosmicClinicGUI(
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+            elif event.type == pygame.VIDEORESIZE:
+                self.resize_display(event.size)
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                position = self.window_to_game_position(event.pos)
                 if self.developer_navigator_open:
-                    self.handle_developer_click(event.pos)
+                    self.handle_developer_click(position)
                 elif self.exit_confirmation_open:
-                    self.handle_exit_confirmation_click(event.pos)
+                    self.handle_exit_confirmation_click(position)
                 elif self.state != GameState.INTRO and self.tutorial_open:
-                    self.handle_tutorial_click(event.pos)
-                elif self.audio_button.collidepoint(event.pos):
+                    self.handle_tutorial_click(position)
+                elif self.audio_button.collidepoint(position):
                     self.toggle_audio_muted()
-                elif self.state != GameState.INTRO and self.help_button.collidepoint(event.pos):
+                elif self.state != GameState.INTRO and self.help_button.collidepoint(position):
                     self.play_sfx("button")
                     self.open_tutorial()
                 elif self.state == GameState.INTRO:
                     self.play_sfx("button")
                     self.finish_intro()
-                elif self.state == GameState.TITLE and self.start_button.collidepoint(event.pos):
+                elif self.state == GameState.TITLE and self.start_button.collidepoint(position):
                     self.play_sfx("button")
                     self.begin_reception_transition()
                 elif self.state == GameState.PATIENT:
-                    self.handle_patient_click(event.pos)
+                    self.handle_patient_click(position)
                 elif self.state == GameState.TEST_RESULT:
-                    self.handle_test_result_click(event.pos)
+                    self.handle_test_result_click(position)
                 elif self.state == GameState.NOTEBOOK:
-                    self.handle_notebook_click(event.pos)
+                    self.handle_notebook_click(position)
                 elif self.state == GameState.OUTCOME:
-                    self.handle_outcome_click(event.pos)
+                    self.handle_outcome_click(position)
                 elif self.state == GameState.SHOP:
-                    self.handle_shop_click(event.pos)
+                    self.handle_shop_click(position)
                 elif self.state == GameState.DAY_COMPLETE:
-                    self.handle_day_complete_click(event.pos)
+                    self.handle_day_complete_click(position)
                 elif self.state == GameState.ENDING:
                     self.play_sfx("button")
                     self.finish_ending_sequence()
                 elif self.state == GameState.FINAL:
-                    self.handle_final_screen_click(event.pos)
+                    self.handle_final_screen_click(position)
             elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_F11:
+                    self.toggle_fullscreen()
+                    continue
                 if event.key == pygame.K_F10:
                     self.toggle_developer_navigator()
                     continue
@@ -614,6 +622,7 @@ class CosmicClinicGUI(
             if self.diagnosis_confirmation_open
             else "Press Esc for exit options"
         )
+        footer_text += f"  •  {self.get_fullscreen_hint()}"
         quit_hint = self.small_font.render(footer_text, True, COLORS["muted"])
         self.screen.blit(quit_hint, quit_hint.get_rect(center=(WINDOW_SIZE[0] // 2, 635)))
         self.draw_reception_transition_fade()

@@ -233,7 +233,7 @@ class EndingMixin:
     def draw_ending_button(self, rect, label, danger=False):
         """Draw a reusable final-screen or exit-dialog button."""
 
-        hovered = rect.collidepoint(pygame.mouse.get_pos())
+        hovered = rect.collidepoint(self.get_mouse_position())
         if danger:
             color = (225, 111, 100) if hovered else (157, 78, 79)
         else:

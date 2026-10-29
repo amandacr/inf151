@@ -95,7 +95,7 @@ class ShopMixin:
         label = "SELECT AN UPGRADE"
         if selected:
             label = "INSTALLED" if owned else (f"BUY & INSTALL  ${selected['cost']}" if can_buy else f"NEED ${selected['cost'] - self.player.balance} MORE")
-        mouse_position = pygame.mouse.get_pos()
+        mouse_position = self.get_mouse_position()
         for rect, text, enabled, accent in (
             (self.shop_purchase_button, label, can_buy, (112, 255, 181)),
             (self.shop_button, "FINISH SHIFT", True, (206, 158, 233)),
@@ -335,7 +335,7 @@ class ShopMixin:
             ),
         )
 
-        hovered = self.day_complete_button.collidepoint(pygame.mouse.get_pos())
+        hovered = self.day_complete_button.collidepoint(self.get_mouse_position())
         button_fill = (23, 49, 54) if hovered else (21, 27, 39)
         pygame.draw.rect(
             self.screen,
@@ -438,7 +438,7 @@ class ShopMixin:
 
         selected = upgrade["id"] == self.selected_shop_upgrade
         owned = upgrade["id"] in self.purchased_shop_upgrades
-        hovered = shelf.collidepoint(pygame.mouse.get_pos())
+        hovered = shelf.collidepoint(self.get_mouse_position())
         affordable = self.player.balance >= upgrade["cost"]
         product_colors = {
             "temperature": (242, 160, 83),
