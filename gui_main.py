@@ -18,6 +18,7 @@ from gui_developer import DeveloperMixin
 from gui_display import DisplayMixin
 from gui_ending import EndingMixin
 from gui_examination import ExaminationMixin
+from gui_intro import IntroMixin
 from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
 from gui_results import ResultsMixin
@@ -43,6 +44,7 @@ class CosmicClinicGUI(
     DisplayMixin,
     EndingMixin,
     ExaminationMixin,
+    IntroMixin,
     NotebookMixin,
     ReceptionMixin,
     ResultsMixin,
@@ -63,7 +65,7 @@ class CosmicClinicGUI(
         self.running = True
         self.state = GameState.INTRO
         self.intro_started_at = pygame.time.get_ticks()
-        self.intro_duration = 5500
+        self.intro_duration = 13200
         intro_random = random.Random(151)
         self.intro_stars = [
             (
@@ -173,8 +175,17 @@ class CosmicClinicGUI(
         self.exit_quit_button = pygame.Rect(365, 420, 370, 46)
         self.final_replay_button = pygame.Rect(300, 500, 235, 48)
         self.final_quit_button = pygame.Rect(565, 500, 235, 48)
-        self.tutorial_open = True
+        self.tutorial_open = False
         self.tutorial_opened_at = None
+        self.guided_tutorial_active = False
+        self.guided_tutorial_step = None
+        self.guided_tutorial_step_started_at = None
+        self.guided_tutorial_nudge = ""
+        self.guided_tutorial_nudge_started_at = None
+        self.tutorial_skip_button = pygame.Rect(933, 58, 135, 28)
+        self.intro_dialogue_active = False
+        self.intro_dialogue_index = 0
+        self.intro_dialogue_started_at = None
         self.help_button = pygame.Rect(976, 16, 108, 31)
         self.tutorial_begin_button = pygame.Rect(400, 510, 300, 48)
         self.diagnosis_cancel_button = pygame.Rect(315, 410, 210, 48)
@@ -211,7 +222,13 @@ class CosmicClinicGUI(
         self.tutorial_step_font = pygame.font.SysFont("Arial", 17, bold=True)
         self.tutorial_body_font = pygame.font.SysFont("Arial", 15)
         self.tutorial_label_font = pygame.font.SysFont("Arial", 13, bold=True)
+        self.dialogue_speaker_font = pygame.font.SysFont("Arial", 16, bold=True)
+        self.dialogue_body_font = pygame.font.SysFont("Arial", 23)
+        self.dialogue_hint_font = pygame.font.SysFont("Arial", 13, bold=True)
         self.game_logo = self.create_game_logo_surface()
+        self.intro_ufo_surface = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        self.draw_intro_clinic(self.intro_ufo_surface, beam_alpha=0)
+        self.intro_wake_active = False
         self.setup_developer_navigator()
 
     def run(self):
@@ -240,9 +257,14 @@ class CosmicClinicGUI(
                     self.handle_developer_click(position)
                 elif self.exit_confirmation_open:
                     self.handle_exit_confirmation_click(position)
+                elif self.intro_dialogue_active:
+                    self.play_sfx("button")
+                    self.advance_intro_dialogue()
+                elif self.guided_tutorial_active:
+                    self.handle_guided_tutorial_click(position)
                 elif self.state != GameState.INTRO and self.tutorial_open:
                     self.handle_tutorial_click(position)
-                elif self.audio_button.collidepoint(position):
+                elif self.state != GameState.INTRO and self.audio_button.collidepoint(position):
                     self.toggle_audio_muted()
                 elif self.state != GameState.INTRO and self.help_button.collidepoint(position):
                     self.play_sfx("button")
@@ -286,13 +308,23 @@ class CosmicClinicGUI(
                 if event.key == pygame.K_m:
                     self.toggle_audio_muted()
                     continue
-                if self.state != GameState.INTRO and self.tutorial_open:
-                    if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
-                        self.close_tutorial()
-                    continue
                 if self.exit_confirmation_open:
                     if event.key == pygame.K_ESCAPE:
                         self.close_exit_confirmation()
+                    continue
+                if self.intro_dialogue_active:
+                    if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                        self.play_sfx("button")
+                        self.advance_intro_dialogue()
+                    elif event.key == pygame.K_ESCAPE:
+                        self.finish_intro_dialogue()
+                    continue
+                if self.guided_tutorial_active:
+                    self.handle_guided_tutorial_key(event.key)
+                    continue
+                if self.state != GameState.INTRO and self.tutorial_open:
+                    if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
+                        self.close_tutorial()
                     continue
                 if event.key == pygame.K_ESCAPE:
                     if self.state == GameState.PATIENT and self.diagnosis_confirmation_open:
@@ -406,6 +438,9 @@ class CosmicClinicGUI(
         if self.exit_confirmation_open:
             return
 
+        if self.intro_dialogue_active:
+            return
+
         if self.state != GameState.INTRO and self.tutorial_open:
             return
 
@@ -421,6 +456,8 @@ class CosmicClinicGUI(
             if elapsed >= self.intro_duration:
                 self.finish_intro()
             return
+
+        self.update_guided_tutorial()
 
         now = pygame.time.get_ticks()
         if self.note_transfer_animation is not None:
@@ -559,7 +596,6 @@ class CosmicClinicGUI(
 
         if self.state == GameState.INTRO:
             self.draw_intro_screen()
-            self.draw_audio_button()
             if self.exit_confirmation_open:
                 self.draw_exit_confirmation()
             if self.developer_navigator_open:
@@ -626,11 +662,20 @@ class CosmicClinicGUI(
         quit_hint = self.small_font.render(footer_text, True, COLORS["muted"])
         self.screen.blit(quit_hint, quit_hint.get_rect(center=(WINDOW_SIZE[0] // 2, 635)))
         self.draw_reception_transition_fade()
-        if self.state != GameState.INTRO:
+        if (
+            self.state != GameState.INTRO
+            and not self.intro_dialogue_active
+            and not self.guided_tutorial_active
+        ):
             self.draw_help_button()
-        self.draw_audio_button()
-        if self.state != GameState.INTRO and self.tutorial_open:
+        if not self.intro_dialogue_active and not self.guided_tutorial_active:
+            self.draw_audio_button()
+        if self.intro_dialogue_active:
+            self.draw_intro_dialogue()
+        elif self.state != GameState.INTRO and self.tutorial_open:
             self.draw_tutorial_overlay()
+        if self.guided_tutorial_active:
+            self.draw_guided_tutorial()
         if self.exit_confirmation_open:
             self.draw_exit_confirmation()
         if self.developer_navigator_open:

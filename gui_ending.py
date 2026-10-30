@@ -313,6 +313,10 @@ class EndingMixin:
     def restart_vertical_slice(self):
         """Reset progress and return to reception without replaying the intro."""
 
+        restart_training = self.guided_tutorial_active
+        self.finish_guided_tutorial()
+        self.intro_dialogue_active = False
+        self.intro_dialogue_started_at = None
         self.player.balance = STARTING_BALANCE
         self.player.machine_levels.clear()
         self.player.test_discount = 0
@@ -322,6 +326,8 @@ class EndingMixin:
         self.exit_confirmation_opened_at = None
         self.reset_day()
         self.state = GameState.TITLE
+        if restart_training:
+            self.start_guided_tutorial()
 
     def draw_exit_confirmation(self):
         """Draw the styled modal used when Escape is pressed."""

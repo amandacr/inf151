@@ -36,6 +36,7 @@ from gui_developer import DeveloperMixin
 from gui_display import DisplayMixin
 from gui_ending import EndingMixin
 from gui_examination import ExaminationMixin
+from gui_intro import IntroMixin
 from gui_main import CosmicClinicGUI, GameState
 from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
@@ -130,6 +131,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game = CosmicClinicGUI()
         self.game.finish_intro()
+        self.game.finish_intro_dialogue()
+        self.game.finish_guided_tutorial()
         self.game.tutorial_open = False
         self.game.tutorial_opened_at = None
         self.game.patients_called = 1
@@ -150,6 +153,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIsInstance(self.game, DisplayMixin)
         self.assertIsInstance(self.game, EndingMixin)
         self.assertIsInstance(self.game, ExaminationMixin)
+        self.assertIsInstance(self.game, IntroMixin)
         self.assertIsInstance(self.game, NotebookMixin)
         self.assertIsInstance(self.game, ReceptionMixin)
         self.assertIsInstance(self.game, ResultsMixin)
@@ -167,7 +171,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.draw_patient_screen.__module__, "gui_examination")
         self.assertEqual(self.game.draw_id_card.__module__, "gui_examination")
         self.assertEqual(self.game.draw_notebook.__module__, "gui_notebook")
-        self.assertEqual(self.game.draw_intro_screen.__module__, "gui_reception")
+        self.assertEqual(self.game.draw_intro_screen.__module__, "gui_intro")
         self.assertEqual(self.game.draw_title_screen.__module__, "gui_reception")
         self.assertEqual(self.game.draw_test_result_screen.__module__, "gui_results")
         self.assertEqual(self.game.draw_diagnosis_outcome.__module__, "gui_results")
@@ -208,59 +212,196 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertFalse(self.game.fullscreen)
         self.assertEqual(self.game.windowed_size, (1500, 900))
 
-    def test_first_launch_briefing_blocks_reception_until_dismissed(self):
-        """The tutorial should appear once and remain available from gameplay Help."""
+    def test_abduction_intro_renders_each_story_stage_and_can_be_skipped(self):
+        """Earth, beam, blinking reception, and the skip path should stay playable."""
 
-        self.game.state = GameState.TITLE
-        self.game.patients_called = 0
-        self.game.tutorial_open = True
-        self.game.tutorial_opened_at = None
-        self.game.reception_transition_started_at = None
-        self.assertTrue(self.game.tutorial_open)
-        self.assertEqual(self.game.get_tutorial_action_label(), "BEGIN SHIFT")
-        self.game.draw()
+        self.game.state = GameState.INTRO
+        self.game.finish_guided_tutorial()
+        self.game.tutorial_open = False
+        now = pygame.time.get_ticks()
+        for elapsed in (0, 2500, 6400, 7600, 8350, 9000, 9700, 10800, 12600):
+            self.game.intro_started_at = now - elapsed
+            self.game.draw()
 
-        self.game.handle_tutorial_click(self.game.start_button.center)
-        self.assertTrue(self.game.tutorial_open)
-        self.assertIsNone(self.game.reception_transition_started_at)
+        self.assertEqual(self.game.get_intro_blink_openness(0), 0.0)
+        self.assertGreater(self.game.get_intro_blink_openness(1000), 0.3)
+        self.assertEqual(self.game.get_intro_blink_openness(2500), 1.0)
 
-        self.game.handle_tutorial_click(self.game.tutorial_begin_button.center)
-        self.assertFalse(self.game.tutorial_open)
-        self.game.open_tutorial()
-        self.assertTrue(self.game.tutorial_open)
-        self.game.close_tutorial()
-        self.assertFalse(self.game.tutorial_open)
-
-        self.game.state = GameState.PATIENT
-        self.game.patients_called = 1
-        self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO PATIENT")
         pygame.event.post(
             pygame.event.Event(
                 pygame.MOUSEBUTTONDOWN,
                 {
                     "button": 1,
                     "pos": self.game.game_to_window_position(
-                        self.game.help_button.center
+                        self.game.audio_button.center
                     ),
                 },
             )
         )
         self.game.handle_events()
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertTrue(self.game.intro_dialogue_active)
+        self.assertFalse(self.game.tutorial_open)
+
+        self.game.draw()
+        for expected_index in range(1, len(self.game.INTRO_DIALOGUE)):
+            self.game.advance_intro_dialogue()
+            self.assertEqual(self.game.intro_dialogue_index, expected_index)
+            self.game.draw()
+        self.game.advance_intro_dialogue()
+        self.assertFalse(self.game.intro_dialogue_active)
+        self.assertTrue(self.game.guided_tutorial_active)
+        self.assertEqual(self.game.guided_tutorial_step, "call_patient")
+        self.assertFalse(self.game.tutorial_open)
+
+    def test_guided_zorpa_case_uses_real_controls_from_reception_to_diagnosis(self):
+        """The interactive tutorial should complete one real, billed patient case."""
+
+        self.game.state = GameState.TITLE
+        self.game.patients_called = 0
+        self.game.reception_transition_started_at = None
+        self.game.start_guided_tutorial()
+        self.assertEqual(self.game.guided_tutorial_step, "call_patient")
+        self.game.draw()
+
+        self.game.handle_guided_tutorial_click(self.game.start_button.center)
+        self.assertEqual(self.game.guided_tutorial_step, "patient_arrival")
+        self.game.reception_transition_started_at -= self.game.reception_transition_duration + 1
+        self.game.update()
+        self.game.patient_fade_started_at -= self.game.patient_fade_duration + 1
+        self.game.update()
+        self.game.update()
+        self.assertEqual(self.game.state, GameState.PATIENT)
+        self.assertEqual(self.game.guided_tutorial_step, "symptom")
+
+        self.game.handle_guided_tutorial_click((1090, 680))
+        self.assertEqual(self.game.guided_tutorial_step, "inspect_id")
+        self.game.handle_guided_tutorial_click(self.game.layout["id_card"].center)
+        self.assertTrue(self.game.showing_health_id)
+        self.assertEqual(self.game.guided_tutorial_step, "review_health_id")
+        self.game.handle_guided_tutorial_click((1090, 680))
+
+        temperature_index = self.game.get_temperature_card_index()
+        self.game.handle_guided_tutorial_click(self.game.card_rects[temperature_index].center)
+        self.assertEqual(self.game.guided_tutorial_step, "temperature_run")
+        selected = self.game.get_selected_card_rect(self.game.selected_card_index)
+        self.game.handle_guided_tutorial_click(self.game.get_run_test_button(selected).center)
+        self.assertEqual(self.game.state, GameState.TEST_RESULT)
+        self.assertEqual(self.game.daily_test_count, 1)
+        self.game.test_result_started_at -= self.game.test_result_reveal_duration + 1
+        self.game.draw()
+        self.game.handle_guided_tutorial_click(self.game.continue_button.center)
+        self.assertEqual(self.game.guided_tutorial_step, "note_transfer")
+
+        self.game.note_transfer_animation["started_at"] -= self.game.note_transfer_animation_duration + 1
+        self.game.update()
+        self.game.notebook_attention_started_at -= self.game.notebook_attention_duration + 1
+        self.game.update()
+        self.game.discard_animation["started_at"] -= self.game.test_discard_animation_duration + 1
+        self.game.update()
+        self.game.update()
+        self.assertEqual(self.game.guided_tutorial_step, "open_notebook")
+
+        self.game.handle_guided_tutorial_click(self.game.layout["notebook"].center)
+        self.assertEqual(self.game.state, GameState.NOTEBOOK)
+        self.assertEqual(self.game.guided_tutorial_step, "review_notebook")
+        self.game.handle_guided_tutorial_click((1090, 680))
+        self.game.handle_guided_tutorial_click(self.game.layout["diagnosis"].center)
+        hypothermia_index = self.game.get_hypothermia_card_index()
+        self.game.handle_guided_tutorial_click(self.game.card_rects[hypothermia_index].center)
+        selected = self.game.get_selected_card_rect(self.game.selected_card_index)
+        self.game.handle_guided_tutorial_click(self.game.get_card_action_button(selected).center)
+        self.assertTrue(self.game.diagnosis_confirmation_open)
+        self.game.handle_guided_tutorial_click(self.game.diagnosis_confirm_button.center)
+        self.assertEqual(self.game.state, GameState.OUTCOME)
+        self.assertTrue(self.game.diagnosis_correct)
+        self.assertEqual(self.game.guided_tutorial_step, "complete")
+        self.game.handle_guided_tutorial_click((1090, 680))
+        self.assertFalse(self.game.guided_tutorial_active)
+        self.assertEqual(self.game.daily_correct_diagnoses, 1)
+
+    def test_compact_help_remains_available_after_training(self):
+        """The deleted briefing should be replaced by compact reusable Help."""
+
+        self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO PATIENT")
+        self.game.open_tutorial()
         self.assertTrue(self.game.tutorial_open)
         self.game.draw()
         self.game.handle_tutorial_click(self.game.tutorial_begin_button.center)
         self.assertFalse(self.game.tutorial_open)
-        self.assertEqual(self.game.state, GameState.PATIENT)
-
         self.game.state = GameState.TITLE
-        self.game.patients_called = 1
-        self.assertEqual(self.game.get_tutorial_action_label(), "CONTINUE SHIFT")
+        self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO RECEPTION")
         self.game.state = GameState.TEST_RESULT
         self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO TEST RESULT")
         self.game.state = GameState.NOTEBOOK
         self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO NOTEBOOK")
         self.game.state = GameState.SHOP
         self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO SHOP")
+
+    def test_tutorial_spotlights_have_clickable_hitboxes_and_wrapped_text(self):
+        """Highlighted reading targets and lifted card edges should never feel inert."""
+
+        self.game.start_guided_tutorial()
+        self.game.state = GameState.PATIENT
+
+        self.game.set_guided_tutorial_step("symptom")
+        symptom_target = self.game.get_guided_tutorial_target()
+        self.assertEqual(symptom_target.size, (91, 55))
+        self.game.handle_guided_tutorial_click((1090, 680))
+        self.assertEqual(self.game.guided_tutorial_step, "inspect_id")
+
+        self.game.showing_health_id = True
+        self.game.set_guided_tutorial_step("review_health_id")
+        self.game.handle_guided_tutorial_click((1090, 680))
+        self.assertEqual(self.game.guided_tutorial_step, "temperature_select")
+
+        temperature_target = self.game.get_guided_tutorial_target()
+        temperature_index = self.game.get_temperature_card_index()
+        self.assertTrue(
+            temperature_target.contains(self.game.card_rects[temperature_index])
+        )
+        self.game.handle_guided_tutorial_click(
+            (temperature_target.x + 1, temperature_target.y + 1)
+        )
+        self.assertEqual(self.game.guided_tutorial_step, "temperature_run")
+
+        self.game.open_notebook()
+        self.game.guided_tutorial_active = True
+        self.game.set_guided_tutorial_step("review_notebook")
+        self.game.handle_guided_tutorial_click((1090, 680))
+        self.assertEqual(self.game.guided_tutorial_step, "diagnosis_folder")
+
+        self.game.set_guided_tutorial_step("complete")
+        self.game.handle_guided_tutorial_click((1090, 680))
+        self.assertFalse(self.game.guided_tutorial_active)
+
+        for step in (
+            "symptom",
+            "inspect_id",
+            "review_health_id",
+            "temperature_select",
+            "temperature_run",
+            "test_result",
+            "note_transfer",
+            "open_notebook",
+            "review_notebook",
+            "diagnosis_folder",
+            "diagnosis_select",
+            "diagnosis_play",
+            "diagnosis_confirm",
+            "complete",
+        ):
+            self.game.guided_tutorial_step = step
+            message, panel, _click_anywhere = self.game.get_guided_tutorial_prompt()
+            for line in self.game.wrap_text(
+                message,
+                self.game.tutorial_body_font,
+                panel.width - 32,
+            ):
+                self.assertLessEqual(
+                    self.game.tutorial_body_font.size(line)[0],
+                    panel.width - 32,
+                )
 
     def test_gameplay_help_pauses_timers_and_works_on_ending_screens(self):
         """Help should freeze transitions and remain visible through the finale."""
@@ -355,6 +496,20 @@ class GuiFlowSmokeTests(unittest.TestCase):
         )
         self.game.handle_events()
         self.assertFalse(self.game.developer_navigator_open)
+
+    def test_f10_jump_closes_the_opening_dialogue(self):
+        """A preview jump must not carry the abduction dialogue onto another screen."""
+
+        self.game.state = GameState.TITLE
+        self.game.start_intro_dialogue()
+        self.assertTrue(self.game.intro_dialogue_active)
+
+        self.game.toggle_developer_navigator()
+        self.game.jump_to_developer_screen(6)
+
+        self.assertEqual(self.game.state, GameState.SHOP)
+        self.assertFalse(self.game.intro_dialogue_active)
+        self.assertIsNone(self.game.intro_dialogue_started_at)
 
     def test_test_cards_accumulate_end_of_day_operating_expenses(self):
         """Running machines should charge by rarity without changing cash immediately."""
@@ -727,6 +882,24 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.open_exit_confirmation()
         self.game.handle_exit_confirmation_click(self.game.exit_quit_button.center)
         self.assertFalse(self.game.running)
+
+    def test_return_to_reception_restarts_interrupted_training(self):
+        """Restarting during training should return to its first valid action."""
+
+        self.game.start_guided_tutorial()
+        self.game.set_guided_tutorial_step("temperature_select")
+        self.game.state = GameState.PATIENT
+        self.game.open_exit_confirmation()
+
+        self.game.handle_exit_confirmation_click(
+            self.game.exit_reception_button.center
+        )
+
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertTrue(self.game.guided_tutorial_active)
+        self.assertEqual(self.game.guided_tutorial_step, "call_patient")
+        self.assertEqual(self.game.patients_called, 0)
+        self.assertFalse(self.game.exit_confirmation_open)
 
     def test_remaining_patients_slide_forward_before_the_next_call(self):
         """After Zorpa, the other three patients should move into the open chairs."""

@@ -10,11 +10,12 @@ from gui_theme import COLORS, WINDOW_SIZE
 
 class ReceptionMixin:
     def finish_intro(self):
-        """Skip or finish the one-time opening animation and show the welcome screen."""
+        """Skip or finish the cinematic and begin the abduction conversation."""
 
         self.reception_transition_started_at = None
         self.patient_fade_started_at = None
         self.state = GameState.TITLE
+        self.start_intro_dialogue()
 
     def begin_reception_transition(self):
         """Call the next patient, or end the day if the room is empty."""
@@ -171,84 +172,6 @@ class ReceptionMixin:
             self.screen.blit(fade, (0, 0))
 
 
-    def draw_intro_screen(self):
-        """Animate the clinic arriving in space before the welcome screen appears."""
-
-        elapsed = pygame.time.get_ticks() - self.intro_started_at
-        self.screen.fill((6, 10, 27))
-
-        pygame.draw.circle(self.screen, (55, 45, 92), (1035, 575), 155)
-        pygame.draw.circle(self.screen, (82, 64, 126), (1000, 535), 98)
-        pygame.draw.arc(
-            self.screen,
-            (150, 113, 185),
-            pygame.Rect(850, 490, 350, 115),
-            math.pi,
-            math.pi * 2,
-            width=5,
-        )
-
-        for star_index, (star_x, star_y, star_size) in enumerate(self.intro_stars):
-            twinkle = (elapsed // 180 + star_index) % 5 == 0
-            star_color = (220, 232, 255) if twinkle else (125, 151, 185)
-            pygame.draw.circle(
-                self.screen,
-                star_color,
-                (star_x, star_y),
-                star_size + int(twinkle and star_size == 1),
-            )
-
-        approach_progress = max(0.0, min(1.0, elapsed / 2800))
-        approach_eased = approach_progress ** 1.65
-        clinic_scale = 0.04 + 0.96 * approach_eased
-        beam_progress = max(0.0, min(1.0, (elapsed - 2450) / 350))
-        clinic_layer = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
-        self.draw_intro_clinic(clinic_layer, round(255 * beam_progress))
-
-        scaled_size = (
-            max(1, round(WINDOW_SIZE[0] * clinic_scale)),
-            max(1, round(WINDOW_SIZE[1] * clinic_scale)),
-        )
-        scaled_clinic = pygame.transform.smoothscale(clinic_layer, scaled_size)
-        arrival_alpha = max(0.0, min(1.0, elapsed / 450))
-        scaled_clinic.set_alpha(round(255 * arrival_alpha))
-        clinic_center_y = round(250 + 75 * approach_eased)
-        clinic_position = (
-            (WINDOW_SIZE[0] - scaled_size[0]) // 2,
-            clinic_center_y - scaled_size[1] // 2,
-        )
-        self.screen.blit(scaled_clinic, clinic_position)
-
-        title_progress = max(0.0, min(1.0, (elapsed - 2850) / 650))
-        if title_progress > 0:
-            self.draw_intro_title(title_progress)
-
-        message_progress = max(0.0, min(1.0, (elapsed - 3650) / 650))
-        message = self.body_font.render(
-            "Your shift is beginning...",
-            True,
-            COLORS["text"],
-        )
-        message.set_alpha(round(255 * message_progress))
-        self.screen.blit(
-            message,
-            message.get_rect(center=(WINDOW_SIZE[0] // 2, 545)),
-        )
-
-        skip = self.small_font.render(
-            "Click anywhere or press Enter to skip",
-            True,
-            (139, 169, 180),
-        )
-        self.screen.blit(skip, skip.get_rect(center=(WINDOW_SIZE[0] // 2, 620)))
-
-        fade_progress = max(0.0, min(1.0, (elapsed - 4850) / 650))
-        if fade_progress > 0:
-            fade = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
-            fade.fill((6, 10, 27, round(255 * fade_progress)))
-            self.screen.blit(fade, (0, 0))
-
-
     def draw_intro_clinic(self, surface, beam_alpha=255):
         """Draw the Cosmic Clinic as a classic flying saucer on a scalable layer."""
 
@@ -347,20 +270,6 @@ class ReceptionMixin:
         )
 
 
-    def draw_intro_title(self, progress):
-        """Pop the glowing game title into place above the arrived clinic ship."""
-
-        if progress < 0.72:
-            title_scale = 0.68 + 0.47 * (progress / 0.72)
-        else:
-            title_scale = 1.15 - 0.15 * ((progress - 0.72) / 0.28)
-        self.draw_game_logo(
-            (WINDOW_SIZE[0] // 2, 64),
-            scale=title_scale,
-            alpha=round(255 * progress),
-        )
-
-
     def draw_title_screen(self):
         """Draw the reusable reception room and its next-patient controls."""
 
@@ -371,7 +280,8 @@ class ReceptionMixin:
         self.draw_waiting_room_chairs()
         self.draw_waiting_room_aliens()
         self.draw_reception_desk()
-        self.draw_reception_button()
+        if not getattr(self, "intro_dialogue_active", False):
+            self.draw_reception_button()
 
 
     def draw_reception_room(self):
@@ -678,9 +588,14 @@ class ReceptionMixin:
         )
         pygame.draw.line(self.screen, alien_outline, (zorpa_x - 7, zorpa_y + 31), (zorpa_x, zorpa_y + 35), width=2)
         pygame.draw.line(self.screen, alien_outline, (zorpa_x, zorpa_y + 35), (zorpa_x + 7, zorpa_y + 31), width=2)
+        if getattr(self, "intro_wake_active", False):
+            wave_offset = round(math.sin(pygame.time.get_ticks() / 105) * 5)
+            right_hand = (zorpa_x + 37 + wave_offset, zorpa_y + 43)
+        else:
+            right_hand = (zorpa_x + 31, zorpa_y + 78)
         for arm_start, arm_end in (
                 ((zorpa_x - 17, zorpa_y + 57), (zorpa_x - 31, zorpa_y + 78)),
-                ((zorpa_x + 17, zorpa_y + 57), (zorpa_x + 31, zorpa_y + 78)),
+                ((zorpa_x + 17, zorpa_y + 57), right_hand),
         ):
             pygame.draw.line(self.screen, alien_outline, arm_start, arm_end, width=9)
             pygame.draw.line(self.screen, alien_color, arm_start, arm_end, width=6)

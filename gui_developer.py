@@ -31,6 +31,7 @@ class DeveloperMixin:
 
         self.developer_navigator_open = not self.developer_navigator_open
         if self.developer_navigator_open:
+            self.finish_guided_tutorial()
             self.tutorial_open = False
             self.tutorial_opened_at = None
             self.exit_confirmation_open = False
@@ -85,6 +86,11 @@ class DeveloperMixin:
         """Prepare any required preview data and display one selected screen."""
 
         _number, _label, target_state = DEVELOPER_SCREENS[index]
+        # A developer jump intentionally leaves the opening story. Without
+        # clearing it here, its dialogue overlay keeps intercepting input on
+        # whichever preview screen was selected.
+        self.intro_dialogue_active = False
+        self.intro_dialogue_started_at = None
         self.developer_navigator_open = False
         self.exit_confirmation_open = False
         self.tutorial_open = False
