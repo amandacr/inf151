@@ -481,7 +481,13 @@ class IntroMixin:
         if rotation:
             ship = pygame.transform.rotate(ship, rotation)
         pulse = 0.82 + 0.18 * math.sin(elapsed / 95)
-        ship.set_alpha(round(255 * pulse))
+        # Multiply the existing per-pixel alpha instead of setting alpha on the
+        # entire transformed surface. This preserves truly transparent corners
+        # around the rotated ship instead of displaying a rectangular layer.
+        ship.fill(
+            (255, 255, 255, round(255 * pulse)),
+            special_flags=pygame.BLEND_RGBA_MULT,
+        )
         self.screen.blit(ship, ship.get_rect(center=center))
 
     def draw_intro_tractor_beam(self, strength):
@@ -808,15 +814,6 @@ class IntroMixin:
                 (dot_start_x + dot_index * 17, dot_y),
                 dot_radius,
             )
-
-        hint = self.dialogue_hint_font.render(
-            "CONTINUE   [ CLICK / ENTER ]  ›",
-            True,
-            accent,
-        )
-        hint_alpha = 145 + round(80 * (0.5 + 0.5 * math.sin(elapsed / 260)))
-        hint.set_alpha(hint_alpha)
-        self.screen.blit(hint, hint.get_rect(bottomright=(panel.right - 25, panel.bottom - 15)))
 
     def draw_intro_reception_view(self, sign_alpha):
         """Draw reception without controls so it can power on during the blink."""

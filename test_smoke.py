@@ -42,6 +42,7 @@ from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
 from gui_results import ResultsMixin
 from gui_shop import SHOP_UPGRADES, ShopMixin
+from gui_theme import WINDOW_SIZE
 from gui_tutorial import TutorialMixin
 
 
@@ -215,6 +216,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
     def test_abduction_intro_renders_each_story_stage_and_can_be_skipped(self):
         """Earth, beam, blinking reception, and the skip path should stay playable."""
 
+        self.assertLess(self.game.intro_ufo_surface.get_width(), WINDOW_SIZE[0])
+        self.assertLess(self.game.intro_ufo_surface.get_height(), WINDOW_SIZE[1])
+        self.assertEqual(self.game.intro_ufo_surface.get_at((0, 0)).a, 0)
         self.game.state = GameState.INTRO
         self.game.finish_guided_tutorial()
         self.game.tutorial_open = False

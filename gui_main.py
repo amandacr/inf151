@@ -224,10 +224,16 @@ class CosmicClinicGUI(
         self.tutorial_label_font = pygame.font.SysFont("Arial", 13, bold=True)
         self.dialogue_speaker_font = pygame.font.SysFont("Arial", 16, bold=True)
         self.dialogue_body_font = pygame.font.SysFont("Arial", 23)
-        self.dialogue_hint_font = pygame.font.SysFont("Arial", 13, bold=True)
         self.game_logo = self.create_game_logo_surface()
-        self.intro_ufo_surface = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
-        self.draw_intro_clinic(self.intro_ufo_surface, beam_alpha=0)
+        intro_ufo_layer = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        self.draw_intro_clinic(intro_ufo_layer, beam_alpha=0)
+        # Keep only the visible saucer pixels. Transforming the old full-screen
+        # layer created a large rectangular artifact around the departing ship
+        # on some displays.
+        intro_ufo_bounds = intro_ufo_layer.get_bounding_rect(min_alpha=1)
+        self.intro_ufo_surface = intro_ufo_layer.subsurface(
+            intro_ufo_bounds
+        ).copy()
         self.intro_wake_active = False
         self.setup_developer_navigator()
 
