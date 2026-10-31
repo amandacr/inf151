@@ -238,10 +238,15 @@ class ResultsMixin:
             "ALLERGY": (219, 118, 239),
         }
         scan_color = test_colors.get(test_name, COLORS["accent"])
-        icon = pygame.Rect(visual.centerx - 58, visual.y + 45, 116, 116)
-        pygame.draw.rect(self.screen, (201, 218, 208), icon, border_radius=12)
-        pygame.draw.rect(self.screen, scan_color, icon, width=3, border_radius=12)
-        self.draw_test_icon(test_name, icon, scan_color)
+        display = pygame.Rect(
+            visual.x + 20,
+            visual.y + 24,
+            visual.width - 40,
+            visual.height - 86,
+        )
+        pygame.draw.rect(self.screen, (8, 27, 36), display, border_radius=10)
+        pygame.draw.rect(self.screen, scan_color, display, width=2, border_radius=10)
+        self.draw_test_specific_readout(display, test_name, scan_color, progress)
 
         scan_range = visual.height - 42
         scan_phase = (pygame.time.get_ticks() % 3200) / 3200
@@ -270,6 +275,197 @@ class ResultsMixin:
             COLORS["muted"],
         )
         self.screen.blit(percentage, percentage.get_rect(center=(visual.centerx, visual.bottom - 15)))
+
+
+    def draw_test_specific_readout(self, display, test_name, scan_color, progress):
+        """Draw the selected machine's own diagnostic visualization."""
+
+        if test_name == "TEMPERATURE":
+            self.draw_temperature_readout(display, scan_color, progress)
+        elif test_name == "ULTRASOUND":
+            self.draw_ultrasound_readout(display, scan_color, progress)
+        elif test_name == "X-RAY":
+            self.draw_xray_readout(display, scan_color, progress)
+        elif test_name == "ALLERGY":
+            self.draw_allergy_readout(display, scan_color, progress)
+        else:
+            icon = display.inflate(-54, -20)
+            self.draw_test_icon(test_name, icon, scan_color)
+
+
+    def draw_temperature_readout(self, display, scan_color, progress):
+        """Draw a core-temperature gauge with the observed digital reading."""
+
+        stem = pygame.Rect(display.x + 37, display.y + 25, 22, 77)
+        bulb_center = (stem.centerx, stem.bottom + 8)
+        pygame.draw.rect(self.screen, (14, 45, 48), stem, border_radius=11)
+        pygame.draw.rect(self.screen, scan_color, stem, width=2, border_radius=11)
+        pygame.draw.circle(self.screen, (14, 45, 48), bulb_center, 17)
+        pygame.draw.circle(self.screen, scan_color, bulb_center, 17, width=2)
+
+        fill_height = round(57 * max(0.08, progress))
+        fill = pygame.Rect(
+            stem.centerx - 4,
+            stem.bottom - 10 - fill_height,
+            8,
+            fill_height + 18,
+        )
+        pygame.draw.rect(self.screen, scan_color, fill, border_radius=4)
+        pygame.draw.circle(self.screen, scan_color, bulb_center, 11)
+        pygame.draw.circle(
+            self.screen,
+            (224, 255, 238),
+            (bulb_center[0] - 4, bulb_center[1] - 5),
+            3,
+        )
+        for tick_index in range(5):
+            tick_y = stem.y + 8 + tick_index * 15
+            pygame.draw.line(
+                self.screen,
+                (104, 151, 149),
+                (stem.right + 7, tick_y),
+                (stem.right + 17 + (4 if tick_index % 2 == 0 else 0), tick_y),
+                width=1,
+            )
+
+        reading = "CORE READING"
+        if self.last_test_result and ":" in self.last_test_result:
+            reading = self.last_test_result.rsplit(":", 1)[-1].strip()
+        title = self.compact_ui_font.render("THERMAL CORE", True, COLORS["muted"])
+        value = self.heading_font.render(reading, True, scan_color)
+        status = self.card_font.render("LIVE PATIENT SAMPLE", True, COLORS["text"])
+        self.screen.blit(title, (display.x + 91, display.y + 33))
+        self.screen.blit(value, value.get_rect(center=(display.x + 142, display.y + 76)))
+        self.screen.blit(status, status.get_rect(center=(display.x + 142, display.y + 111)))
+
+
+    def draw_ultrasound_readout(self, display, scan_color, progress):
+        """Draw a moving echo waveform and stylized sonic pulse source."""
+
+        source_center = (display.x + 31, display.centery)
+        pygame.draw.circle(self.screen, (18, 43, 54), source_center, 13)
+        pygame.draw.circle(self.screen, scan_color, source_center, 13, width=2)
+        pygame.draw.circle(self.screen, (210, 237, 246), source_center, 5)
+        for radius in (20, 29, 38):
+            pygame.draw.arc(
+                self.screen,
+                scan_color,
+                pygame.Rect(
+                    source_center[0] - radius,
+                    source_center[1] - radius,
+                    radius * 2,
+                    radius * 2,
+                ),
+                -0.72,
+                0.72,
+                width=2,
+            )
+
+        phase = pygame.time.get_ticks() / 210
+        wave_left = display.x + 65
+        wave_right = display.right - 13
+        visible_right = wave_left + round((wave_right - wave_left) * max(0.08, progress))
+        wave_points = []
+        for wave_x in range(wave_left, visible_right + 1, 3):
+            distance = wave_x - wave_left
+            amplitude = 24 * max(0.2, 1 - distance / 165)
+            wave_y = display.centery + round(math.sin(distance / 8 - phase) * amplitude)
+            wave_points.append((wave_x, wave_y))
+        if len(wave_points) > 1:
+            pygame.draw.lines(self.screen, (50, 89, 112), False, wave_points, width=6)
+            pygame.draw.lines(self.screen, scan_color, False, wave_points, width=2)
+        pygame.draw.line(
+            self.screen,
+            (73, 107, 123),
+            (wave_left, display.bottom - 25),
+            (wave_right, display.bottom - 25),
+            width=1,
+        )
+        label = self.compact_ui_font.render("ECHO RETURN", True, COLORS["text"])
+        self.screen.blit(label, label.get_rect(midright=(display.right - 12, display.y + 17)))
+
+
+    def draw_xray_readout(self, display, scan_color, progress):
+        """Draw a compact alien skeletal scan on a luminous X-ray plate."""
+
+        plate = display.inflate(-30, -16)
+        pygame.draw.rect(self.screen, (7, 34, 49), plate, border_radius=7)
+        pygame.draw.rect(self.screen, (75, 130, 150), plate, width=1, border_radius=7)
+        skeleton = pygame.Surface(plate.size, pygame.SRCALPHA)
+        alpha = max(70, round(235 * progress))
+        bone = (*scan_color, alpha)
+        center_x = skeleton.get_width() // 2
+        pygame.draw.circle(skeleton, bone, (center_x, 22), 13, width=3)
+        pygame.draw.line(skeleton, bone, (center_x, 35), (center_x, 91), width=3)
+        for rib_y, rib_width in ((44, 25), (53, 31), (62, 28), (71, 22)):
+            pygame.draw.arc(
+                skeleton,
+                bone,
+                pygame.Rect(center_x - rib_width, rib_y - 6, rib_width * 2, 16),
+                0,
+                math.pi,
+                width=2,
+            )
+        pygame.draw.arc(
+            skeleton,
+            bone,
+            pygame.Rect(center_x - 21, 79, 42, 24),
+            0,
+            math.pi,
+            width=3,
+        )
+        for direction in (-1, 1):
+            shoulder = (center_x + direction * 13, 42)
+            elbow = (center_x + direction * 35, 66)
+            hand = (center_x + direction * 42, 91)
+            pygame.draw.line(skeleton, bone, shoulder, elbow, width=3)
+            pygame.draw.line(skeleton, bone, elbow, hand, width=3)
+            hip = (center_x + direction * 11, 91)
+            knee = (center_x + direction * 20, 111)
+            foot = (center_x + direction * 31, 128)
+            pygame.draw.line(skeleton, bone, hip, knee, width=3)
+            pygame.draw.line(skeleton, bone, knee, foot, width=3)
+        self.screen.blit(skeleton, plate.topleft)
+        label = self.compact_ui_font.render("STRUCTURAL PLATE", True, COLORS["text"])
+        self.screen.blit(label, label.get_rect(center=(display.centerx, display.bottom - 10)))
+
+
+    def draw_allergy_readout(self, display, scan_color, progress):
+        """Draw a four-sample reaction tray with patient-specific activity."""
+
+        reaction_detected = "no reaction" not in (self.last_test_result or "").lower()
+        title = self.compact_ui_font.render("REACTION SAMPLE ARRAY", True, COLORS["text"])
+        self.screen.blit(title, title.get_rect(center=(display.centerx, display.y + 17)))
+        tray = pygame.Rect(display.x + 18, display.y + 41, display.width - 36, 84)
+        pygame.draw.rect(self.screen, (20, 37, 48), tray, border_radius=9)
+        pygame.draw.rect(self.screen, (93, 83, 119), tray, width=2, border_radius=9)
+        for index in range(4):
+            well_center = (tray.x + 25 + index * 41, tray.centery)
+            active = reaction_detected and index == 2 and progress > 0.55
+            well_color = (245, 137, 165) if active else scan_color
+            pygame.draw.circle(self.screen, (6, 18, 27), well_center, 14)
+            pygame.draw.circle(self.screen, well_color, well_center, 14, width=2)
+            pygame.draw.circle(
+                self.screen,
+                well_color,
+                (well_center[0], well_center[1] + 2),
+                7 if active else 4,
+            )
+            pygame.draw.circle(
+                self.screen,
+                (251, 232, 248),
+                (well_center[0] - 2, well_center[1]),
+                2,
+            )
+            sample_label = self.legible_micro_font.render(
+                chr(ord("A") + index),
+                True,
+                COLORS["muted"],
+            )
+            self.screen.blit(
+                sample_label,
+                sample_label.get_rect(center=(well_center[0], tray.bottom + 12)),
+            )
 
 
     def draw_med_waste_notice(self, footer):

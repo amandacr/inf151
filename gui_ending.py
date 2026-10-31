@@ -47,25 +47,71 @@ class EndingMixin:
         """Draw the star field shared by the ending animation and final report."""
 
         self.screen.fill((6, 10, 27))
-        pygame.draw.circle(self.screen, (47, 38, 82), (1030, 595), 142)
-        pygame.draw.circle(self.screen, (89, 67, 137), (997, 552), 88)
+
+        # Low-contrast color clouds keep the empty space dimensional without
+        # competing with the report panel or departing clinic.
+        haze = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        pygame.draw.ellipse(haze, (51, 72, 130, 18), pygame.Rect(35, 80, 390, 185))
+        pygame.draw.ellipse(haze, (112, 64, 132, 14), pygame.Rect(720, 210, 335, 180))
+        self.screen.blit(haze, (0, 0))
+
+        # The corner planet is deliberately small and muted so it frames the
+        # summary rather than becoming the focal point.
+        planet_layer = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        planet_center = (1038, 610)
+        pygame.draw.circle(planet_layer, (92, 68, 139, 22), planet_center, 109)
+        ring_rect = pygame.Rect(930, 576, 218, 57)
         pygame.draw.arc(
-            self.screen,
-            (155, 116, 190),
-            pygame.Rect(865, 515, 320, 100),
+            planet_layer,
+            (151, 115, 184, 105),
+            ring_rect,
             math.pi,
             math.pi * 2,
             width=4,
         )
+        pygame.draw.circle(planet_layer, (39, 34, 69, 210), planet_center, 94)
+        pygame.draw.circle(planet_layer, (70, 56, 108, 215), (1013, 584), 57)
+        pygame.draw.ellipse(
+            planet_layer,
+            (55, 44, 91, 150),
+            pygame.Rect(955, 609, 168, 31),
+        )
+        for crater_x, crater_y, radius in ((1069, 575, 9), (1002, 622, 6), (1050, 640, 5)):
+            pygame.draw.circle(
+                planet_layer,
+                (31, 27, 58, 115),
+                (crater_x, crater_y),
+                radius,
+            )
+        pygame.draw.arc(
+            planet_layer,
+            (151, 115, 184, 125),
+            ring_rect,
+            0,
+            math.pi,
+            width=4,
+        )
+        self.screen.blit(planet_layer, (0, 0))
+
         for index, (x, y, size) in enumerate(self.intro_stars):
             twinkle = (elapsed // 220 + index) % 6 == 0
-            color = (221, 235, 255) if twinkle else (112, 140, 178)
+            resting_colors = (
+                (112, 140, 178),
+                (133, 153, 194),
+                (166, 143, 190),
+                (116, 167, 178),
+            )
+            color = (221, 235, 255) if twinkle else resting_colors[index % 4]
+            star_radius = size + int(twinkle and size == 1)
             pygame.draw.circle(
                 self.screen,
                 color,
                 (x, y),
-                size + int(twinkle and size == 1),
+                star_radius,
             )
+            if twinkle and size == 2:
+                pygame.draw.line(self.screen, color, (x - 5, y), (x + 5, y), width=1)
+                pygame.draw.line(self.screen, color, (x, y - 5), (x, y + 5), width=1)
 
     def draw_ending_screen(self):
         """Draw the clinic shrinking into space at the end of the shift."""

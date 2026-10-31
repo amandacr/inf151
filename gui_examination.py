@@ -93,13 +93,41 @@ class ExaminationMixin:
             (756, 220, 1), (802, 345, 2), (846, 181, 1), (884, 314, 1),
             (928, 205, 2), (978, 339, 1), (1028, 176, 1), (1050, 267, 1),
         )
+        elapsed = pygame.time.get_ticks()
+        star_colors = (
+            (190, 211, 239),
+            (193, 173, 233),
+            (175, 226, 220),
+            (233, 211, 177),
+        )
         for star_index, (star_x, star_y, star_size) in enumerate(star_data):
+            twinkle = (elapsed // 280 + star_index) % 10 == 0
+            star_color = (
+                (239, 247, 255)
+                if twinkle
+                else star_colors[star_index % len(star_colors)]
+            )
             pygame.draw.circle(
                 self.screen,
-                (190, 211, 239) if star_index % 4 else (193, 173, 233),
+                star_color,
                 (star_x, star_y),
-                star_size,
+                star_size + int(twinkle and star_size == 1),
             )
+            if twinkle and star_size == 2:
+                pygame.draw.line(
+                    self.screen,
+                    star_color,
+                    (star_x - 4, star_y),
+                    (star_x + 4, star_y),
+                    width=1,
+                )
+                pygame.draw.line(
+                    self.screen,
+                    star_color,
+                    (star_x, star_y - 4),
+                    (star_x, star_y + 4),
+                    width=1,
+                )
 
         distant_planets = (
             ((183, 175), 10, (225, 105, 126), (255, 169, 146), None),
@@ -107,7 +135,37 @@ class ExaminationMixin:
             ((500, 181), 12, (218, 157, 69), (255, 212, 105), (240, 180, 99)),
             ((1042, 338), 8, (181, 99, 198), (237, 155, 224), None),
         )
+        planet_glow = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        for center, radius, planet_color, _highlight_color, _ring_color in distant_planets:
+            pygame.draw.circle(
+                planet_glow,
+                (*planet_color, 28),
+                center,
+                radius + 6,
+            )
+        self.screen.blit(planet_glow, (0, 0))
         for center, radius, planet_color, highlight_color, ring_color in distant_planets:
+            ring = pygame.Rect(
+                center[0] - radius - 7,
+                center[1] - radius // 2,
+                radius * 2 + 14,
+                radius,
+            )
+            if ring_color is not None:
+                pygame.draw.arc(
+                    self.screen,
+                    ring_color,
+                    ring,
+                    math.pi,
+                    math.pi * 2,
+                    width=2,
+                )
+            pygame.draw.circle(
+                self.screen,
+                tuple(max(0, channel - 35) for channel in planet_color),
+                (center[0] + 1, center[1] + 2),
+                radius + 1,
+            )
             pygame.draw.circle(self.screen, planet_color, center, radius)
             pygame.draw.circle(
                 self.screen,
@@ -115,19 +173,27 @@ class ExaminationMixin:
                 (center[0] - radius // 3, center[1] - radius // 3),
                 max(2, radius // 3),
             )
-            if ring_color is not None:
-                ring = pygame.Rect(
-                    center[0] - radius - 7,
-                    center[1] - radius // 2,
-                    radius * 2 + 14,
-                    radius,
+            if radius >= 10:
+                pygame.draw.arc(
+                    self.screen,
+                    tuple(max(0, channel - 25) for channel in planet_color),
+                    pygame.Rect(
+                        center[0] - radius,
+                        center[1],
+                        radius * 2,
+                        max(5, radius // 2),
+                    ),
+                    0,
+                    math.pi,
+                    width=1,
                 )
+            if ring_color is not None:
                 pygame.draw.arc(
                     self.screen,
                     ring_color,
                     ring,
                     0,
-                    math.pi * 2,
+                    math.pi,
                     width=2,
                 )
         for frame_x in (window.x + 175, window.x + 462, window.x + 765):

@@ -736,6 +736,25 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.game.run_selected_test()
             play_sfx.assert_called_once_with("scan")
 
+    def test_each_test_result_visualization_draws(self):
+        """Every machine-specific diagnostic readout should render safely."""
+
+        previews = {
+            "TEMPERATURE": "Current temperature: 1700°F",
+            "ULTRASOUND": "Ultrasound imaging found no unusual internal changes.",
+            "X-RAY": "X-ray imaging found no fractures or visible bone damage.",
+            "ALLERGY": "Severe allergic response detected from: water.",
+        }
+        self.game.state = GameState.TEST_RESULT
+        self.game.test_result_started_at = None
+        self.game.last_test_cost = 10
+        for test_name, result in previews.items():
+            with self.subTest(test_name=test_name):
+                self.game.last_test_name = test_name
+                self.game.last_test_result = result
+                self.game.draw()
+                self.assertEqual(self.game.continue_button.size, (208, 44))
+
     def test_correct_diagnosis_returns_to_reception_without_early_payment(self):
         """A resolved early case should queue its pay and return to reception."""
 

@@ -372,8 +372,27 @@ class ReceptionMixin:
 
         window = pygame.Rect(37, 164, 792, 239)
         pygame.draw.rect(self.screen, (17, 31, 62), window, border_radius=13)
+
+        window_haze = pygame.Surface(window.size, pygame.SRCALPHA)
+        pygame.draw.ellipse(
+            window_haze,
+            (84, 119, 174, 24),
+            pygame.Rect(185, 52, 360, 128),
+        )
+        pygame.draw.ellipse(
+            window_haze,
+            (128, 73, 154, 20),
+            pygame.Rect(430, 10, 285, 145),
+        )
+        pygame.draw.ellipse(
+            window_haze,
+            (52, 159, 157, 13),
+            pygame.Rect(20, 120, 310, 92),
+        )
+        self.screen.blit(window_haze, window.topleft)
         pygame.draw.rect(self.screen, (122, 142, 163), window, width=4, border_radius=13)
-        for star_x, star_y, radius in (
+        elapsed = pygame.time.get_ticks()
+        star_data = (
             (50, 183, 1), (65, 218, 1), (83, 298, 2), (105, 238, 2),
             (126, 335, 1), (151, 181, 1), (174, 230, 1), (196, 275, 1),
             (218, 362, 1), (236, 205, 2), (262, 321, 1), (285, 257, 1),
@@ -384,17 +403,111 @@ class ReceptionMixin:
             (649, 183, 1), (670, 302, 1), (688, 226, 2), (707, 365, 1),
             (730, 188, 1), (746, 316, 1), (768, 271, 1), (787, 344, 2),
             (801, 193, 1), (816, 245, 1),
-        ):
-            pygame.draw.circle(self.screen, (192, 215, 239), (star_x, star_y), radius)
-        pygame.draw.circle(self.screen, (91, 72, 141), (730, 232), 61)
-        pygame.draw.circle(self.screen, (119, 94, 164), (710, 212), 27)
+        )
+        star_colors = (
+            (192, 215, 239),
+            (170, 205, 231),
+            (224, 199, 236),
+            (186, 231, 218),
+        )
+        for index, (star_x, star_y, radius) in enumerate(star_data):
+            twinkle = (elapsed // 260 + index) % 9 == 0
+            color = (239, 247, 255) if twinkle else star_colors[index % 4]
+            pygame.draw.circle(
+                self.screen,
+                color,
+                (star_x, star_y),
+                radius + int(twinkle and radius == 1),
+            )
+            if twinkle and radius == 2:
+                pygame.draw.line(
+                    self.screen,
+                    color,
+                    (star_x - 4, star_y),
+                    (star_x + 4, star_y),
+                    width=1,
+                )
+                pygame.draw.line(
+                    self.screen,
+                    color,
+                    (star_x, star_y - 4),
+                    (star_x, star_y + 4),
+                    width=1,
+                )
+
+        # Three different worlds make each window bay feel like a new view.
+        pygame.draw.circle(self.screen, (55, 135, 151), (281, 243), 12)
+        pygame.draw.circle(self.screen, (114, 211, 202), (277, 239), 4)
+        small_ring = pygame.Rect(508, 198, 28, 10)
         pygame.draw.arc(
             self.screen,
-            (175, 132, 208),
-            pygame.Rect(662, 211, 136, 61),
+            (190, 128, 76),
+            small_ring,
             math.pi,
             math.pi * 2,
-            width=4,
+            width=1,
+        )
+        pygame.draw.circle(self.screen, (183, 118, 67), (522, 202), 9)
+        pygame.draw.circle(self.screen, (248, 190, 99), (519, 199), 3)
+        pygame.draw.arc(
+            self.screen,
+            (237, 174, 105),
+            small_ring,
+            0,
+            math.pi,
+            width=1,
+        )
+
+        ring_rect = pygame.Rect(670, 212, 124, 49)
+        pygame.draw.arc(
+            self.screen,
+            (135, 103, 173),
+            ring_rect,
+            math.pi,
+            math.pi * 2,
+            width=3,
+        )
+        pygame.draw.circle(self.screen, (76, 61, 124), (730, 232), 53)
+        pygame.draw.circle(self.screen, (112, 88, 155), (712, 214), 25)
+        pygame.draw.ellipse(
+            self.screen,
+            (68, 53, 112),
+            pygame.Rect(684, 237, 92, 17),
+        )
+        for crater_x, crater_y, crater_radius in ((747, 216, 6), (719, 250, 4), (757, 242, 3)):
+            pygame.draw.circle(
+                self.screen,
+                (57, 45, 98),
+                (crater_x, crater_y),
+                crater_radius,
+            )
+        pygame.draw.arc(
+            self.screen,
+            (171, 130, 201),
+            ring_rect,
+            0,
+            math.pi,
+            width=3,
+        )
+
+        # A tiny commuter shuttle drifts through the middle window.
+        shuttle_x = 340 + round((elapsed / 45) % 190)
+        shuttle_y = 276 - round((shuttle_x - 340) * 0.08)
+        pygame.draw.line(
+            self.screen,
+            (80, 157, 190),
+            (shuttle_x - 14, shuttle_y + 2),
+            (shuttle_x - 4, shuttle_y),
+            width=1,
+        )
+        pygame.draw.polygon(
+            self.screen,
+            (190, 226, 232),
+            (
+                (shuttle_x - 4, shuttle_y - 3),
+                (shuttle_x + 7, shuttle_y),
+                (shuttle_x - 4, shuttle_y + 3),
+            ),
         )
         for divider_x in (235, 433, 631):
             pygame.draw.line(
@@ -476,10 +589,42 @@ class ReceptionMixin:
         for chair_center_x in (356, 498, 640, 782):
             back = pygame.Rect(chair_center_x - 48, 331, 96, 91)
             seat = pygame.Rect(chair_center_x - 52, 404, 104, 30)
+            pygame.draw.ellipse(
+                self.screen,
+                (39, 38, 56),
+                pygame.Rect(chair_center_x - 58, 457, 116, 18),
+            )
             pygame.draw.rect(self.screen, (50, 48, 73), back, border_radius=18)
             pygame.draw.rect(self.screen, (119, 91, 132), back, width=3, border_radius=18)
+            inner_back = back.inflate(-14, -14)
+            pygame.draw.rect(self.screen, (59, 56, 84), inner_back, border_radius=14)
+            pygame.draw.arc(
+                self.screen,
+                (139, 105, 150),
+                inner_back.inflate(-9, -7),
+                math.pi,
+                math.pi * 2,
+                width=2,
+            )
             pygame.draw.rect(self.screen, (69, 63, 91), seat, border_radius=10)
             pygame.draw.rect(self.screen, (145, 113, 149), seat, width=2, border_radius=10)
+            pygame.draw.line(
+                self.screen,
+                (94, 77, 111),
+                (seat.x + 12, seat.centery),
+                (seat.right - 12, seat.centery),
+                width=1,
+            )
+            for arm_x in (seat.x - 5, seat.right - 5):
+                arm = pygame.Rect(arm_x, seat.y - 11, 10, 24)
+                pygame.draw.rect(self.screen, (56, 57, 78), arm, border_radius=5)
+                pygame.draw.rect(
+                    self.screen,
+                    (122, 116, 139),
+                    arm,
+                    width=1,
+                    border_radius=5,
+                )
             pygame.draw.line(
                 self.screen,
                 (91, 96, 116),
@@ -762,6 +907,27 @@ class ReceptionMixin:
             queue_text = f"PATIENTS WAITING: {self.patients_waiting()}"
         queue_label = self.card_font.render(queue_text, True, COLORS["accent"])
         self.screen.blit(queue_label, queue_label.get_rect(center=queue.center))
+
+        # A tiny service bell adds a friendly reception-desk detail.
+        pygame.draw.ellipse(self.screen, (41, 37, 54), pygame.Rect(205, 443, 39, 10))
+        bell_points = (
+            (211, 447),
+            (214, 438),
+            (219, 433),
+            (229, 433),
+            (235, 438),
+            (238, 447),
+        )
+        pygame.draw.polygon(self.screen, (142, 167, 176), bell_points)
+        pygame.draw.lines(self.screen, (211, 231, 228), False, bell_points[1:5], width=2)
+        pygame.draw.line(self.screen, (74, 94, 106), (211, 447), (238, 447), width=2)
+        pygame.draw.circle(self.screen, COLORS["accent"], (224, 431), 3)
+        pygame.draw.rect(
+            self.screen,
+            (91, 110, 121),
+            pygame.Rect(208, 447, 33, 5),
+            border_radius=2,
+        )
 
         pygame.draw.ellipse(self.screen, (38, 35, 55), pygame.Rect(244, 447, 52, 10))
         stem_color = (73, 145, 113)
