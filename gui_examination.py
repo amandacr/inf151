@@ -321,7 +321,7 @@ class ExaminationMixin:
             "PATIENT: " + self.patient.name, True, COLORS["text"]
         )
         money = self.body_font.render(
-            "MONEY: $" + str(self.player.balance), True, COLORS["accent"]
+            "MONEY: $" + str(self.get_displayed_balance()), True, COLORS["accent"]
         )
 
         self.screen.blit(
@@ -356,6 +356,7 @@ class ExaminationMixin:
             money,
             money.get_rect(midright=(display.right - 14, display.centery)),
         )
+        self.draw_money_deduction_popup((display.right - 105, display.bottom + 19))
 
     def draw_draw_deck(self):
         """Draw the face-down test-card stack resting in a counter tray."""

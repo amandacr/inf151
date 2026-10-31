@@ -28,6 +28,86 @@ SHOP_UPGRADES = (
 
 
 class ShopMixin:
+    def get_live_balance(self):
+        """Return the balance players see after costs accrued this shift.
+
+        Test and diagnosis costs remain part of the shift ledger until payday,
+        so this preview must not mutate ``Player.balance`` or they would be
+        charged twice when ``settle_daily_pay`` applies the final net total.
+        """
+
+        if self.daily_payout_applied:
+            return self.player.balance
+        penalties = self.daily_wrong_diagnoses * WRONG_DIAGNOSIS_PENALTY
+        return self.player.balance - self.daily_test_expenses - penalties
+
+    def get_displayed_balance(self):
+        """Interpolate the visible balance during a live deduction."""
+
+        animation = self.money_deduction_animation
+        if animation is None:
+            return self.get_live_balance()
+        elapsed = pygame.time.get_ticks() - animation["started_at"]
+        if elapsed >= self.money_count_duration:
+            return self.get_live_balance()
+        progress = max(0.0, min(1.0, elapsed / self.money_count_duration))
+        eased = progress * progress * (3 - 2 * progress)
+        value = animation["from"] + (animation["to"] - animation["from"]) * eased
+        return round(value)
+
+    def start_live_money_deduction(self, amount, reason):
+        """Animate one immediate cost without altering end-of-day accounting."""
+
+        if amount <= 0:
+            return
+        current_balance = self.get_displayed_balance()
+        target_balance = self.get_live_balance() - amount
+        self.money_deduction_animation = {
+            "from": current_balance,
+            "to": target_balance,
+            "amount": amount,
+            "reason": reason,
+            "started_at": pygame.time.get_ticks(),
+        }
+
+    def draw_money_deduction_popup(self, center):
+        """Float a short red cost label beside the current balance display."""
+
+        animation = self.money_deduction_animation
+        if animation is None:
+            return
+        elapsed = pygame.time.get_ticks() - animation["started_at"]
+        if elapsed >= self.money_popup_duration:
+            return
+        progress = max(0.0, min(1.0, elapsed / self.money_popup_duration))
+        rise = round(15 * progress)
+        alpha = 255 if progress < 0.62 else round(255 * (1 - progress) / 0.38)
+        label = self.card_font.render(
+            f"-${animation['amount']}  {animation['reason']}",
+            True,
+            (255, 139, 126),
+        )
+        panel = pygame.Surface((label.get_width() + 18, label.get_height() + 10), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (49, 19, 27, 232), panel.get_rect(), border_radius=7)
+        pygame.draw.rect(panel, (232, 98, 91, 245), panel.get_rect(), width=1, border_radius=7)
+        panel.blit(label, (9, 5))
+        panel.set_alpha(alpha)
+        self.screen.blit(panel, panel.get_rect(center=(center[0], center[1] - rise)))
+
+    def draw_modal_balance(self, header, status_badge):
+        """Keep live money feedback visible above full-screen result panels."""
+
+        balance = self.small_font.render(
+            f"MONEY  ${self.get_displayed_balance()}",
+            True,
+            COLORS["accent"],
+        )
+        anchor = (status_badge.x - 18, header.y + 23)
+        self.screen.blit(balance, balance.get_rect(midright=anchor))
+        self.draw_money_deduction_popup(
+            (anchor[0] - balance.get_width() // 2, header.y + 58)
+        )
+
     def draw_shop_screen(self):
         """Draw the illustrated intergalactic equipment shop."""
 
@@ -288,19 +368,20 @@ class ShopMixin:
         )
 
         balance_y = summary.bottom + 17
+        remaining_pay = base_pay - CLINIC_OPERATING_FEE + bonus
         if self.daily_payout_applied:
             resulting_balance = self.player.balance
-            current_balance = resulting_balance - total
+            current_balance = resulting_balance - remaining_pay
         else:
-            current_balance = self.player.balance
-            resulting_balance = current_balance + total
+            current_balance = self.get_live_balance()
+            resulting_balance = current_balance + remaining_pay
         current = self.card_font.render(
-            f"CURRENT BALANCE  ${current_balance}",
+            f"LIVE BALANCE  ${current_balance}",
             True,
             COLORS["muted"],
         )
         resulting = self.small_font.render(
-            f"AFTER PAY  ${resulting_balance}",
+            f"AFTER PAY & OVERHEAD  ${resulting_balance}",
             True,
             COLORS["accent"],
         )
@@ -399,6 +480,7 @@ class ShopMixin:
             return
         self.player.earn(self.get_daily_pay_breakdown()[3])
         self.daily_payout_applied = True
+        self.money_deduction_animation = None
 
     def get_shop_upgrade_rects(self):
         """Stable three-column, two-row layout matching the concept art."""

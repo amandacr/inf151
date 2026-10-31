@@ -78,6 +78,7 @@ class ResultsMixin:
             badge_color,
         )
         self.screen.blit(badge_text, badge_text.get_rect(center=badge.center))
+        self.draw_modal_balance(header, badge)
 
         visual = pygame.Rect(panel.x + 24, panel.y + 102, 252, 238)
         report = pygame.Rect(visual.right + 18, visual.y, panel.right - visual.right - 42, 238)
@@ -288,7 +289,7 @@ class ResultsMixin:
         self.screen.blit(warning, warning.get_rect(center=bin_rect.center))
         waste_title = self.card_font.render("CARD READY FOR MED-WASTE", True, COLORS["text"])
         waste_detail = self.card_font.render(
-            f"TEST COST ${self.last_test_cost} ADDED TO END-OF-DAY EXPENSES",
+            f"TEST COST ${self.last_test_cost} DEDUCTED  •  INCLUDED IN SHIFT RECAP",
             True,
             COLORS["muted"],
         )
@@ -346,6 +347,7 @@ class ResultsMixin:
             status_color,
         )
         self.screen.blit(badge_text, badge_text.get_rect(center=badge.center))
+        self.draw_modal_balance(header, badge)
 
         patient_panel = pygame.Rect(panel.x + 24, panel.y + 102, 252, 238)
         report = pygame.Rect(
@@ -642,7 +644,7 @@ class ResultsMixin:
         )
         reward = self.card_font.render(reward_text, True, status_color)
         payment_note = self.card_font.render(
-            "PAID AT END OF DAY" if correct else "DEDUCTED FROM SHIFT PAY",
+            "PAID AT END OF DAY" if correct else "DEDUCTED FROM LIVE BALANCE",
             True,
             COLORS["muted"],
         )

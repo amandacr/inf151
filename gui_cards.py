@@ -12,6 +12,7 @@ from gui_theme import (
     TEST_SUBTITLES,
     WINDOW_SIZE,
 )
+from Player import WRONG_DIAGNOSIS_PENALTY
 
 
 class CardMixin:
@@ -133,6 +134,7 @@ class CardMixin:
         card = self.player.test_hand[self.selected_card_index]
         self.last_test_name = card.value.name
         self.last_test_cost = self.player.get_test_cost(card.value)
+        self.start_live_money_deduction(self.last_test_cost, "TEST COST")
         self.daily_test_count += 1
         self.daily_test_expenses += self.last_test_cost
         result = self.patient.perform_test(self.last_test_name)
@@ -266,6 +268,10 @@ class CardMixin:
             self.daily_correct_diagnoses += 1
             self.play_sfx("correct")
         else:
+            self.start_live_money_deduction(
+                WRONG_DIAGNOSIS_PENALTY,
+                "WRONG DIAGNOSIS",
+            )
             self.daily_wrong_diagnoses += 1
             self.player.diagnosis_hand.pop(selected_index)
             self.pending_diagnosis_discard = {

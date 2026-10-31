@@ -357,13 +357,14 @@ class ReceptionMixin:
             middle_text = f"PATIENTS WAITING: {waiting}"
         middle = self.small_font.render(middle_text, True, waiting_color)
         right = self.body_font.render(
-            "MONEY: $" + str(self.player.balance),
+            "MONEY: $" + str(self.get_displayed_balance()),
             True,
             COLORS["accent"],
         )
         self.screen.blit(left, left.get_rect(midleft=(display.x + 29, display.centery)))
         self.screen.blit(middle, middle.get_rect(center=display.center))
         self.screen.blit(right, right.get_rect(midright=(display.right - 13, display.centery)))
+        self.draw_money_deduction_popup((display.right - 104, display.bottom + 19))
 
 
     def draw_waiting_room_windows(self):

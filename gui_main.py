@@ -112,6 +112,9 @@ class CosmicClinicGUI(
         self.daily_test_count = 0
         self.daily_test_expenses = 0
         self.daily_payout_applied = False
+        self.money_deduction_animation = None
+        self.money_count_duration = 650
+        self.money_popup_duration = 1350
         self.patient = self.waiting_room_queue[0]["create"]()
         self.player = Player("Dr GUI")
         self.notebook = Notebook()
@@ -548,6 +551,7 @@ class CosmicClinicGUI(
         self.daily_test_count = 0
         self.daily_test_expenses = 0
         self.daily_payout_applied = False
+        self.money_deduction_animation = None
         self.selected_shop_upgrade = None
         self.shop_message = "Select an upgrade to inspect it."
         self.deck.populate(

@@ -422,6 +422,15 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game.close_tutorial()
         self.game.reception_transition_started_at = None
+        self.game.start_live_money_deduction(10, "TEST COST")
+        money_started_at = self.game.money_deduction_animation["started_at"]
+        self.game.open_tutorial()
+        self.game.tutorial_opened_at -= 500
+        self.game.close_tutorial()
+        self.assertGreaterEqual(
+            self.game.money_deduction_animation["started_at"],
+            money_started_at + 500,
+        )
         self.game.state = GameState.ENDING
         self.game.ending_started_at = pygame.time.get_ticks()
         pygame.event.post(
@@ -516,7 +525,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIsNone(self.game.intro_dialogue_started_at)
 
     def test_test_cards_accumulate_end_of_day_operating_expenses(self):
-        """Running machines should charge by rarity without changing cash immediately."""
+        """Running machines should charge by rarity without settling cash early."""
 
         starting_balance = self.game.player.balance
         self.assertEqual(
@@ -544,6 +553,54 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.daily_test_count = 16
         self.game.daily_test_expenses = 220
         self.assertLess(self.game.get_daily_pay_breakdown()[3], 0)
+
+    def test_live_balance_animates_costs_without_double_charging_at_payday(self):
+        """Tests and mistakes should lower the HUD once and remain in the recap."""
+
+        starting_balance = self.game.player.balance
+        self.game.selected_card_index = 0
+        test_cost = self.game.player.get_test_cost(
+            self.game.player.test_hand[0].value
+        )
+        self.game.run_selected_test()
+
+        self.assertEqual(self.game.player.balance, starting_balance)
+        self.assertEqual(self.game.get_live_balance(), starting_balance - test_cost)
+        self.assertEqual(self.game.money_deduction_animation["amount"], test_cost)
+        self.assertEqual(self.game.money_deduction_animation["reason"], "TEST COST")
+        self.game.money_deduction_animation["started_at"] -= (
+            self.game.money_count_duration + 1
+        )
+        self.assertEqual(
+            self.game.get_displayed_balance(),
+            starting_balance - test_cost,
+        )
+
+        self.game.state = GameState.PATIENT
+        self.game.showing_diagnosis_hand = True
+        self.game.selected_card_index = 1
+        self.game.play_selected_diagnosis()
+        expected_live_balance = (
+            starting_balance - test_cost - WRONG_DIAGNOSIS_PENALTY
+        )
+        self.assertEqual(self.game.player.balance, starting_balance)
+        self.assertEqual(self.game.get_live_balance(), expected_live_balance)
+        self.assertEqual(
+            self.game.money_deduction_animation["amount"],
+            WRONG_DIAGNOSIS_PENALTY,
+        )
+        self.assertEqual(
+            self.game.money_deduction_animation["reason"],
+            "WRONG DIAGNOSIS",
+        )
+
+        expected_final_balance = (
+            starting_balance + self.game.get_daily_pay_breakdown()[3]
+        )
+        self.game.settle_daily_pay()
+        self.assertEqual(self.game.player.balance, expected_final_balance)
+        self.assertEqual(self.game.get_live_balance(), expected_final_balance)
+        self.assertIsNone(self.game.money_deduction_animation)
 
     def test_rebalanced_economy_allows_one_efficient_shift_upgrade(self):
         """An efficient first shift should fund one upgrade, not a shopping spree."""

@@ -292,7 +292,11 @@ class EndingMixin:
             if started_at is not None:
                 setattr(self, timer_name, started_at + paused_for)
 
-        for animation_name in ("note_transfer_animation", "discard_animation"):
+        for animation_name in (
+            "note_transfer_animation",
+            "discard_animation",
+            "money_deduction_animation",
+        ):
             animation = getattr(self, animation_name, None)
             if animation is not None and "started_at" in animation:
                 animation["started_at"] += paused_for

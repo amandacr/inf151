@@ -139,7 +139,7 @@ class TutorialMixin:
             "inspect_id": ("Inspect Zorpa's Intergalactic ID.", pygame.Rect(62, 178, 375, 92), False),
             "review_health_id": ("Normal temperature: 2,000°F. Remember this baseline.", pygame.Rect(62, 174, 410, 104), True),
             "temperature_select": ("Shaking may be temperature-related. Select TEMPERATURE.", pygame.Rect(650, 174, 400, 92), False),
-            "temperature_run": ("Run the selected test. Tests are billed at shift end.", pygame.Rect(650, 174, 400, 92), False),
+            "temperature_run": ("Run the selected test. Its cost is deducted immediately.", pygame.Rect(650, 174, 400, 92), False),
             "test_result": ("Read the observed result, then return to Zorpa.", pygame.Rect(120, 462, 400, 92), False),
             "note_transfer": ("The clinic is filing this result in Patient Notes...", pygame.Rect(650, 172, 400, 92), False),
             "open_notebook": ("The result is recorded. Open Patient Notes.", pygame.Rect(265, 401, 410, 92), False),
