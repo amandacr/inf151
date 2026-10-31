@@ -49,19 +49,28 @@ class IntroMixin:
             self.draw_reception_wake(elapsed - self.INTRO_WAKE_START)
 
         if elapsed < self.intro_duration - 250:
-            skip = self.small_font.render(
-                "Click anywhere or press Enter to skip",
-                True,
-                (184, 202, 216),
-            )
-            shadow = self.small_font.render(
-                "Click anywhere or press Enter to skip",
-                True,
-                (3, 7, 14),
-            )
-            skip_rect = skip.get_rect(center=(WINDOW_SIZE[0] // 2, 624))
-            self.screen.blit(shadow, skip_rect.move(1, 2))
-            self.screen.blit(skip, skip_rect)
+            self.draw_cinematic_skip_prompt()
+
+    def draw_cinematic_skip_prompt(self):
+        """Draw a readable cinematic hint on a translucent control pill."""
+
+        label = self.tutorial_subtitle_font.render(
+            "CLICK ANYWHERE OR PRESS ENTER TO SKIP",
+            True,
+            (226, 238, 248),
+        )
+        panel = label.get_rect(center=(WINDOW_SIZE[0] // 2, 621)).inflate(38, 18)
+        backing = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.rect(backing, (3, 8, 18, 194), backing.get_rect(), border_radius=13)
+        pygame.draw.rect(
+            backing,
+            (93, 157, 181, 210),
+            backing.get_rect(),
+            width=2,
+            border_radius=13,
+        )
+        self.screen.blit(backing, panel)
+        self.screen.blit(label, label.get_rect(center=panel.center))
 
     def draw_earth_abduction(self, elapsed):
         """Draw a quiet hill, the arriving clinic UFO, and its tractor beam."""
@@ -614,7 +623,7 @@ class IntroMixin:
         """Draw tapered speed trails behind the saucer as it leaves the hill."""
 
         trails = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
-        alpha = round(180 * math.sin(departure * math.pi))
+        alpha = round(235 * math.sin(departure * math.pi) ** 0.65)
         trail_origin = (455, 232)
         for index, offset in enumerate((-38, -19, 0, 19, 38)):
             start = (trail_origin[0] + offset, trail_origin[1] + abs(offset) // 3)
@@ -622,13 +631,29 @@ class IntroMixin:
                 center[0] - round((34 - abs(index - 2) * 4) * departure),
                 center[1] + round((18 + abs(index - 2) * 5) * departure),
             )
+            distance = abs(index - 2)
             pygame.draw.line(
                 trails,
-                (102, 217, 232, max(0, alpha - abs(index - 2) * 24)),
+                (43, 139, 189, max(0, alpha // 3 - distance * 12)),
                 start,
                 end,
-                width=max(1, 4 - abs(index - 2)),
+                width=max(4, 10 - distance * 2),
             )
+            pygame.draw.line(
+                trails,
+                (111, 231, 246, max(0, alpha - distance * 24)),
+                start,
+                end,
+                width=max(2, 5 - distance),
+            )
+            if index == 2:
+                pygame.draw.line(
+                    trails,
+                    (229, 253, 255, min(255, alpha + 20)),
+                    start,
+                    end,
+                    width=2,
+                )
         self.screen.blit(trails, (0, 0))
 
     def draw_reception_wake(self, wake_elapsed):

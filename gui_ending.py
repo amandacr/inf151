@@ -1,4 +1,4 @@
-"""Vertical-slice ending animation, final report, and exit confirmation."""
+"""End-of-shift animation, final report, and exit confirmation."""
 
 import math
 
@@ -112,12 +112,7 @@ class EndingMixin:
             message.set_alpha(round(255 * message_progress))
             self.screen.blit(message, message.get_rect(center=(550, 478)))
 
-        skip = self.small_font.render(
-            "Click anywhere or press Enter to skip",
-            True,
-            COLORS["muted"],
-        )
-        self.screen.blit(skip, skip.get_rect(center=(550, 620)))
+        self.draw_cinematic_skip_prompt()
 
     def draw_clinic_window_farewell(self, surface, elapsed):
         """Draw tiny colorful patients waving from the departing clinic dome."""
@@ -172,7 +167,7 @@ class EndingMixin:
                 pygame.draw.circle(surface, (56, 66, 82), position, 5)
 
     def draw_final_screen(self):
-        """Draw the completed vertical-slice report and replay/quit controls."""
+        """Draw the completed first-shift report and replay/quit controls."""
 
         self.draw_space_background()
         self.draw_game_logo((550, 55), scale=0.72)
@@ -188,23 +183,45 @@ class EndingMixin:
         )
 
         heading = self.heading_font.render(
-            "VERTICAL SLICE COMPLETE",
+            "FIRST SHIFT COMPLETE",
             True,
             COLORS["accent"],
         )
         self.screen.blit(heading, heading.get_rect(center=(panel.centerx, 148)))
-        thanks = self.body_font.render(
-            "Thanks for playing The Cosmic Clinic!",
+        system_message = self.body_font.render(
+            "Adequate work, Doctor. Return authorization remains pending.",
             True,
             COLORS["text"],
         )
-        self.screen.blit(thanks, thanks.get_rect(center=(panel.centerx, 186)))
+        self.screen.blit(
+            system_message,
+            system_message.get_rect(center=(panel.centerx, 184)),
+        )
+
+        roster_status = pygame.Rect(panel.centerx - 175, 202, 350, 24)
+        pygame.draw.rect(self.screen, (7, 22, 28), roster_status, border_radius=12)
+        pygame.draw.rect(
+            self.screen,
+            (65, 101, 98),
+            roster_status,
+            width=1,
+            border_radius=12,
+        )
+        roster_label = self.card_font.render(
+            "WAITING ROOM CLEAR  //  NEXT SHIFT ROSTER PENDING",
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(
+            roster_label,
+            roster_label.get_rect(center=roster_status.center),
+        )
 
         total_earned = self.get_daily_pay_breakdown()[3]
         total_earned_label = (
             f"-${abs(total_earned)}" if total_earned < 0 else f"${total_earned}"
         )
-        summary = pygame.Rect(panel.x + 105, 220, panel.width - 210, 210)
+        summary = pygame.Rect(panel.x + 105, 235, panel.width - 210, 195)
         pygame.draw.rect(self.screen, (7, 22, 28), summary, border_radius=12)
         pygame.draw.rect(self.screen, (65, 101, 98), summary, width=2, border_radius=12)
         stats = (
@@ -221,10 +238,10 @@ class EndingMixin:
             self.screen.blit(label, (summary.x + 24, y))
             self.screen.blit(value, value.get_rect(topright=(summary.right - 24, y)))
 
-        self.draw_ending_button(self.final_replay_button, "REPLAY SHIFT", False)
+        self.draw_ending_button(self.final_replay_button, "REPLAY FIRST SHIFT", False)
         self.draw_ending_button(self.final_quit_button, "QUIT GAME", True)
         hint = self.card_font.render(
-            "Replay begins again in reception with a fresh clinic balance.",
+            "The next patient roster has not arrived. Replay returns to reception.",
             True,
             COLORS["muted"],
         )
@@ -250,11 +267,11 @@ class EndingMixin:
         self.screen.blit(text, text.get_rect(center=rect.center))
 
     def handle_final_screen_click(self, position):
-        """Replay the slice or close the game from the final report."""
+        """Replay the first shift or close the game from the final report."""
 
         if self.final_replay_button.collidepoint(position):
             self.play_sfx("button")
-            self.restart_vertical_slice()
+            self.restart_game()
         elif self.final_quit_button.collidepoint(position):
             self.play_sfx("button")
             self.running = False
@@ -309,13 +326,25 @@ class EndingMixin:
             self.close_exit_confirmation()
         elif self.exit_reception_button.collidepoint(position):
             self.play_sfx("button")
-            self.restart_vertical_slice()
+            self.restart_game()
         elif self.exit_quit_button.collidepoint(position):
             self.play_sfx("button")
             self.running = False
 
-    def restart_vertical_slice(self):
-        """Reset progress and return to reception without replaying the intro."""
+    def start_next_shift(self, patient_queue):
+        """Load a future shift roster while preserving clinic upgrades and money."""
+
+        if not patient_queue:
+            raise ValueError("A shift requires at least one patient.")
+        self.waiting_room_queue = list(patient_queue)
+        self.ending_started_at = None
+        self.exit_confirmation_open = False
+        self.exit_confirmation_opened_at = None
+        self.reset_day()
+        self.state = GameState.TITLE
+
+    def restart_game(self):
+        """Reset campaign progress and return to reception without the intro."""
 
         restart_training = self.guided_tutorial_active
         self.finish_guided_tutorial()
@@ -328,8 +357,7 @@ class EndingMixin:
         self.ending_started_at = None
         self.exit_confirmation_open = False
         self.exit_confirmation_opened_at = None
-        self.reset_day()
-        self.state = GameState.TITLE
+        self.start_next_shift(self.waiting_room_queue)
         if restart_training:
             self.start_guided_tutorial()
 

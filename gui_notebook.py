@@ -493,7 +493,8 @@ class NotebookMixin:
         entry_count = sum(
             1
             for kind, text, _ in column
-            if kind == "title" and text.upper() != "NO TESTS"
+            if kind == "title"
+            and text.upper() not in ("NO TESTS", "PATIENT INTERVIEW")
         )
         count_text = (
             "NO RECORDS"
@@ -764,7 +765,12 @@ class NotebookMixin:
         card_gap = 10
         columns = [[]]
         used = 0
-        for test_name, result in self.notebook.get_entries(self.patient).items():
+        entries = []
+        interview = self.notebook.get_interview(self.patient)
+        if interview:
+            entries.append(("PATIENT INTERVIEW", "  •  ".join(interview)))
+        entries.extend(self.notebook.get_entries(self.patient).items())
+        for test_name, result in entries:
             result_lines = self.wrap_text(result, self.notebook_body_font, width)
             card_height = max(58, title_h + len(result_lines) * body_h + 12)
             if columns[-1] and used + card_height > height:

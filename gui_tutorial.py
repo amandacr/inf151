@@ -69,10 +69,7 @@ class TutorialMixin:
         if step == "call_patient":
             return self.start_button
         if step == "symptom":
-            alien = self.layout["alien"]
-            # Match the speech-bubble rectangle exactly so the halo and arrow
-            # remain centered on what the player is being asked to read.
-            return pygame.Rect(alien.right - 112, alien.y + 49, 91, 55)
+            return self.get_symptom_bubble_rect()
         if step == "inspect_id":
             return self.layout["id_card"]
         if step == "review_health_id":
@@ -135,7 +132,7 @@ class TutorialMixin:
         """Return instruction text, position, and whether any click advances it."""
 
         prompts = {
-            "symptom": ("Start with what the patient is telling you.", pygame.Rect(620, 168, 400, 104), True),
+            "symptom": ("Read Zorpa's concern, then click the highlighted patient to ask a follow-up.", pygame.Rect(620, 168, 400, 104), False),
             "inspect_id": ("Inspect Zorpa's Intergalactic ID.", pygame.Rect(62, 178, 375, 92), False),
             "review_health_id": ("Normal temperature: 2,000°F. Remember this baseline.", pygame.Rect(62, 174, 410, 104), True),
             "temperature_select": ("Shaking may be temperature-related. Select TEMPERATURE.", pygame.Rect(650, 174, 400, 92), False),
@@ -171,9 +168,10 @@ class TutorialMixin:
         # Reading steps deliberately consume the click instead of passing it
         # through to the dimmed game screen underneath the tutorial.
         if step == "symptom":
-            self.play_sfx("button")
-            self.set_guided_tutorial_step("inspect_id")
-            return
+            if self.layout["alien"].collidepoint(position):
+                self.advance_patient_dialogue()
+                self.set_guided_tutorial_step("inspect_id")
+                return
         if step == "inspect_id" and self.layout["id_card"].collidepoint(position):
             self.play_sfx("button")
             self.showing_health_id = True
@@ -381,13 +379,44 @@ class TutorialMixin:
         pulse = (math.sin(pygame.time.get_ticks() / 210) + 1) / 2
         if step != "patient_arrival":
             dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
-            dim.fill((2, 6, 12, 178))
+            # Reception remains visible during the first lesson so the player
+            # understands where the highlighted call control lives.
+            dim_alpha = 108 if step == "call_patient" else 158
+            dim.fill((2, 6, 12, dim_alpha))
             if target is not None:
-                pygame.draw.rect(dim, (0, 0, 0, 0), target.inflate(18, 18), border_radius=12)
+                clear_padding = 28 if step == "call_patient" else 18
+                pygame.draw.rect(
+                    dim,
+                    (0, 0, 0, 0),
+                    target.inflate(clear_padding, clear_padding),
+                    border_radius=14,
+                )
             self.screen.blit(dim, (0, 0))
         if target is not None:
-            glow = target.inflate(round(13 + 5 * pulse), round(13 + 5 * pulse))
-            pygame.draw.rect(self.screen, (106, 246, 198), glow, width=2 + round(pulse), border_radius=11)
+            if step == "call_patient":
+                halo = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+                for padding, halo_alpha, width in (
+                    (38 + round(8 * pulse), 28, 8),
+                    (25 + round(6 * pulse), 62, 5),
+                    (14 + round(4 * pulse), 150, 3),
+                ):
+                    pygame.draw.rect(
+                        halo,
+                        (106, 246, 198, halo_alpha),
+                        target.inflate(padding, padding),
+                        width=width,
+                        border_radius=16,
+                    )
+                self.screen.blit(halo, (0, 0))
+            glow = target.inflate(round(15 + 7 * pulse), round(15 + 7 * pulse))
+            glow_width = 3 + round(2 * pulse) if step == "call_patient" else 2 + round(pulse)
+            pygame.draw.rect(
+                self.screen,
+                (106, 246, 198),
+                glow,
+                width=glow_width,
+                border_radius=12,
+            )
             arrow_x = target.centerx
             if target.y > 145:
                 tip_y = target.y - 8

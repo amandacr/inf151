@@ -8,6 +8,7 @@ class Patient:
     Symptoms = str patient's symptoms
     Diagnosis = str patient's correct diagnosis
     Test_results = dictionary in the form test_name (str) : test_result (str)
+    Dialogue = ordered patient statements revealed during the interview
 
     """
     def __init__(
@@ -20,6 +21,7 @@ class Patient:
             test_results,
             profile=None,
             medical_info=None,
+            dialogue=None,
     ):
         self.name = name
         self.card_front = card_front
@@ -29,6 +31,7 @@ class Patient:
         self.test_results = test_results
         self.profile = profile or {}
         self.medical_info = medical_info or {}
+        self.dialogue = tuple(dialogue or (symptoms,))
 
     def perform_test(self, test_name):
         return f"RESULTS: {self.test_results[test_name]}"

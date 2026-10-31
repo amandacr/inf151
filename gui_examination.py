@@ -254,11 +254,11 @@ class ExaminationMixin:
                 width=1,
                 border_radius=6,
             )
-            stage_text = self.pile_font.render(stage, True, text_color)
+            stage_text = self.compact_ui_font.render(stage, True, text_color)
             self.screen.blit(stage_text, stage_text.get_rect(center=stage_rect.center))
 
             if index < len(stages) - 1:
-                arrow = self.pile_font.render(">", True, COLORS["muted"])
+                arrow = self.compact_ui_font.render(">", True, COLORS["muted"])
                 arrow_x = stage_rect.right + stage_gap // 2
                 self.screen.blit(
                     arrow,
@@ -404,7 +404,11 @@ class ExaminationMixin:
                 pygame.draw.rect(self.screen, (22, 44, 50), rect, border_radius=7)
                 pygame.draw.rect(self.screen, (63, 120, 110), rect, width=2, border_radius=7)
 
-        count = self.pile_font.render(f"{remaining} LEFT", True, COLORS["muted"])
+        count = self.compact_ui_font.render(
+            f"{remaining} LEFT",
+            True,
+            COLORS["text"],
+        )
         self.screen.blit(count, count.get_rect(center=(tray.centerx, tray.bottom - 9)))
 
     def draw_card_back(self, rect, hovered=False):
@@ -529,7 +533,7 @@ class ExaminationMixin:
         entry = self.get_current_entry()
         if entry["exam"] is not None:
             head = entry["exam"](bay, base_alien_center_x, platform, shake_x, shake_y, blinking)
-            self.draw_symptom_bubble(bay, head, entry["symptom"])
+            self.draw_symptom_bubble(bay, head)
             name = self.small_font.render(self.patient.name, True, COLORS["muted"])
             self.screen.blit(name, name.get_rect(center=(panel.centerx, panel.bottom - 13)))
             return
@@ -735,23 +739,61 @@ class ExaminationMixin:
             2,
         )
 
-        self.draw_symptom_bubble(bay, head, entry["symptom"])
+        self.draw_symptom_bubble(bay, head)
 
         name = self.small_font.render(self.patient.name, True, COLORS["muted"])
         self.screen.blit(name, name.get_rect(center=(panel.centerx, panel.bottom - 13)))
 
 
-    def draw_symptom_bubble(self, bay, alien_head, symptom_lines):
-        """Draw Zorpa's current symptom in a speech bubble beside the alien."""
+    def get_symptom_bubble_rect(self, bay=None):
+        """Return the reusable patient-interview bubble rectangle."""
 
-        bubble = pygame.Rect(bay.right - 100, bay.y + 15, 91, 55)
+        if bay is None:
+            panel = self.layout["alien"]
+            bay = pygame.Rect(
+                panel.x + 12,
+                panel.y + 34,
+                panel.width - 24,
+                panel.height - 62,
+            )
+        return pygame.Rect(bay.right - 114, bay.y + 11, 105, 76)
+
+    def advance_patient_dialogue(self):
+        """Cycle the visible interview answer and file newly heard details."""
+
+        if not self.patient.dialogue:
+            return
+        self.patient_dialogue_index = (
+            self.patient_dialogue_index + 1
+        ) % len(self.patient.dialogue)
+        statement = self.patient.dialogue[self.patient_dialogue_index]
+        self.notebook.add_interview(self.patient, statement)
+        self.play_sfx("button")
+
+    def draw_symptom_bubble(self, bay, alien_head):
+        """Draw the current patient-interview statement beside the alien."""
+
+        bubble = self.get_symptom_bubble_rect(bay)
         bubble_fill = (246, 241, 220)
-        bubble_outline = (62, 50, 74)
+        hovered = self.layout["alien"].collidepoint(self.get_mouse_position())
+        text_color = (62, 50, 74)
+        bubble_outline = COLORS["accent"] if hovered else text_color
         tail = (
-            (bubble.x + 5, bubble.y + 32),
+            (bubble.x + 5, bubble.y + 34),
             (alien_head.right - 2, alien_head.y + 27),
-            (bubble.x + 7, bubble.y + 45),
+            (bubble.x + 7, bubble.y + 47),
         )
+        if hovered:
+            glow = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+            for padding, alpha, width in ((12, 30, 6), (6, 78, 3)):
+                pygame.draw.rect(
+                    glow,
+                    (*COLORS["accent"], alpha),
+                    bubble.inflate(padding, padding),
+                    width=width,
+                    border_radius=13,
+                )
+            self.screen.blit(glow, (0, 0))
         pygame.draw.polygon(self.screen, bubble_fill, tail)
         pygame.draw.line(self.screen, bubble_outline, tail[0], tail[1], width=2)
         pygame.draw.line(self.screen, bubble_outline, tail[1], tail[2], width=2)
@@ -760,14 +802,36 @@ class ExaminationMixin:
             self.screen,
             bubble_outline,
             bubble,
-            width=2,
+            width=3 if hovered else 2,
             border_radius=10,
         )
 
+        statement = self.patient.dialogue[self.patient_dialogue_index]
+        symptom_lines = self.wrap_text(
+            statement,
+            self.compact_ui_font,
+            bubble.width - 16,
+        )
+        symptom_lines = symptom_lines[:3]
+        line_height = self.compact_ui_font.get_linesize()
+        text_height = len(symptom_lines) * line_height
+        first_y = bubble.y + 7 + max(0, (42 - text_height) // 2)
         for line_index, line_text in enumerate(symptom_lines):
-            line = self.pile_font.render(line_text, True, bubble_outline)
-            line_y = bubble.y + 17 + line_index * 17
-            self.screen.blit(line, line.get_rect(center=(bubble.centerx, line_y)))
+            # Hovering should call attention to the interaction without
+            # sacrificing the dark-on-cream dialogue contrast.
+            line = self.compact_ui_font.render(line_text, True, text_color)
+            line_y = first_y + line_index * line_height
+            self.screen.blit(line, line.get_rect(midtop=(bubble.centerx, line_y)))
+
+        footer = self.legible_micro_font.render(
+            f"ASK MORE  {self.patient_dialogue_index + 1}/{len(self.patient.dialogue)}",
+            True,
+            (102, 86, 112),
+        )
+        self.screen.blit(
+            footer,
+            footer.get_rect(center=(bubble.centerx, bubble.bottom - 10)),
+        )
 
 
     def draw_id_card(self):
@@ -862,15 +926,19 @@ class ExaminationMixin:
         detail_y = card.y + 43
         for label, value in details:
             detail_text = f"{label}: {value}"
-            detail_font = self.card_font
+            detail_font = self.id_detail_font
             available_width = card.right - 10 - (card.x + 70)
             if detail_font.size(detail_text)[0] > available_width:
-                detail_font = self.pile_font
+                detail_font = self.legible_micro_font
             detail = detail_font.render(detail_text, True, (72, 101, 91))
             self.screen.blit(detail, (card.x + 70, detail_y))
             detail_y += 15
 
-        serial = self.pile_font.render(self.get_current_entry()["serial"], True, (72, 101, 91))
+        serial = self.legible_micro_font.render(
+            self.get_current_entry()["serial"],
+            True,
+            (72, 101, 91),
+        )
         self.screen.blit(serial, serial.get_rect(center=(portrait.centerx, portrait.bottom + 9)))
 
         flip_hint = self.card_font.render(next_side, True, COLORS["card_text"])
@@ -1113,7 +1181,7 @@ class ExaminationMixin:
             if self.discard_pile
             else "EMPTY"
         )
-        count = self.pile_font.render(count_text, True, COLORS["text"])
+        count = self.compact_ui_font.render(count_text, True, COLORS["text"])
         self.screen.blit(
             count,
             count.get_rect(center=(panel.centerx, panel.bottom - 12)),

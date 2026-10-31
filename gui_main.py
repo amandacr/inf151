@@ -80,28 +80,24 @@ class CosmicClinicGUI(
             {
                 "chair_x": 782, "draw": self.draw_waiting_zorpa, "create": create_zorpa,
                 "exam": None,
-                "symptom": ("I CAN'T STOP", "SHAKING!"),
                 "serial": "BLP-004-ZV",
                 "portrait": ((218, 199, 235), (91, 59, 125), (126, 75, 174), (190, 143, 229)),
             },
             {
                 "chair_x": 640, "draw": self.draw_waiting_zoogy, "create": create_zoogy,
                 "exam": self.draw_exam_zoogy,
-                "symptom": ("I FEEL...", "STRAINED?"),
                 "serial": "GRN-017-ZG",
                 "portrait": ((205, 228, 208), (49, 111, 82), (84, 151, 108), (151, 211, 155)),
             },
             {
                 "chair_x": 498, "draw": self.draw_waiting_titus, "create": create_titus,
                 "exam": self.draw_exam_titus,
-                "symptom": ("I'M SO", "DISTRESSED!"),
                 "serial": "BLU-203-TT",
                 "portrait": ((200, 222, 236), (38, 83, 119), (64, 125, 166), (118, 190, 220)),
             },
             {
                 "chair_x": 356, "draw": self.draw_waiting_conmann, "create": create_conmann,
                 "exam": self.draw_exam_conmann,
-                "symptom": ("MY TUMMY", "HURTS :("),
                 "serial": "ORG-088-CM",
                 "portrait": ((240, 212, 196), (159, 70, 66), (226, 127, 91), (249, 170, 119)),
             },
@@ -116,6 +112,7 @@ class CosmicClinicGUI(
         self.money_count_duration = 650
         self.money_popup_duration = 1350
         self.patient = self.waiting_room_queue[0]["create"]()
+        self.patient_dialogue_index = 0
         self.player = Player("Dr GUI")
         self.notebook = Notebook()
         self.notebook.add_patient(self.patient)
@@ -197,7 +194,7 @@ class CosmicClinicGUI(
             "status_bar": pygame.Rect(30, 100, 1040, 50),
             "draw_deck": pygame.Rect(45, 180, 150, 175),
             "alien": pygame.Rect(233, 165, 230, 195),
-            "id_card": pygame.Rect(510, 180, 270, 155),
+            "id_card": pygame.Rect(498, 180, 294, 155),
             "throwaway": pygame.Rect(923, 423, 100, 125),
             "notebook": pygame.Rect(35, 395, 180, 165),
             "active_hand": pygame.Rect(225, 390, 625, 170),
@@ -213,6 +210,9 @@ class CosmicClinicGUI(
         self.card_font = pygame.font.Font(None, 17)
         self.pile_font = pygame.font.Font(None, 14)
         self.tiny_font = pygame.font.Font(None, 10)
+        self.compact_ui_font = pygame.font.SysFont("Arial", 12, bold=True)
+        self.legible_micro_font = pygame.font.SysFont("Arial", 9, bold=True)
+        self.id_detail_font = pygame.font.SysFont("Arial", 11, bold=True)
         self.notebook_preview_font = pygame.font.Font(None, 15)
         self.diagnosis_name_font = pygame.font.SysFont("Arial", 21, bold=True)
         self.diagnosis_card_font = pygame.font.SysFont("Arial", 13, bold=True)
@@ -394,6 +394,9 @@ class CosmicClinicGUI(
             self.play_sfx("button")
             self.showing_health_id = not self.showing_health_id
             return
+        if self.layout["alien"].collidepoint(position):
+            self.advance_patient_dialogue()
+            return
         if self.layout["notebook"].collidepoint(position):
             self.open_notebook()
             return
@@ -517,7 +520,7 @@ class CosmicClinicGUI(
                 self.patient_fade_started_at = None
 
     def handle_shop_click(self, position):
-        """Handle upgrade purchases or finish the vertical-slice shift."""
+        """Handle upgrade purchases or finish the current shift."""
 
         if self.shop_button.collidepoint(position):
             self.play_sfx("button")
@@ -565,6 +568,7 @@ class CosmicClinicGUI(
         current_balance = self.player.balance
         next_slot = min(self.patients_called, len(self.waiting_room_queue) - 1)
         self.patient = self.waiting_room_queue[next_slot]["create"]()
+        self.patient_dialogue_index = 0
         machine_levels = self.player.machine_levels.copy()
         test_discount = self.player.test_discount
         self.player = Player(self.player.name)

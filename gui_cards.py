@@ -556,41 +556,14 @@ class CardMixin:
             border_radius=6,
         )
 
-        symbol_center = (badge.x + 11, badge.centery)
-        if rarity == "Rare":
-            symbol = (
-                (symbol_center[0], symbol_center[1] - 5),
-                (symbol_center[0] + 3, symbol_center[1] - 2),
-                (symbol_center[0] + 5, symbol_center[1]),
-                (symbol_center[0] + 2, symbol_center[1] + 2),
-                (symbol_center[0], symbol_center[1] + 5),
-                (symbol_center[0] - 2, symbol_center[1] + 2),
-                (symbol_center[0] - 5, symbol_center[1]),
-                (symbol_center[0] - 3, symbol_center[1] - 2),
-            )
-            pygame.draw.polygon(self.screen, rarity_color, symbol)
-        elif rarity == "Uncommon":
-            pygame.draw.polygon(
-                self.screen,
-                rarity_color,
-                (
-                    (symbol_center[0], symbol_center[1] - 5),
-                    (symbol_center[0] + 5, symbol_center[1]),
-                    (symbol_center[0], symbol_center[1] + 5),
-                    (symbol_center[0] - 5, symbol_center[1]),
-                ),
-            )
-        else:
-            pygame.draw.circle(self.screen, rarity_color, symbol_center, 4)
-
-        rarity_text = self.tiny_font.render(
-            f"LV.{self.player.get_machine_level(test)} {rarity.upper()}  ${self.player.get_test_cost(test)}",
+        rarity_text = self.legible_micro_font.render(
+            f"{rarity.upper()}  ${self.player.get_test_cost(test)}",
             True,
             rarity_color,
         )
         self.screen.blit(
             rarity_text,
-            rarity_text.get_rect(midleft=(badge.x + 20, badge.centery)),
+            rarity_text.get_rect(center=badge.center),
         )
 
 
@@ -627,7 +600,7 @@ class CardMixin:
     def draw_compact_diagnosis_card(self, diagnosis, card_rect, diagnosis_color):
         """Draw a diagnosis option with the same hierarchy as a compact test card."""
 
-        header = pygame.Rect(card_rect.x + 6, card_rect.y + 6, card_rect.width - 12, 30)
+        header = pygame.Rect(card_rect.x + 6, card_rect.y + 6, card_rect.width - 12, 38)
         pygame.draw.rect(self.screen, (218, 199, 226), header, border_radius=5)
         pygame.draw.line(
             self.screen,
@@ -651,27 +624,21 @@ class CardMixin:
         else:
             name_parts = diagnosis.name.split(maxsplit=1)
             for line_index, line_text in enumerate(name_parts):
-                title = self.pile_font.render(line_text, True, COLORS["card_text"])
-                line_y = header.centery - 6 + line_index * 11
+                title = self.diagnosis_card_font.render(
+                    line_text,
+                    True,
+                    COLORS["card_text"],
+                )
+                line_y = header.centery - 7 + line_index * 14
                 self.screen.blit(
                     title,
                     title.get_rect(center=(header.centerx, line_y)),
                 )
 
-        icon = pygame.Rect(card_rect.centerx - 25, card_rect.y + 40, 50, 43)
+        icon = pygame.Rect(card_rect.centerx - 28, card_rect.y + 50, 56, 54)
         pygame.draw.rect(self.screen, (210, 211, 216), icon, border_radius=6)
         pygame.draw.rect(self.screen, diagnosis_color, icon, width=2, border_radius=6)
         self.draw_diagnosis_file_icon(icon, diagnosis_color)
-
-        subtitle = self.card_font.render(
-            "CASE FILE",
-            True,
-            COLORS["card_text"],
-        )
-        self.screen.blit(
-            subtitle,
-            subtitle.get_rect(center=(card_rect.centerx, card_rect.y + 90)),
-        )
         self.draw_diagnosis_badge(card_rect, diagnosis_color)
 
 
@@ -776,27 +743,20 @@ class CardMixin:
 
         badge = pygame.Rect(
             card_rect.x + 7,
-            card_rect.bottom - 23,
+            card_rect.bottom - 26,
             card_rect.width - 14,
-            16,
+            20,
         )
         pygame.draw.rect(self.screen, (213, 205, 218), badge, border_radius=6)
         pygame.draw.rect(self.screen, diagnosis_color, badge, width=1, border_radius=6)
-        symbol_center = (badge.x + 11, badge.centery)
-        pygame.draw.polygon(
-            self.screen,
+        label = self.diagnosis_card_font.render(
+            "DIAGNOSIS",
+            True,
             diagnosis_color,
-            (
-                (symbol_center[0], symbol_center[1] - 5),
-                (symbol_center[0] + 5, symbol_center[1]),
-                (symbol_center[0], symbol_center[1] + 5),
-                (symbol_center[0] - 5, symbol_center[1]),
-            ),
         )
-        label = self.pile_font.render("DIAGNOSIS", True, diagnosis_color)
         self.screen.blit(
             label,
-            label.get_rect(midleft=(badge.x + 20, badge.centery)),
+            label.get_rect(center=badge.center),
         )
 
 
@@ -846,7 +806,7 @@ class CardMixin:
         pygame.draw.rect(self.screen, rarity_color, icon, width=2, border_radius=6)
         self.draw_test_icon(test.name, icon, rarity_color)
 
-        subtitle = self.tiny_font.render(
+        subtitle = self.legible_micro_font.render(
             TEST_SUBTITLES.get(test.name.upper(), "MEDICAL TEST"),
             True,
             COLORS["card_text"],
@@ -881,7 +841,7 @@ class CardMixin:
         pygame.draw.rect(self.screen, rarity_color, icon, width=2, border_radius=7)
         self.draw_test_icon(test.name, icon, rarity_color)
 
-        subtitle = self.tiny_font.render(
+        subtitle = self.legible_micro_font.render(
             TEST_SUBTITLES.get(test.name.upper(), "MEDICAL TEST"),
             True,
             COLORS["card_text"],

@@ -63,6 +63,25 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertEqual(patient.medical_info["Normal temperature"], "2,000°F")
         self.assertEqual(notebook.get_entries(patient), {"TEMPERATURE": result})
 
+    def test_patient_records_and_interviews_keep_new_allergies_discoverable(self):
+        """Health IDs should build alien context without revealing Titus's answer."""
+
+        titus = create_titus()
+        self.assertEqual(titus.profile["Species"], "Goopian Ectomorph")
+        self.assertNotIn(
+            "water",
+            " ".join(titus.medical_info.values()).lower(),
+        )
+        self.assertIn("None documented", titus.medical_info.values())
+        self.assertIn("water", titus.test_results["ALLERGY"].lower())
+
+        notebook = Notebook()
+        notebook.add_patient(titus)
+        self.assertEqual(notebook.get_interview(titus), titus.dialogue[:1])
+        notebook.add_interview(titus, titus.dialogue[1])
+        notebook.add_interview(titus, titus.dialogue[1])
+        self.assertEqual(notebook.get_interview(titus), titus.dialogue[:2])
+
     def test_main_launches_the_cosmic_clinic_gui(self):
         """The official main.py entry point should start the GUI build."""
 
@@ -278,7 +297,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.state, GameState.PATIENT)
         self.assertEqual(self.game.guided_tutorial_step, "symptom")
 
-        self.game.handle_guided_tutorial_click((1090, 680))
+        self.game.handle_guided_tutorial_click(self.game.layout["alien"].center)
         self.assertEqual(self.game.guided_tutorial_step, "inspect_id")
         self.game.handle_guided_tutorial_click(self.game.layout["id_card"].center)
         self.assertTrue(self.game.showing_health_id)
@@ -350,8 +369,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game.set_guided_tutorial_step("symptom")
         symptom_target = self.game.get_guided_tutorial_target()
-        self.assertEqual(symptom_target.size, (91, 55))
-        self.game.handle_guided_tutorial_click((1090, 680))
+        self.assertEqual(symptom_target.size, (105, 76))
+        self.assertEqual(self.game.patient_dialogue_index, 0)
+        self.game.handle_guided_tutorial_click(self.game.layout["alien"].center)
+        self.assertEqual(self.game.patient_dialogue_index, 1)
         self.assertEqual(self.game.guided_tutorial_step, "inspect_id")
 
         self.game.showing_health_id = True
@@ -405,6 +426,52 @@ class GuiFlowSmokeTests(unittest.TestCase):
                 self.assertLessEqual(
                     self.game.tutorial_body_font.size(line)[0],
                     panel.width - 32,
+                )
+
+    def test_patient_interview_cycles_and_files_each_unique_statement(self):
+        """Clicking the patient should reveal questions without losing notes."""
+
+        self.assertEqual(self.game.patient_dialogue_index, 0)
+        self.assertEqual(
+            self.game.notebook.get_interview(self.game.patient),
+            self.game.patient.dialogue[:1],
+        )
+
+        for expected_index in (1, 2, 0):
+            self.game.handle_patient_click(self.game.layout["alien"].center)
+            self.assertEqual(self.game.patient_dialogue_index, expected_index)
+
+        self.assertEqual(
+            self.game.notebook.get_interview(self.game.patient),
+            self.game.patient.dialogue,
+        )
+
+        self.game.reset_round()
+        self.assertEqual(self.game.patient_dialogue_index, 0)
+        self.assertEqual(
+            self.game.notebook.get_interview(self.game.patient),
+            self.game.patient.dialogue[:1],
+        )
+
+    def test_patient_id_details_fit_the_larger_readable_font(self):
+        """Every current profile and medical line should fit the widened ID card."""
+
+        panel = self.game.layout["id_card"]
+        card = pygame.Rect(
+            panel.x + 8,
+            panel.y + 10,
+            panel.width - 16,
+            panel.height - 18,
+        )
+        available_width = card.right - 10 - (card.x + 70)
+        for entry in self.game.waiting_room_queue:
+            patient = entry["create"]()
+            rows = [("Name", patient.name)] + list(patient.profile.items())
+            rows.extend(patient.medical_info.items())
+            for label, value in rows:
+                self.assertLessEqual(
+                    self.game.id_detail_font.size(f"{label}: {value}")[0],
+                    available_width,
                 )
 
     def test_gameplay_help_pauses_timers_and_works_on_ending_screens(self):
@@ -1061,9 +1128,23 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.assertFalse(rect.colliderect(self.game.shop_button))
             self.assertFalse(any(rect.colliderect(other) for other in rects[index + 1:]))
         self.game.draw_shop_screen()
-        self.game.restart_vertical_slice()
+        self.game.restart_game()
         self.assertEqual(self.game.player.machine_levels, {})
         self.assertEqual(self.game.player.test_discount, 0)
+
+    def test_future_shift_can_load_a_new_patient_roster(self):
+        """A later day can replace the queue without erasing earned upgrades."""
+
+        next_roster = [self.game.waiting_room_queue[1]]
+        self.game.player.balance = 175
+        self.game.player.machine_levels["TEMPERATURE"] = 2
+        self.game.start_next_shift(next_roster)
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertEqual(self.game.waiting_room_queue, next_roster)
+        self.assertEqual(self.game.patients_called, 0)
+        self.assertEqual(self.game.patient.name, next_roster[0]["create"]().name)
+        self.assertEqual(self.game.player.balance, 175)
+        self.assertEqual(self.game.player.machine_levels["TEMPERATURE"], 2)
 
     def test_shop_blocks_an_unaffordable_upgrade_purchase(self):
         """A selected upgrade should not charge or unlock when money is too low."""

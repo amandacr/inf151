@@ -18,16 +18,22 @@ def create_zorpa():
             "ALLERGY": "Allergy screening produced no reaction.",
         },
         profile={
+            "Species": "Bloopiter Magmoid",
             "Occupation": "Black Hole Tour Guide",
             "Home Planet": "Bloopiter",
         },
         medical_info={
-            "Hearts": "4 very small",
-            "Lungs": "1 giant lung",
-            "Blood": "Lava, Type HOT",
+            "Circulation": "4 micro-hearts; HOT lava",
+            "Respiration": "1 thermal lung",
+            "Core": "Thermal body core",
             "Normal temperature": "2,000°F",
-            "Known allergy": "Water",
+            "Medical alert": "Avoid water contact",
         },
+        dialogue=(
+            "I can't stop shivering.",
+            "Even the lights feel cold.",
+            "It started after my last tour.",
+        ),
     )
 
 
@@ -45,16 +51,22 @@ def create_zoogy():
             "ALLERGY": "Allergy screening produced no reaction.",
         },
         profile={
-            "Occupation": "Professional Orb-Bowler",
+            "Species": "Arcedian Resonid",
+            "Occupation": "Pro Orb-Bowler",
             "Home Planet": "Arcedo",
         },
         medical_info={
-            "Hearts": "None",
-            "Lungs": "2 rectangular lungs",
-            "Blood": "Acid, Type GREEN",
+            "Circulation": "No central heart",
+            "Respiration": "2 rectangular lungs",
+            "Skeleton": "Crystal resonance frame",
             "Normal temperature": "95°F",
-            "Known allergy": "Mice",
+            "Medical alert": "Rodent dander",
         },
+        dialogue=(
+            "My whole frame is buzzing.",
+            "It gets worse when I tense up.",
+            "I blamed orb-bowling at first.",
+        ),
     )
 
 
@@ -72,16 +84,22 @@ def create_titus():
             "ALLERGY": "Severe allergic response detected from: water.",
         },
         profile={
-            "Occupation": "Accountant",
+            "Species": "Goopian Ectomorph",
+            "Occupation": "Orbital Tax Accountant",
             "Home Planet": "Goopus",
         },
         medical_info={
-            "Hearts": "1",
-            "Lungs": "3 orbicular lungs",
-            "Blood": "Ectoplasm, Type Bloo",
+            "Circulation": "1 ecto-heart; Type BLOO",
+            "Respiration": "3 orbicular lungs",
+            "Skin": "Highly absorbent membrane",
             "Normal temperature": "50°F",
-            "Known allergy": "None",
+            "Allergy record": "None documented",
         },
+        dialogue=(
+            "My skin burns. I'm trembling.",
+            "It started after the sprinklers.",
+            "I've never reacted like this.",
+        ),
     )
 
 
@@ -99,14 +117,20 @@ def create_conmann():
             "ALLERGY": "Minor intolerant response detected from: lactose.",
         },
         profile={
-            "Occupation": "Unemployed",
+            "Species": "Vaygan Oilblood",
+            "Occupation": "Galactic Food Reviewer",
             "Home Planet": "Vaygus Neverada",
         },
         medical_info={
-            "Hearts": "2",
-            "Lungs": "1 very large lung",
-            "Blood": "Oil, Type IMPORTED",
+            "Circulation": "2 hearts; IMPORTED oil",
+            "Respiration": "1 oversized lung",
+            "Digestion": "3 fermentation chambers",
             "Normal temperature": "35°F",
-            "Known allergy": "Cats",
+            "Medical alert": "Cat allergy",
         },
+        dialogue=(
+            "My stomach may explode.",
+            "I got bloated after lunch.",
+            "I tried the moon-cheese special.",
+        ),
     )
