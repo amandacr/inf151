@@ -348,6 +348,7 @@ class EndingMixin:
             "reception_transition_started_at",
             "queue_shift_started_at",
             "patient_fade_started_at",
+            "end_day_shutdown_started_at",
             "ending_started_at",
         )
         for timer_name in timer_names:
@@ -427,7 +428,7 @@ class EndingMixin:
         heading = self.heading_font.render("LEAVE YOUR SHIFT?", True, COLORS["text"])
         self.screen.blit(heading, heading.get_rect(center=(panel.centerx, 190)))
         detail = self.small_font.render(
-            "Return to reception restarts the four-patient vertical slice.",
+            "Return to reception restarts the current clinic shift.",
             True,
             COLORS["muted"],
         )

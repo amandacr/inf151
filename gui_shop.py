@@ -13,17 +13,17 @@ from Player import (
 
 SHOP_UPGRADES = (
     {"id": "temperature", "name": "THERMAL CALIBRATION", "category": "TEMPERATURE", "cost": 125,
-     "description": "Upgrade to level 2. Halves the operating cost of every temperature card.", "machine": "TEMPERATURE"},
+     "description": "Level 2: temperature tests cost 50% less.", "machine": "TEMPERATURE"},
     {"id": "xray", "name": "FOCUSED X-RAY", "category": "X-RAY", "cost": 125,
-     "description": "Upgrade to level 2. Halves the operating cost of every X-ray card.", "machine": "X-RAY"},
+     "description": "Level 2: X-ray tests cost 50% less.", "machine": "X-RAY"},
     {"id": "ultrasound", "name": "SONIC AMPLIFIER", "category": "ULTRASOUND", "cost": 175,
-     "description": "Upgrade to level 2. Halves the operating cost of every ultrasound card.", "machine": "ULTRASOUND"},
+     "description": "Level 2: ultrasound tests cost 50% less.", "machine": "ULTRASOUND"},
     {"id": "allergy", "name": "ALLERGEN ANALYZER", "category": "ALLERGY", "cost": 200,
-     "description": "Upgrade to level 2. Halves the operating cost of every allergy card.", "machine": "ALLERGY"},
+     "description": "Level 2: allergy tests cost 50% less.", "machine": "ALLERGY"},
     {"id": "power", "name": "EFFICIENT POWER CORE", "category": "ALL MACHINES", "cost": 150,
-     "description": "Save another $2 on every test. Works with all machine calibrations.", "discount": 2},
+     "description": "Every test costs $2 less. Stacks with calibrations.", "discount": 2},
     {"id": "smart_cards", "name": "SMART TEST CARDS", "category": "CARD UPGRADE", "cost": 100,
-     "description": "Improved test cards save $1 on every test. Stacks with machine upgrades.", "discount": 1},
+     "description": "Every test costs $1 less. Stacks with upgrades.", "discount": 1},
 )
 
 
@@ -192,12 +192,17 @@ class ShopMixin:
             pygame.draw.rect(self.screen, (3, 8, 13), rect.move(2, 3), border_radius=8)
             pygame.draw.rect(self.screen, fill, rect, border_radius=8)
             pygame.draw.rect(self.screen, border, rect, width=2, border_radius=8)
+            label_center = rect.center
+            if rect == self.shop_purchase_button and selected:
+                icon_center = (rect.x + 24, rect.centery)
+                self.draw_shop_purchase_icon(selected, icon_center)
+                label_center = (rect.centerx + 14, rect.centery)
             rendered = self.small_font.render(
                 text,
                 True,
                 COLORS["background"] if enabled and hovered else border,
             )
-            self.screen.blit(rendered, rendered.get_rect(center=rect.center))
+            self.screen.blit(rendered, rendered.get_rect(center=label_center))
         message = self.card_font.render(self.shop_message, True, COLORS["text"])
         self.screen.blit(message, message.get_rect(center=(550, 588)))
 
@@ -309,9 +314,12 @@ class ShopMixin:
             (
                 "PERFORMANCE BONUS",
                 (
-                    "Perfect-shift accuracy award"
+                    "Every case supported by test evidence"
                     if bonus
-                    else "No perfect-shift bonus earned"
+                    else (
+                        f"Test evidence recorded for {self.daily_evidence_cases}/"
+                        f"{len(self.waiting_room_queue)} cases"
+                    )
                 ),
                 f"+${bonus}",
                 (216, 159, 238),
@@ -462,6 +470,7 @@ class ShopMixin:
         perfect_day = (
             self.daily_correct_diagnoses == len(self.waiting_room_queue)
             and self.daily_wrong_diagnoses == 0
+            and self.daily_evidence_cases == len(self.waiting_room_queue)
         )
         bonus = PERFECT_DAY_BONUS if perfect_day else 0
         total = (
@@ -540,6 +549,24 @@ class ShopMixin:
         )
         display = shelf.move(0, -2 if hovered and not selected else 0)
 
+        if selected:
+            glow_rect = display.inflate(18, 18)
+            glow = pygame.Surface(glow_rect.size, pygame.SRCALPHA)
+            pygame.draw.rect(
+                glow,
+                (*product_color, 38),
+                glow.get_rect(),
+                border_radius=16,
+            )
+            pygame.draw.rect(
+                glow,
+                (*product_color, 105),
+                glow.get_rect().inflate(-7, -7),
+                width=3,
+                border_radius=13,
+            )
+            self.screen.blit(glow, glow_rect.topleft)
+
         pygame.draw.rect(self.screen, (3, 8, 13), display.move(4, 5), border_radius=11)
         pygame.draw.rect(self.screen, (12, 18, 29), display, border_radius=11)
         pygame.draw.rect(
@@ -552,7 +579,7 @@ class ShopMixin:
             self.screen,
             border,
             display,
-            width=3 if selected else 2 if hovered or owned else 1,
+            width=4 if selected else 2 if hovered or owned else 1,
             border_radius=11,
         )
 
@@ -577,18 +604,18 @@ class ShopMixin:
 
         description_lines = self.wrap_text(
             upgrade["description"],
-            self.card_font,
+            self.small_font,
             text_width,
         )
         if len(description_lines) > 3:
             description_lines = description_lines[:3]
             final_line = description_lines[-1]
-            while final_line and self.card_font.size(final_line + "...")[0] > text_width:
+            while final_line and self.small_font.size(final_line + "...")[0] > text_width:
                 final_line = final_line[:-1]
             description_lines[-1] = final_line.rstrip() + "..."
         for line_index, line in enumerate(description_lines):
-            rendered = self.card_font.render(line, True, COLORS["muted"])
-            self.screen.blit(rendered, (text_x, display.y + 56 + line_index * 16))
+            rendered = self.small_font.render(line, True, COLORS["muted"])
+            self.screen.blit(rendered, (text_x, display.y + 56 + line_index * 18))
 
         footer = pygame.Rect(display.x + 5, display.bottom - 34, display.width - 10, 29)
         pygame.draw.rect(self.screen, (8, 13, 22), footer, border_radius=6)
@@ -630,6 +657,40 @@ class ShopMixin:
                 width=1,
             )
         self.screen.blit(status, status_rect)
+
+    def draw_shop_purchase_icon(self, upgrade, center):
+        """Show the selected product's symbol inside the purchase control."""
+
+        product_colors = {
+            "temperature": (242, 160, 83),
+            "xray": (103, 176, 244),
+            "ultrasound": (105, 201, 222),
+            "allergy": (215, 126, 226),
+            "power": (112, 255, 181),
+            "smart_cards": (190, 143, 229),
+        }
+        color = product_colors[upgrade["id"]]
+        pygame.draw.circle(self.screen, (9, 17, 27), center, 14)
+        pygame.draw.circle(self.screen, color, center, 14, width=2)
+        item_id = upgrade["id"]
+        if item_id == "temperature":
+            pygame.draw.line(self.screen, color, (center[0], center[1] - 7), (center[0], center[1] + 4), width=3)
+            pygame.draw.circle(self.screen, color, (center[0], center[1] + 7), 4)
+        elif item_id == "xray":
+            pygame.draw.line(self.screen, color, (center[0] - 6, center[1] + 6), (center[0] + 6, center[1] - 6), width=3)
+            pygame.draw.circle(self.screen, color, (center[0] - 7, center[1] + 7), 3)
+            pygame.draw.circle(self.screen, color, (center[0] + 7, center[1] - 7), 3)
+        elif item_id == "ultrasound":
+            for radius in (6, 11):
+                pygame.draw.arc(self.screen, color, pygame.Rect(center[0] - radius, center[1] - radius, radius * 2, radius * 2), -0.8, 0.8, width=2)
+        elif item_id == "allergy":
+            pygame.draw.circle(self.screen, color, (center[0], center[1] + 3), 6)
+            pygame.draw.polygon(self.screen, color, ((center[0], center[1] - 9), (center[0] - 5, center[1] + 1), (center[0] + 5, center[1] + 1)))
+        elif item_id == "power":
+            pygame.draw.polygon(self.screen, color, ((center[0] + 2, center[1] - 10), (center[0] - 6, center[1] + 1), (center[0], center[1] + 1), (center[0] - 2, center[1] + 10), (center[0] + 7, center[1] - 2), (center[0] + 1, center[1] - 2)))
+        else:
+            pygame.draw.rect(self.screen, color, pygame.Rect(center[0] - 7, center[1] - 8, 12, 15), width=2, border_radius=2)
+            pygame.draw.line(self.screen, color, (center[0] - 3, center[1] - 4), (center[0] + 8, center[1] - 4), width=2)
 
     def draw_shop_product_illustration(self, upgrade, frame, color, dimmed=False):
         """Draw a compact UI illustration for one shop product."""

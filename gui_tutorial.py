@@ -346,7 +346,7 @@ class TutorialMixin:
         subtitle = self.card_font.render("FOLLOW THE EVIDENCE  •  PROTECT YOUR PAY", True, COLORS["muted"])
         self.screen.blit(subtitle, subtitle.get_rect(center=(panel.centerx, panel.y + 68)))
         rows = (
-            ("1", "INSPECT", "Read symptoms and flip the patient's ID."),
+            ("1", "INSPECT", "Click the patient to ask questions; flip their ID."),
             ("2", "TEST", "Run useful tests; every machine use has a cost."),
             ("3", "COMPARE", "Patient Notes keeps anatomy and results together."),
             ("4", "DIAGNOSE", "Submit the condition best supported by the clues."),

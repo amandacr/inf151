@@ -56,7 +56,7 @@ class CosmicClinicGUI(
         """Set up Pygame, shared game data, layout rectangles, and fonts."""
 
         pygame.init()
-        pygame.display.set_caption("The Cosmic Clinic - GUI Prototype")
+        pygame.display.set_caption("The Cosmic Clinic")
 
         self.setup_audio()
         self.start_music()
@@ -107,6 +107,7 @@ class CosmicClinicGUI(
         self.daily_wrong_diagnoses = 0
         self.daily_test_count = 0
         self.daily_test_expenses = 0
+        self.daily_evidence_cases = 0
         self.daily_payout_applied = False
         self.money_deduction_animation = None
         self.money_count_duration = 650
@@ -153,6 +154,8 @@ class CosmicClinicGUI(
         self.reception_transition_started_at = None
         self.reception_transition_duration = 3350
         self.reception_fade_duration = 650
+        self.end_day_shutdown_started_at = None
+        self.end_day_shutdown_duration = 1750
         self.queue_shift_started_at = None
         self.queue_shift_duration = 900
         self.patient_fade_started_at = None
@@ -434,7 +437,8 @@ class CosmicClinicGUI(
             self.play_sfx("button")
             if self.diagnosis_correct:
                 if self.patients_waiting() == 0:
-                    self.end_day()
+                    self.state = GameState.TITLE
+                    self.begin_end_day_shutdown()
                 else:
                     self.reset_round()
                     self.begin_queue_shift()
@@ -499,6 +503,12 @@ class CosmicClinicGUI(
                 self.play_sfx("waste")
                 self.discard_animation = None
 
+        if self.state == GameState.TITLE and self.end_day_shutdown_started_at is not None:
+            elapsed = now - self.end_day_shutdown_started_at
+            if elapsed >= self.end_day_shutdown_duration:
+                self.end_day()
+            return
+
         if self.state == GameState.TITLE and self.queue_shift_started_at is not None:
             elapsed = pygame.time.get_ticks() - self.queue_shift_started_at
             if elapsed >= self.queue_shift_duration:
@@ -534,6 +544,7 @@ class CosmicClinicGUI(
         self.reception_transition_started_at = None
         self.queue_shift_started_at = None
         self.patient_fade_started_at = None
+        self.end_day_shutdown_started_at = None
         self.state = GameState.DAY_COMPLETE
 
     def handle_day_complete_click(self, position):
@@ -549,10 +560,12 @@ class CosmicClinicGUI(
 
         self.patients_called = 0
         self.queue_shift_started_at = None
+        self.end_day_shutdown_started_at = None
         self.daily_correct_diagnoses = 0
         self.daily_wrong_diagnoses = 0
         self.daily_test_count = 0
         self.daily_test_expenses = 0
+        self.daily_evidence_cases = 0
         self.daily_payout_applied = False
         self.money_deduction_animation = None
         self.selected_shop_upgrade = None

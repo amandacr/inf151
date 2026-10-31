@@ -494,9 +494,114 @@ class ExaminationMixin:
         pygame.draw.rect(self.screen, border, pygame.Rect(center[0] - 3, center[1] - 10, 6, 20))
         pygame.draw.rect(self.screen, border, pygame.Rect(center[0] - 10, center[1] - 3, 20, 6))
 
+    def draw_patient_bay_details(self, bay, platform, entry, idle_time):
+        """Add small environmental clues unique to the current patient."""
+
+        serial = entry["serial"]
+        pulse = (math.sin(idle_time / 260) + 1) / 2
+        if serial.startswith("BLP"):
+            warning = pygame.Rect(bay.x + 7, bay.y + 28, 34, 55)
+            pygame.draw.rect(self.screen, (30, 25, 30), warning, border_radius=5)
+            warning_color = (
+                244,
+                round(111 + 40 * pulse),
+                round(86 + 22 * pulse),
+            )
+            pygame.draw.rect(self.screen, warning_color, warning, width=2, border_radius=5)
+            pygame.draw.line(
+                self.screen,
+                warning_color,
+                (warning.centerx, warning.y + 10),
+                (warning.centerx, warning.y + 32),
+                width=3,
+            )
+            pygame.draw.circle(self.screen, warning_color, (warning.centerx, warning.y + 38), 6)
+            label = self.legible_micro_font.render("TEMP", True, warning_color)
+            self.screen.blit(label, label.get_rect(center=(warning.centerx, warning.bottom - 7)))
+        elif serial.startswith("GRN"):
+            resonance_color = (126, 225, 174)
+            for radius in (23, 34, 45):
+                wave = pygame.Rect(
+                    platform.centerx - radius,
+                    platform.centery - radius,
+                    radius * 2,
+                    radius * 2,
+                )
+                pygame.draw.arc(
+                    self.screen,
+                    resonance_color,
+                    wave,
+                    math.pi + 0.35,
+                    math.tau - 0.35,
+                    width=1,
+                )
+            for offset in (-1, 1):
+                x = platform.centerx + offset * 72
+                pygame.draw.line(
+                    self.screen,
+                    (71, 132, 105),
+                    (x, bay.y + 29),
+                    (x, bay.y + 81),
+                    width=2,
+                )
+                for line_y in range(bay.y + 35, bay.y + 79, 11):
+                    pygame.draw.line(
+                        self.screen,
+                        resonance_color,
+                        (x - 4, line_y),
+                        (x + 4, line_y),
+                        width=1,
+                    )
+        elif serial.startswith("BLU"):
+            droplet_color = (105, 201, 222)
+            droplets = (
+                (bay.x + 38, bay.y + 32, 5),
+                (bay.x + 57, bay.y + 73, 4),
+                (bay.right - 34, bay.y + 25, 4),
+            )
+            for drop_x, drop_y, radius in droplets:
+                bob = round(math.sin(idle_time / 320 + drop_x) * 2)
+                points = (
+                    (drop_x, drop_y - radius * 2 + bob),
+                    (drop_x - radius, drop_y + bob),
+                    (drop_x, drop_y + radius + bob),
+                    (drop_x + radius, drop_y + bob),
+                )
+                pygame.draw.polygon(self.screen, droplet_color, points)
+                pygame.draw.circle(
+                    self.screen,
+                    (186, 235, 241),
+                    (drop_x - 1, drop_y - 1 + bob),
+                    1,
+                )
+        elif serial.startswith("ORG"):
+            container = pygame.Rect(bay.right - 60, platform.y - 25, 43, 27)
+            pygame.draw.rect(self.screen, (74, 42, 38), container.move(2, 2), border_radius=4)
+            pygame.draw.rect(self.screen, (239, 186, 111), container, border_radius=4)
+            pygame.draw.rect(self.screen, (160, 74, 63), container, width=2, border_radius=4)
+            lid = pygame.Rect(container.x - 3, container.y - 5, container.width + 6, 8)
+            pygame.draw.rect(self.screen, (248, 210, 143), lid, border_radius=3)
+            pygame.draw.rect(self.screen, (160, 74, 63), lid, width=1, border_radius=3)
+            pygame.draw.arc(
+                self.screen,
+                (255, 236, 188),
+                pygame.Rect(container.centerx - 10, container.y - 21, 9, 16),
+                math.pi,
+                math.tau,
+                width=2,
+            )
+            pygame.draw.arc(
+                self.screen,
+                (255, 236, 188),
+                pygame.Rect(container.centerx + 2, container.y - 18, 9, 13),
+                math.pi,
+                math.tau,
+                width=2,
+            )
+
 
     def draw_alien_patient(self):
-        """Draw Zorpa standing inside a softly lit examination bay."""
+        """Draw the current patient inside their personalized examination bay."""
 
         panel = self.layout["alien"]
         pygame.draw.rect(
@@ -597,6 +702,7 @@ class ExaminationMixin:
         )
 
         entry = self.get_current_entry()
+        self.draw_patient_bay_details(bay, platform, entry, idle_time)
         if entry["exam"] is not None:
             head = entry["exam"](bay, base_alien_center_x, platform, shake_x, shake_y, blinking)
             self.draw_symptom_bubble(bay, head)

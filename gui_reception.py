@@ -23,12 +23,28 @@ class ReceptionMixin:
         if self.queue_shift_started_at is not None:
             return
         if self.patients_waiting() == 0:
-            self.end_day()
+            self.begin_end_day_shutdown()
             return
         if self.reception_transition_started_at is None:
             self.play_sfx("door")
             self.patient_fade_started_at = None
             self.reception_transition_started_at = pygame.time.get_ticks()
+
+    def begin_end_day_shutdown(self):
+        """Pause on the empty clinic while its systems power down."""
+
+        if self.end_day_shutdown_started_at is None:
+            self.reception_transition_started_at = None
+            self.queue_shift_started_at = None
+            self.end_day_shutdown_started_at = pygame.time.get_ticks()
+
+    def get_end_day_shutdown_progress(self):
+        """Return the progress of the empty-clinic shutdown moment."""
+
+        if self.end_day_shutdown_started_at is None:
+            return 0.0
+        elapsed = pygame.time.get_ticks() - self.end_day_shutdown_started_at
+        return max(0.0, min(1.0, elapsed / self.end_day_shutdown_duration))
 
     def get_reception_transition_progress(self):
         """Return a zero-to-one value for the active reception-room transition."""
@@ -280,8 +296,40 @@ class ReceptionMixin:
         self.draw_waiting_room_chairs()
         self.draw_waiting_room_aliens()
         self.draw_reception_desk()
-        if not getattr(self, "intro_dialogue_active", False):
+        if (
+            not getattr(self, "intro_dialogue_active", False)
+            and self.end_day_shutdown_started_at is None
+        ):
             self.draw_reception_button()
+        self.draw_end_day_shutdown()
+
+    def draw_end_day_shutdown(self):
+        """Dim the vacant waiting room before opening the payroll recap."""
+
+        if self.end_day_shutdown_started_at is None:
+            return
+        progress = self.get_end_day_shutdown_progress()
+        eased = progress * progress * (3 - 2 * progress)
+        dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        dim.fill((1, 5, 12, round(55 + 130 * eased)))
+        self.screen.blit(dim, (0, 0))
+
+        panel = pygame.Rect(350, 276, 400, 88)
+        pygame.draw.rect(self.screen, (3, 8, 13), panel.move(5, 6), border_radius=12)
+        pygame.draw.rect(self.screen, (12, 24, 34), panel, border_radius=12)
+        pygame.draw.rect(self.screen, (105, 201, 222), panel, width=2, border_radius=12)
+        title = self.body_font.render("SHIFT SYSTEMS POWERING DOWN", True, (186, 232, 236))
+        self.screen.blit(title, title.get_rect(center=(panel.centerx, panel.y + 31)))
+        segment_width = 43
+        for index in range(7):
+            segment = pygame.Rect(panel.x + 40 + index * 47, panel.y + 56, segment_width, 8)
+            active = index < round(progress * 8)
+            pygame.draw.rect(
+                self.screen,
+                (40, 61, 70) if active else (112, 255, 181),
+                segment,
+                border_radius=4,
+            )
 
 
     def draw_reception_room(self):

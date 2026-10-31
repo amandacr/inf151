@@ -266,6 +266,8 @@ class CardMixin:
         self.diagnosis_correct = self.patient.receive_diagnosis(card.value)
         if self.diagnosis_correct:
             self.daily_correct_diagnoses += 1
+            if self.notebook_has_test_results():
+                self.daily_evidence_cases += 1
             self.play_sfx("correct")
         else:
             self.start_live_money_deduction(

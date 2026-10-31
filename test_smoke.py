@@ -342,6 +342,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_guided_tutorial_click((1090, 680))
         self.assertFalse(self.game.guided_tutorial_active)
         self.assertEqual(self.game.daily_correct_diagnoses, 1)
+        self.assertEqual(self.game.daily_evidence_cases, 1)
 
     def test_compact_help_remains_available_after_training(self):
         """The deleted briefing should be replaced by compact reusable Help."""
@@ -545,7 +546,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.draw()
 
         pygame.event.post(
-            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_6})
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_r})
         )
         self.game.handle_events()
         self.assertEqual(self.game.state, GameState.DAY_COMPLETE)
@@ -559,7 +560,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         )
         self.game.handle_events()
         pygame.event.post(
-            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_7})
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_s})
         )
         self.game.handle_events()
         self.assertEqual(self.game.state, GameState.SHOP)
@@ -585,11 +586,68 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertTrue(self.game.intro_dialogue_active)
 
         self.game.toggle_developer_navigator()
-        self.game.jump_to_developer_screen(6)
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("shop")
+        )
 
         self.assertEqual(self.game.state, GameState.SHOP)
         self.assertFalse(self.game.intro_dialogue_active)
         self.assertIsNone(self.game.intro_dialogue_started_at)
+
+    def test_f10_navigator_prepares_every_missing_story_scene(self):
+        """Opening, tutorial, diagnosis, and shutdown previews should be valid."""
+
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("intro")
+        )
+        self.assertEqual(self.game.state, GameState.INTRO)
+        self.game.draw()
+
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("dialogue")
+        )
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertTrue(self.game.intro_dialogue_active)
+        self.game.draw()
+
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("tutorial")
+        )
+        self.assertTrue(self.game.guided_tutorial_active)
+        self.assertEqual(self.game.guided_tutorial_step, "call_patient")
+        self.game.draw()
+
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("diagnosis_hand")
+        )
+        self.assertEqual(self.game.state, GameState.PATIENT)
+        self.assertTrue(self.game.showing_diagnosis_hand)
+        self.game.draw()
+
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("diagnosis_confirm")
+        )
+        self.assertTrue(self.game.diagnosis_confirmation_open)
+        self.assertIsNotNone(self.game.selected_card_index)
+        self.game.draw()
+
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("wrong")
+        )
+        self.assertEqual(self.game.state, GameState.OUTCOME)
+        self.assertFalse(self.game.diagnosis_correct)
+        self.game.draw()
+
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("shutdown")
+        )
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertEqual(
+            self.game.patients_called,
+            len(self.game.waiting_room_queue),
+        )
+        self.assertIsNotNone(self.game.end_day_shutdown_started_at)
+        self.game.draw()
 
     def test_test_cards_accumulate_end_of_day_operating_expenses(self):
         """Running machines should charge by rarity without settling cash early."""
@@ -612,8 +670,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.game.get_daily_pay_breakdown()[3],
             len(self.game.waiting_room_queue) * DIAGNOSIS_REWARD
             - get_test_cost(first_test)
-            - CLINIC_OPERATING_FEE
-            + PERFECT_DAY_BONUS,
+            - CLINIC_OPERATING_FEE,
         )
 
         self.game.daily_wrong_diagnoses = 1
@@ -681,6 +738,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.daily_correct_diagnoses = len(self.game.waiting_room_queue)
         self.game.daily_test_count = 4
         self.game.daily_test_expenses = 40
+        self.game.daily_evidence_cases = len(self.game.waiting_room_queue)
         self.assertEqual(
             self.game.get_daily_pay_breakdown(),
             (160, 0, PERFECT_DAY_BONUS, 95),
@@ -691,6 +749,32 @@ class GuiFlowSmokeTests(unittest.TestCase):
             upgrade["cost"] for upgrade in SHOP_UPGRADES
         )[:2]
         self.assertLessEqual(two_cheapest_upgrades[0], projected_balance)
+        self.assertGreater(sum(two_cheapest_upgrades), projected_balance)
+
+    def test_perfect_bonus_requires_test_evidence_for_every_case(self):
+        """Guessing every answer should not fund two first-shift upgrades."""
+
+        patient_count = len(self.game.waiting_room_queue)
+        self.game.daily_correct_diagnoses = patient_count
+        self.game.daily_test_count = 0
+        self.game.daily_test_expenses = 0
+        self.game.daily_evidence_cases = 0
+
+        self.assertEqual(
+            self.game.get_daily_pay_breakdown(),
+            (
+                patient_count * DIAGNOSIS_REWARD,
+                0,
+                0,
+                patient_count * DIAGNOSIS_REWARD - CLINIC_OPERATING_FEE,
+            ),
+        )
+        projected_balance = (
+            STARTING_BALANCE + self.game.get_daily_pay_breakdown()[3]
+        )
+        two_cheapest_upgrades = sorted(
+            upgrade["cost"] for upgrade in SHOP_UPGRADES
+        )[:2]
         self.assertGreater(sum(two_cheapest_upgrades), projected_balance)
 
     def test_audio_controls_balance_music_and_cover_core_interactions(self):
@@ -923,17 +1007,24 @@ class GuiFlowSmokeTests(unittest.TestCase):
                 self.game.update()
                 self.assertIsNone(self.game.queue_shift_started_at)
 
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertIsNotNone(self.game.end_day_shutdown_started_at)
+        self.game.draw()
+        self.game.end_day_shutdown_started_at = (
+            pygame.time.get_ticks() - self.game.end_day_shutdown_duration - 1
+        )
+        self.game.update()
         self.assertEqual(self.game.state, GameState.DAY_COMPLETE)
+        self.assertIsNone(self.game.end_day_shutdown_started_at)
         self.assertEqual(self.game.player.balance, starting_balance)
         self.assertEqual(
             self.game.get_daily_pay_breakdown(),
             (
                 len(expected_names) * DIAGNOSIS_REWARD,
                 0,
-                PERFECT_DAY_BONUS,
+                0,
                 len(expected_names) * DIAGNOSIS_REWARD
-                - CLINIC_OPERATING_FEE
-                + PERFECT_DAY_BONUS,
+                - CLINIC_OPERATING_FEE,
             ),
         )
         self.game.draw()
@@ -943,8 +1034,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.game.player.balance,
             starting_balance
             + len(expected_names) * DIAGNOSIS_REWARD
-            - CLINIC_OPERATING_FEE
-            + PERFECT_DAY_BONUS,
+            - CLINIC_OPERATING_FEE,
         )
         paid_balance = self.game.player.balance
         self.game.settle_daily_pay()
