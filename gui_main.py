@@ -153,6 +153,10 @@ class CosmicClinicGUI(
         self.diagnosis_correct = None
         self.patient_left = False
         self.patient_leave_text = ""
+        self.patient_wrong_diagnoses = 0
+        self.advance_case_after_discard = False
+        self.card_draw_notice = ""
+        self.card_draw_notice_started_at = None
         self.daily_patients_lost = 0
         self.daily_draw_expenses = 0
         self.reception_transition_started_at = None
@@ -412,8 +416,8 @@ class CosmicClinicGUI(
             self.switch_active_hand(not self.showing_diagnosis_hand)
             return
         if self.layout["draw_deck"].collidepoint(position):
-            self.play_sfx("card_select")
-            self.draw_card_from_pile()
+            card_drawn = self.draw_card_from_pile()
+            self.play_sfx("card_select" if card_drawn else "button")
             return
 
         self.handle_card_click(position)
@@ -439,18 +443,31 @@ class CosmicClinicGUI(
 
         if self.outcome_button.collidepoint(position):
             self.play_sfx("button")
-            if self.diagnosis_correct or self.patient_left:
-                if self.patients_waiting() == 0:
-                    self.state = GameState.TITLE
-                    self.begin_end_day_shutdown()
-                else:
-                    self.reset_round()
-                    self.begin_queue_shift()
-                    self.state = GameState.TITLE
+            if self.diagnosis_correct:
+                self.advance_completed_case()
+            elif self.patient_left:
+                self.switch_active_hand(False)
+                self.state = GameState.PATIENT
+                self.advance_case_after_discard = True
+                self.start_pending_diagnosis_discard_animation()
+                if self.discard_animation is None:
+                    self.advance_case_after_discard = False
+                    self.advance_completed_case()
             else:
                 self.switch_active_hand(False)
                 self.state = GameState.PATIENT
                 self.start_pending_diagnosis_discard_animation()
+
+    def advance_completed_case(self):
+        """Move from a resolved or abandoned case to the next queue state."""
+
+        if self.patients_waiting() == 0:
+            self.state = GameState.TITLE
+            self.begin_end_day_shutdown()
+        else:
+            self.reset_round()
+            self.begin_queue_shift()
+            self.state = GameState.TITLE
 
     def update(self):
         """Advance timed GUI transitions without pausing the event loop."""
@@ -506,6 +523,9 @@ class CosmicClinicGUI(
                     self.discard_pile.append(self.discard_animation["card"])
                 self.play_sfx("waste")
                 self.discard_animation = None
+                if self.advance_case_after_discard:
+                    self.advance_case_after_discard = False
+                    self.advance_completed_case()
 
         if self.state == GameState.TITLE and self.end_day_shutdown_started_at is not None:
             elapsed = now - self.end_day_shutdown_started_at
@@ -577,7 +597,7 @@ class CosmicClinicGUI(
         self.deck.populate(
             [AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()]
         )
-        seld.daily_patients_lost = 0
+        self.daily_patients_lost = 0
         self.daily_draw_expenses = 0
         self.reset_round()
 
@@ -620,6 +640,12 @@ class CosmicClinicGUI(
         self.test_result_started_at = None
         self.last_diagnosis = None
         self.diagnosis_correct = None
+        self.patient_left = False
+        self.patient_leave_text = ""
+        self.patient_wrong_diagnoses = 0
+        self.advance_case_after_discard = False
+        self.card_draw_notice = ""
+        self.card_draw_notice_started_at = None
         self.reception_transition_started_at = None
         self.patient_fade_started_at = None
         self.refresh_hand_layout()

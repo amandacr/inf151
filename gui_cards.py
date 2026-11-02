@@ -1,11 +1,11 @@
 """Reusable card interaction and rendering for The Cosmic Clinic GUI."""
 
 import math
+import random
 
 import pygame
 
 from gui_state import GameState
-import random
 from gui_theme import (
     COLORS,
     RARITY_CARD_COLORS,
@@ -14,10 +14,12 @@ from gui_theme import (
     WINDOW_SIZE,
 )
 from Player import (
-    WRONG_DIAGNOSIS_PENALTY,
     DRAW_COST,
+    MAX_TEST_HAND_SIZE,
     PATIENT_LEAVES_CHANCE,
-    PATIENT_LEAVES_TEXT
+    PATIENT_LEAVES_TEXT,
+    PATIENT_WALKOUT_THRESHOLD,
+    WRONG_DIAGNOSIS_PENALTY,
 )
 
 class CardMixin:
@@ -276,7 +278,6 @@ class CardMixin:
                 self.daily_evidence_cases += 1
             self.play_sfx("correct")
         else:
-
             self.start_live_money_deduction(
                 WRONG_DIAGNOSIS_PENALTY,
                 "WRONG DIAGNOSIS",
@@ -287,9 +288,11 @@ class CardMixin:
                 "card": card,
                 "start": selected_rect.center,
             }
+            self.patient_wrong_diagnoses += 1
             self.patient_left = (
-                    not self.guided_tutorial_active
-                    and random.random() < PATIENT_LEAVES_CHANCE
+                not self.guided_tutorial_active
+                and self.patient_wrong_diagnoses >= PATIENT_WALKOUT_THRESHOLD
+                and random.random() < PATIENT_LEAVES_CHANCE
             )
             if self.patient_left:
                 self.daily_patients_lost += 1
@@ -489,13 +492,23 @@ class CardMixin:
     def draw_card_from_pile(self):
         """Move the top card of the deck into the player's hand for DRAW_COST."""
         if not self.deck.contents:
-            return
+            return False
+        if len(self.player.test_hand) >= MAX_TEST_HAND_SIZE:
+            self.card_draw_notice = "HAND FULL  •  DISCARD FIRST"
+            self.card_draw_notice_started_at = pygame.time.get_ticks()
+            return False
+
+        # Drawn cards belong to the test hand. Reveal that hand immediately so
+        # the player never pays for a card hidden behind Diagnosis Options.
+        if self.showing_diagnosis_hand:
+            self.switch_active_hand(False)
         card = self.deck.draw()
         self.player.draw(card)
         self.start_live_money_deduction(DRAW_COST, "CARD DRAW")
         self.daily_draw_expenses += DRAW_COST
         self.selected_card_index = None
         self.refresh_hand_layout()
+        return True
 
     def get_hovered_card_index(self, position):
         """Return the single card under the mouse, or None."""

@@ -577,7 +577,10 @@ class ResultsMixin:
         if correct:
             detail_text = self.last_diagnosis.treatment
         elif left:
-            detail_text = self.patient_leave_text + " You can't recover this case."
+            detail_text = (
+                self.patient_leave_text
+                + " The case is closed and cannot be recovered."
+            )
         else:
             detail_text = (
                 f"{diagnosis_name} does not match the available evidence. "

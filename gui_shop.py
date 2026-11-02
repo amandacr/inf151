@@ -6,6 +6,7 @@ from gui_theme import COLORS
 from Player import (
     CLINIC_OPERATING_FEE,
     DIAGNOSIS_REWARD,
+    DRAW_COST,
     PERFECT_DAY_BONUS,
     WRONG_DIAGNOSIS_PENALTY,
 )
@@ -39,7 +40,12 @@ class ShopMixin:
         if self.daily_payout_applied:
             return self.player.balance
         penalties = self.daily_wrong_diagnoses * WRONG_DIAGNOSIS_PENALTY
-        return self.player.balance - self.daily_test_expenses - penalties
+        return (
+            self.player.balance
+            - self.daily_test_expenses
+            - self.daily_draw_expenses
+            - penalties
+        )
 
     def get_displayed_balance(self):
         """Interpolate the visible balance during a live deduction."""
@@ -287,6 +293,13 @@ class ShopMixin:
         self.screen.blit(badge_text, badge_text.get_rect(center=case_badge.center))
 
         base_pay, penalties, bonus, total = self.get_daily_pay_breakdown()
+        care_detail = (
+            f"{self.daily_correct_diagnoses} confirmed cases × ${DIAGNOSIS_REWARD}"
+        )
+        if self.daily_patients_lost:
+            care_detail += f"  •  {self.daily_patients_lost} walked out"
+        cards_drawn = self.daily_draw_expenses // DRAW_COST
+        diagnostic_costs = self.daily_test_expenses + self.daily_draw_expenses
         mistake_label = (
             "WRONG DIAGNOSIS"
             if self.daily_wrong_diagnoses == 1
@@ -295,14 +308,14 @@ class ShopMixin:
         recap_rows = (
             (
                 "PATIENT CARE REVENUE",
-                f"{self.daily_correct_diagnoses} confirmed cases × ${DIAGNOSIS_REWARD}",
+                care_detail,
                 f"+${base_pay}",
                 COLORS["accent"],
             ),
             (
-                "DIAGNOSTIC TEST COSTS",
-                f"{self.daily_test_count} machines operated",
-                f"-${self.daily_test_expenses}",
+                "DIAGNOSTIC & CARD COSTS",
+                f"{self.daily_test_count} machines operated  •  {cards_drawn} cards drawn",
+                f"-${diagnostic_costs}",
                 (117, 190, 255),
             ),
             (
@@ -477,6 +490,7 @@ class ShopMixin:
             base_pay
             - penalties
             - self.daily_test_expenses
+            - self.daily_draw_expenses
             - CLINIC_OPERATING_FEE
             + bonus
         )

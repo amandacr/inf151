@@ -11,15 +11,17 @@ STARTING_BALANCE = 100
 DIAGNOSIS_REWARD = 40
 WRONG_DIAGNOSIS_PENALTY = 25
 DRAW_COST = 5
+MAX_TEST_HAND_SIZE = 8
 PERFECT_DAY_BONUS = 25
 CLINIC_OPERATING_FEE = 50
-PATIENT_LEAVES_CHANCE = 0.25  # chance that patient walks off when u give wrong diagnosis
+PATIENT_WALKOUT_THRESHOLD = 2
+PATIENT_LEAVES_CHANCE = 0.25
 
 PATIENT_LEAVES_TEXT = [
-    "Uh oh! {name} lost confidence in your bedside manner, grabbed their health ID, and stormed out of the clinic!",
-    "Oh no! While you were flipping through your diagnosis file, {name} quietly slipped out the airlock to find a second opinion!",
-    "{name}'s ride pod arrived early. They took one look at your diagnosis and left without a word!",
-    "{name} muttered something about 'amateur hour' and teleported out. The case is closed, unsuccessfully.",
+    "{name} lost confidence and left the clinic to seek a second opinion.",
+    "{name} grabbed their Health ID and slipped out before you could continue.",
+    "{name}'s ride pod arrived. They ended the appointment and left.",
+    "{name} called the diagnosis 'amateur hour' and teleported away.",
 ]
 
 

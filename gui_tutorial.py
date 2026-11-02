@@ -135,7 +135,7 @@ class TutorialMixin:
             "symptom": ("Read Zorpa's concern, then click the highlighted patient to ask a follow-up.", pygame.Rect(620, 168, 400, 104), False),
             "inspect_id": ("Inspect Zorpa's Intergalactic ID.", pygame.Rect(62, 178, 375, 92), False),
             "review_health_id": ("Normal temperature: 2,000°F. Remember this baseline.", pygame.Rect(62, 174, 410, 104), True),
-            "temperature_select": ("Shaking may be temperature-related. Select TEMPERATURE.", pygame.Rect(650, 174, 400, 92), False),
+            "temperature_select": ("Shaking may be temperature-related. Select TEMPERATURE. Drawing an extra card from the deck costs $5.", pygame.Rect(650, 174, 400, 104), False),
             "temperature_run": ("Run the selected test. Its cost is deducted immediately.", pygame.Rect(650, 174, 400, 92), False),
             "test_result": ("Read the observed result, then return to Zorpa.", pygame.Rect(120, 462, 400, 92), False),
             "note_transfer": ("The clinic is filing this result in Patient Notes...", pygame.Rect(650, 172, 400, 92), False),
@@ -144,7 +144,7 @@ class TutorialMixin:
             "diagnosis_folder": ("The evidence points to hypothermia. Open Diagnosis.", pygame.Rect(405, 173, 410, 92), False),
             "diagnosis_select": ("Select the Hypothermia case file.", pygame.Rect(650, 173, 400, 92), False),
             "diagnosis_play": ("Submit the selected condition as your diagnosis.", pygame.Rect(650, 173, 400, 92), False),
-            "diagnosis_confirm": ("Diagnoses are final. Confirm when you are certain.", pygame.Rect(105, 174, 400, 92), False),
+            "diagnosis_confirm": ("Confirm when you are ready. Incorrect diagnoses cost $25, and repeated mistakes may cause a patient to leave.", pygame.Rect(350, 38, 400, 104), False),
             "complete": ("Adequate work, Doctor. Three patients remain.", pygame.Rect(350, 12, 400, 104), True),
         }
         return prompts.get(self.guided_tutorial_step)
@@ -347,7 +347,11 @@ class TutorialMixin:
         self.screen.blit(subtitle, subtitle.get_rect(center=(panel.centerx, panel.y + 68)))
         rows = (
             ("1", "INSPECT", "Click the patient to ask questions; flip their ID."),
-            ("2", "TEST", "Run useful tests; every machine use has a cost."),
+            (
+                "2",
+                "TEST",
+                "Run useful tests and draw carefully; machines and new cards cost money.",
+            ),
             ("3", "COMPARE", "Patient Notes keeps anatomy and results together."),
             ("4", "DIAGNOSE", "Submit the condition best supported by the clues."),
         )

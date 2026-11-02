@@ -19,6 +19,9 @@ from PatientData import create_conmann, create_titus, create_zoogy, create_zorpa
 from Player import (
     CLINIC_OPERATING_FEE,
     DIAGNOSIS_REWARD,
+    DRAW_COST,
+    MAX_TEST_HAND_SIZE,
+    PATIENT_WALKOUT_THRESHOLD,
     PERFECT_DAY_BONUS,
     STARTING_BALANCE,
     WRONG_DIAGNOSIS_PENALTY,
@@ -429,6 +432,13 @@ class GuiFlowSmokeTests(unittest.TestCase):
                     panel.width - 32,
                 )
 
+        self.game.guided_tutorial_step = "diagnosis_confirm"
+        _message, confirmation_prompt, _click_anywhere = (
+            self.game.get_guided_tutorial_prompt()
+        )
+        confirmation_modal = pygame.Rect(245, 155, 610, 335)
+        self.assertFalse(confirmation_prompt.colliderect(confirmation_modal))
+
     def test_patient_interview_cycles_and_files_each_unique_statement(self):
         """Clicking the patient should reveal questions without losing notes."""
 
@@ -726,6 +736,56 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.get_live_balance(), expected_final_balance)
         self.assertIsNone(self.game.money_deduction_animation)
 
+    def test_drawn_cards_are_charged_live_and_in_the_shift_recap(self):
+        """A paid draw should remain deducted after its HUD animation finishes."""
+
+        starting_balance = self.game.player.balance
+        starting_hand = len(self.game.player.test_hand)
+        starting_deck = len(self.game.deck.contents)
+        starting_total = self.game.get_daily_pay_breakdown()[3]
+
+        self.assertTrue(self.game.draw_card_from_pile())
+
+        self.assertEqual(len(self.game.player.test_hand), starting_hand + 1)
+        self.assertEqual(len(self.game.deck.contents), starting_deck - 1)
+        self.assertEqual(self.game.daily_draw_expenses, DRAW_COST)
+        self.assertEqual(
+            self.game.get_live_balance(),
+            starting_balance - DRAW_COST,
+        )
+        self.assertEqual(
+            self.game.get_daily_pay_breakdown()[3],
+            starting_total - DRAW_COST,
+        )
+        self.game.money_deduction_animation["started_at"] -= (
+            self.game.money_count_duration + 1
+        )
+        self.assertEqual(
+            self.game.get_displayed_balance(),
+            starting_balance - DRAW_COST,
+        )
+
+    def test_paid_draw_reveals_test_hand_and_full_hand_blocks_extra_charge(self):
+        """Drawn cards stay visible, while a full readable hand refuses the draw."""
+
+        self.game.switch_active_hand(True)
+        starting_hand = len(self.game.player.test_hand)
+        self.assertTrue(self.game.draw_card_from_pile())
+        self.assertFalse(self.game.showing_diagnosis_hand)
+        self.assertEqual(len(self.game.player.test_hand), starting_hand + 1)
+
+        while len(self.game.player.test_hand) < MAX_TEST_HAND_SIZE:
+            self.assertTrue(self.game.draw_card_from_pile())
+        expenses_before_block = self.game.daily_draw_expenses
+        deck_before_block = len(self.game.deck.contents)
+
+        self.assertFalse(self.game.draw_card_from_pile())
+        self.assertEqual(len(self.game.player.test_hand), MAX_TEST_HAND_SIZE)
+        self.assertEqual(len(self.game.deck.contents), deck_before_block)
+        self.assertEqual(self.game.daily_draw_expenses, expenses_before_block)
+        self.assertIn("HAND FULL", self.game.card_draw_notice)
+        self.assertIsNotNone(self.game.card_draw_notice_started_at)
+
     def test_rebalanced_economy_allows_one_efficient_shift_upgrade(self):
         """An efficient first shift should fund one upgrade, not a shopping spree."""
 
@@ -931,6 +991,56 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.update()
         self.assertIsNone(self.game.discard_animation)
         self.assertIs(self.game.discard_pile[-1], wrong_card)
+
+    def test_patient_walkout_requires_repeated_errors_and_finishes_discard(self):
+        """Walkouts begin after repeated errors and still show med-waste disposal."""
+
+        self.assertEqual(PATIENT_WALKOUT_THRESHOLD, 2)
+        first_patient = self.game.patient.name
+
+        with patch("gui_cards.random.random", return_value=0.0):
+            self.game.switch_active_hand(True)
+            self.game.selected_card_index = 1
+            self.game.play_selected_diagnosis()
+
+        self.assertFalse(self.game.patient_left)
+        self.assertEqual(self.game.patient_wrong_diagnoses, 1)
+        self.game.draw()
+        self.game.handle_outcome_click(self.game.outcome_button.center)
+        self.game.discard_animation["started_at"] -= (
+            self.game.test_discard_animation_duration + 1
+        )
+        self.game.update()
+
+        with patch("gui_cards.random.random", return_value=0.0):
+            self.game.switch_active_hand(True)
+            wrong_index = next(
+                index
+                for index, card in enumerate(self.game.player.diagnosis_hand)
+                if card.value != self.game.patient.diagnosis
+            )
+            self.game.selected_card_index = wrong_index
+            self.game.play_selected_diagnosis()
+
+        self.assertTrue(self.game.patient_left)
+        self.assertEqual(self.game.patient_wrong_diagnoses, 2)
+        self.assertEqual(self.game.daily_patients_lost, 1)
+        self.game.draw()
+        self.game.handle_outcome_click(self.game.outcome_button.center)
+        self.assertEqual(self.game.state, GameState.PATIENT)
+        self.assertTrue(self.game.advance_case_after_discard)
+        self.assertIsNotNone(self.game.discard_animation)
+
+        self.game.discard_animation["started_at"] -= (
+            self.game.test_discard_animation_duration + 1
+        )
+        self.game.update()
+
+        self.assertFalse(self.game.advance_case_after_discard)
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertNotEqual(self.game.patient.name, first_patient)
+        self.assertEqual(self.game.patient_wrong_diagnoses, 0)
+        self.assertIsNotNone(self.game.queue_shift_started_at)
 
     def test_reception_transition_reaches_the_patient_workspace(self):
         """Calling the next patient should finish in the examination workspace."""
