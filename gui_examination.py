@@ -5,6 +5,7 @@ import math
 import pygame
 
 from gui_theme import COLORS, WINDOW_SIZE
+from Player import DRAW_COST
 
 
 class ExaminationMixin:
@@ -444,8 +445,7 @@ class ExaminationMixin:
 
         plaque = pygame.Rect(panel.x + 6, panel.y + 3, panel.width - 12, 25)
         pygame.draw.rect(self.screen, (43, 51, 64), plaque, border_radius=5)
-        self.draw_centered_label("DRAW DECK", plaque, plaque.centery)
-
+        self.draw_centered_label(f"DRAW DECK ${DRAW_COST} PER CARD", plaque, plaque.centery)
         if remaining == 0:
             slot = pygame.Rect(0, 0, 80, 100)
             slot.center = (tray.centerx, tray.centery - 6)
@@ -454,6 +454,13 @@ class ExaminationMixin:
             empty = self.small_font.render("EMPTY", True, COLORS["muted"])
             self.screen.blit(empty, empty.get_rect(center=slot.center))
             return
+
+        if hovered:
+            tip = self.compact_ui_font.render(f"-${DRAW_COST} PER DRAW", True, COLORS["accent"])
+            tip_rect = tip.get_rect(midbottom=(panel.centerx, panel.y - 4))
+            pygame.draw.rect(self.screen, (7, 22, 28), tip_rect.inflate(12, 6), border_radius=6)
+            pygame.draw.rect(self.screen, COLORS["accent"], tip_rect.inflate(12, 6), width=1, border_radius=6)
+            self.screen.blit(tip, tip_rect)
 
         # Thicker stack when the deck is full, thinner as it runs down
         layers = min(6, 1 + remaining // 6)

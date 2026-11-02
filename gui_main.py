@@ -151,6 +151,10 @@ class CosmicClinicGUI(
         self.test_result_reveal_duration = 1400
         self.last_diagnosis = None
         self.diagnosis_correct = None
+        self.patient_left = False
+        self.patient_leave_text = ""
+        self.daily_patients_lost = 0
+        self.daily_draw_expenses = 0
         self.reception_transition_started_at = None
         self.reception_transition_duration = 3350
         self.reception_fade_duration = 650
@@ -435,7 +439,7 @@ class CosmicClinicGUI(
 
         if self.outcome_button.collidepoint(position):
             self.play_sfx("button")
-            if self.diagnosis_correct:
+            if self.diagnosis_correct or self.patient_left:
                 if self.patients_waiting() == 0:
                     self.state = GameState.TITLE
                     self.begin_end_day_shutdown()
@@ -573,6 +577,8 @@ class CosmicClinicGUI(
         self.deck.populate(
             [AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()]
         )
+        seld.daily_patients_lost = 0
+        self.daily_draw_expenses = 0
         self.reset_round()
 
     def reset_round(self):

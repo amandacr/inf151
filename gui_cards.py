@@ -5,6 +5,7 @@ import math
 import pygame
 
 from gui_state import GameState
+import random
 from gui_theme import (
     COLORS,
     RARITY_CARD_COLORS,
@@ -12,8 +13,12 @@ from gui_theme import (
     TEST_SUBTITLES,
     WINDOW_SIZE,
 )
-from Player import WRONG_DIAGNOSIS_PENALTY
-
+from Player import (
+    WRONG_DIAGNOSIS_PENALTY,
+    DRAW_COST,
+    PATIENT_LEAVES_CHANCE,
+    PATIENT_LEAVES_TEXT
+)
 
 class CardMixin:
     def get_active_hand(self):
@@ -261,6 +266,7 @@ class CardMixin:
         selected_rect = self.get_selected_card_rect(selected_index)
         card = self.player.diagnosis_hand[selected_index]
         self.diagnosis_confirmation_open = False
+        self.patient_left = False
         self.last_diagnosis = card.value
         self.player.play(card)
         self.diagnosis_correct = self.patient.receive_diagnosis(card.value)
@@ -270,6 +276,7 @@ class CardMixin:
                 self.daily_evidence_cases += 1
             self.play_sfx("correct")
         else:
+
             self.start_live_money_deduction(
                 WRONG_DIAGNOSIS_PENALTY,
                 "WRONG DIAGNOSIS",
@@ -280,6 +287,15 @@ class CardMixin:
                 "card": card,
                 "start": selected_rect.center,
             }
+            self.patient_left = (
+                    not self.guided_tutorial_active
+                    and random.random() < PATIENT_LEAVES_CHANCE
+            )
+            if self.patient_left:
+                self.daily_patients_lost += 1
+                self.patient_leave_text = random.choice(PATIENT_LEAVES_TEXT).format(
+                    name=self.patient.name
+                )
             self.play_sfx("incorrect")
         self.selected_card_index = None
         self.play_diagnosis_button = None
@@ -471,13 +487,13 @@ class CardMixin:
         )
 
     def draw_card_from_pile(self):
-        """Move the top card of the deck into the player's hand."""
-
+        """Move the top card of the deck into the player's hand for DRAW_COST."""
         if not self.deck.contents:
-            return  # checking first avoids Deck.draw's console message on every click
-
+            return
         card = self.deck.draw()
         self.player.draw(card)
+        self.start_live_money_deduction(DRAW_COST, "CARD DRAW")
+        self.daily_draw_expenses += DRAW_COST
         self.selected_card_index = None
         self.refresh_hand_layout()
 

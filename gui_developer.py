@@ -251,6 +251,8 @@ class DeveloperMixin:
         self.reset_round()
         self.patients_called = 1
         self.state = GameState.PATIENT
+        self.patient_left = False
+        self.patient_leave_text = ""
 
     def prepare_developer_shift_preview(self):
         """Seed a believable recap only when no real shift activity exists yet."""

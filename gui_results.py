@@ -502,6 +502,7 @@ class ResultsMixin:
         self.screen.blit(dim, (0, 0))
 
         correct = bool(self.diagnosis_correct)
+        left = bool(self.patient_left)
         status_color = COLORS["accent"] if correct else (245, 130, 115)
         diagnosis_name = self.last_diagnosis.name if self.last_diagnosis else "Unknown"
         panel = pygame.Rect(105, 105, 890, 455)
@@ -524,7 +525,7 @@ class ResultsMixin:
         pygame.draw.rect(self.screen, status_color, seal, width=2, border_radius=8)
         self.draw_outcome_seal(seal, correct, status_color)
 
-        heading_text = "CASE RESOLVED" if correct else "CASE REQUIRES REVIEW"
+        heading_text = "CASE RESOLVED" if correct else "PATIENT LEFT" if left else "CASE REQUIRES REVIEW"
         heading = self.heading_font.render(heading_text, True, COLORS["text"])
         self.screen.blit(heading, heading.get_rect(midleft=(seal.right + 15, header.y + 25)))
         patient = self.card_font.render(
@@ -538,7 +539,7 @@ class ResultsMixin:
         pygame.draw.rect(self.screen, (11, 28, 34), badge, border_radius=17)
         pygame.draw.rect(self.screen, status_color, badge, width=2, border_radius=17)
         badge_text = self.card_font.render(
-            "CONFIRMED" if correct else "NOT CONFIRMED",
+            "CONFIRMED" if correct else "PATIENT LEFT" if left else "NOT CONFIRMED",
             True,
             status_color,
         )
@@ -568,13 +569,15 @@ class ResultsMixin:
         )
 
         detail_label = self.card_font.render(
-            "TREATMENT PLAN" if correct else "NEXT STEP",
+            "TREATMENT PLAN" if correct else "WHAT NOW" if left else "NEXT STEP",
             True,
             COLORS["muted"],
         )
         self.screen.blit(detail_label, (report.x + 20, report.y + 91))
         if correct:
             detail_text = self.last_diagnosis.treatment
+        elif left:
+            detail_text = self.patient_leave_text + " You can't recover this case."
         else:
             detail_text = (
                 f"{diagnosis_name} does not match the available evidence. "
@@ -589,9 +592,10 @@ class ResultsMixin:
             line_spacing=6,
         )
         filing_note = self.card_font.render(
-            "CASE FILE UPDATED" if correct else "REJECTED CARD MARKED FOR MED-WASTE",
-            True,
-            status_color,
+            "CASE FILE UPDATED" if correct
+            else "CASE CLOSED: UNSUCCESSFUL" if left
+            else "REJECTED CARD MARKED FOR MED-WASTE",
+            True, status_color
         )
         self.screen.blit(filing_note, (report.x + 20, report.bottom - 27))
 
@@ -613,7 +617,7 @@ class ResultsMixin:
             width=2,
             border_radius=8,
         )
-        if correct:
+        if correct or left:
             button_label = (
                 "VIEW SHIFT RECAP"
                 if self.patients_waiting() == 0
@@ -674,7 +678,7 @@ class ResultsMixin:
         self.screen.blit(glow, panel.topleft)
 
         title = self.card_font.render(
-            "PATIENT STABLE" if correct else "MORE TESTS NEEDED",
+            "PATIENT STABLE" if correct else "PATIENT LEFT" if self.patient_left else "MORE TESTS NEEDED",
             True,
             status_color,
         )
@@ -682,6 +686,12 @@ class ResultsMixin:
         platform = pygame.Rect(panel.centerx - 63, panel.bottom - 34, 126, 18)
         pygame.draw.ellipse(self.screen, (45, 80, 74), platform)
         pygame.draw.arc(self.screen, status_color, platform, 0, math.pi, width=2)
+        if self.patient_left:
+            empty = self.card_font.render("BAY EMPTY", True, COLORS["muted"])
+            self.screen.blit(empty, empty.get_rect(center=panel.center))
+            name = self.card_font.render(self.patient.name.upper(), True, COLORS["muted"])
+            self.screen.blit(name, name.get_rect(center=(panel.centerx, panel.bottom - 11)))
+            return
         entry = self.get_current_entry()
         if entry["exam"] is not None:
             self.draw_outcome_exam_sprite(panel, platform, entry, correct, status_color)
