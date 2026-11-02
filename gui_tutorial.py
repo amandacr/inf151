@@ -6,6 +6,7 @@ import pygame
 
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
+from Player import DRAW_COST, MAX_TEST_HAND_SIZE, WRONG_DIAGNOSIS_PENALTY
 
 
 class TutorialMixin:
@@ -30,6 +31,8 @@ class TutorialMixin:
         self.guided_tutorial_nudge = ""
         self.guided_tutorial_nudge_started_at = None
         self.guided_tutorial_step_started_at = None
+        if not self.help_attention_seen and self.help_attention_started_at is None:
+            self.help_attention_started_at = pygame.time.get_ticks()
 
     def set_guided_tutorial_step(self, step):
         """Move training to a new action and clear the previous correction."""
@@ -285,6 +288,8 @@ class TutorialMixin:
         if not self.tutorial_open:
             self.tutorial_opened_at = pygame.time.get_ticks()
         self.tutorial_open = True
+        self.help_attention_seen = True
+        self.help_attention_started_at = None
 
     def close_tutorial(self):
         """Close Help and compensate any animations for the paused duration."""
@@ -318,18 +323,119 @@ class TutorialMixin:
             GameState.FINAL: "RETURN TO SUMMARY",
         }.get(self.state, "CLOSE HELP")
 
+    def get_help_context(self):
+        """Return a concise label and instruction for the visible game screen."""
+
+        if self.state == GameState.TITLE:
+            return (
+                "RECEPTION",
+                "Call the next patient and watch the waiting-room queue move toward the examination bay.",
+            )
+        if self.state == GameState.PATIENT:
+            if self.diagnosis_confirmation_open:
+                return (
+                    "DIAGNOSIS CONFIRMATION",
+                    "Review the selected condition carefully. Submit it only when the collected clues support it.",
+                )
+            if self.showing_diagnosis_hand:
+                return (
+                    "DIAGNOSIS OPTIONS",
+                    "Compare the case files with the patient interview, Health ID, and recorded test evidence.",
+                )
+            return (
+                "EXAMINATION BAY",
+                "Interview the patient, inspect both IDs, run useful tests, and record the results in Patient Notes.",
+            )
+        return {
+            GameState.TEST_RESULT: (
+                "TEST RESULT",
+                "Review the scan, then continue so the result can be filed automatically in Patient Notes.",
+            ),
+            GameState.NOTEBOOK: (
+                "PATIENT NOTES",
+                "Compare symptoms, alien anatomy, and every recorded test result before choosing a diagnosis.",
+            ),
+            GameState.OUTCOME: (
+                "CASE RESULT",
+                "Review the outcome and its financial effect, then continue or return to testing when allowed.",
+            ),
+            GameState.DAY_COMPLETE: (
+                "SHIFT RECAP",
+                "Review patient revenue, test and card expenses, diagnosis penalties, overhead, and net pay.",
+            ),
+            GameState.SHOP: (
+                "SUPPLY SHOP",
+                "Select an upgrade to inspect its effect. Purchase it only when the clinic can afford it.",
+            ),
+            GameState.ENDING: (
+                "SHIFT DEPARTURE",
+                "The clinic is closing for the shift. Click or press Enter if you want to skip the departure.",
+            ),
+            GameState.FINAL: (
+                "SHIFT SUMMARY",
+                "Review the final report, then replay the shift or quit the game.",
+            ),
+        }.get(
+            self.state,
+            ("CLINIC", "Follow the evidence and protect the clinic's pay."),
+        )
+
+    def get_help_rules(self):
+        """Return the permanent economy and control reminders shown in Help."""
+
+        return (
+            ("TEST COSTS", "Every machine use has an operating cost."),
+            (
+                "CARD DRAWS",
+                f"Extra cards cost ${DRAW_COST}; your hand holds {MAX_TEST_HAND_SIZE}.",
+            ),
+            (
+                "DIAGNOSIS",
+                f"An incorrect diagnosis costs ${WRONG_DIAGNOSIS_PENALTY}.",
+            ),
+            ("CONFIDENCE", "Repeated mistakes may cause the patient to leave."),
+            ("SHIFT PAY", "Correct evidence-based cases improve your final pay."),
+            ("CONTROLS", "H Help  •  M Sound  •  F11 Fullscreen  •  Esc Menu"),
+        )
+
     def draw_help_button(self):
         """Draw the purple top-right Help control."""
 
         rect = self.help_button
         hovered = rect.collidepoint(self.get_mouse_position())
+        now = pygame.time.get_ticks()
+        pulse_active = self.help_attention_started_at is not None
+        if pulse_active and now - self.help_attention_started_at >= self.help_attention_duration:
+            self.help_attention_started_at = None
+            self.help_attention_seen = True
+            pulse_active = False
+        pulse = (math.sin(now / 180) + 1) / 2 if pulse_active else 0
+        draw_rect = rect.inflate(4, 2) if hovered else rect
         border = (206, 158, 233) if hovered else (155, 116, 190)
         fill = (50, 37, 68) if hovered else (27, 29, 45)
-        pygame.draw.rect(self.screen, (3, 8, 13), rect.move(2, 3), border_radius=8)
-        pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-        pygame.draw.rect(self.screen, border, rect, width=2, border_radius=8)
-        label = self.card_font.render("?  HELP", True, (232, 211, 242))
-        self.screen.blit(label, label.get_rect(center=rect.center))
+        if pulse_active:
+            halo = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+            halo_rect = draw_rect.inflate(round(12 + pulse * 8), round(8 + pulse * 6))
+            pygame.draw.rect(
+                halo,
+                (206, 158, 233, round(45 + pulse * 60)),
+                halo_rect,
+                width=3,
+                border_radius=12,
+            )
+            self.screen.blit(halo, (0, 0))
+        pygame.draw.rect(self.screen, (3, 8, 13), draw_rect.move(2, 3), border_radius=8)
+        pygame.draw.rect(self.screen, fill, draw_rect, border_radius=8)
+        pygame.draw.rect(self.screen, border, draw_rect, width=2, border_radius=8)
+        icon_center = (draw_rect.x + 18, draw_rect.centery)
+        pygame.draw.circle(self.screen, border, icon_center, 8, width=1)
+        icon = self.card_font.render("?", True, (232, 211, 242))
+        self.screen.blit(icon, icon.get_rect(center=icon_center))
+        label = self.card_font.render("HELP   H", True, (232, 211, 242))
+        self.screen.blit(
+            label,
+            label.get_rect(midleft=(draw_rect.x + 32, draw_rect.centery)),
+        )
 
     def draw_tutorial_overlay(self):
         """Draw compact reference Help, replacing the old full-screen briefing."""
@@ -337,35 +443,84 @@ class TutorialMixin:
         dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
         dim.fill((2, 6, 12, 218))
         self.screen.blit(dim, (0, 0))
-        panel = pygame.Rect(270, 130, 560, 390)
+        panel = pygame.Rect(170, 68, 760, 512)
         pygame.draw.rect(self.screen, (3, 8, 13), panel.move(8, 9), border_radius=16)
         pygame.draw.rect(self.screen, (23, 29, 42), panel, border_radius=16)
         pygame.draw.rect(self.screen, (187, 137, 211), panel, width=3, border_radius=16)
         title = self.heading_font.render("CLINIC QUICK GUIDE", True, (232, 211, 242))
-        self.screen.blit(title, title.get_rect(center=(panel.centerx, panel.y + 42)))
-        subtitle = self.card_font.render("FOLLOW THE EVIDENCE  •  PROTECT YOUR PAY", True, COLORS["muted"])
-        self.screen.blit(subtitle, subtitle.get_rect(center=(panel.centerx, panel.y + 68)))
-        rows = (
-            ("1", "INSPECT", "Click the patient to ask questions; flip their ID."),
-            (
-                "2",
-                "TEST",
-                "Run useful tests and draw carefully; machines and new cards cost money.",
-            ),
-            ("3", "COMPARE", "Patient Notes keeps anatomy and results together."),
-            ("4", "DIAGNOSE", "Submit the condition best supported by the clues."),
+        self.screen.blit(title, title.get_rect(center=(panel.centerx, panel.y + 33)))
+        subtitle = self.card_font.render(
+            "CONTEXT HELP  •  ECONOMY RULES  •  CONTROLS",
+            True,
+            COLORS["muted"],
         )
-        for index, (number, heading, detail) in enumerate(rows):
-            row = pygame.Rect(panel.x + 34, panel.y + 91 + index * 57, panel.width - 68, 47)
-            pygame.draw.rect(self.screen, (35, 42, 55), row, border_radius=8)
-            pygame.draw.rect(self.screen, (92, 72, 111), row, width=1, border_radius=8)
-            pygame.draw.circle(self.screen, (151, 101, 180), (row.x + 24, row.centery), 14)
-            number_label = self.card_font.render(number, True, COLORS["text"])
-            self.screen.blit(number_label, number_label.get_rect(center=(row.x + 24, row.centery)))
-            heading_label = self.card_font.render(heading, True, (216, 159, 238))
-            self.screen.blit(heading_label, (row.x + 49, row.y + 7))
-            detail_label = self.card_font.render(detail, True, COLORS["text"])
-            self.screen.blit(detail_label, (row.x + 49, row.y + 25))
+        self.screen.blit(subtitle, subtitle.get_rect(center=(panel.centerx, panel.y + 58)))
+
+        context_name, context_detail = self.get_help_context()
+        context = pygame.Rect(panel.x + 30, panel.y + 78, panel.width - 60, 84)
+        pygame.draw.rect(self.screen, (25, 49, 55), context, border_radius=10)
+        pygame.draw.rect(self.screen, COLORS["accent"], context, width=2, border_radius=10)
+        current_label = self.tutorial_label_font.render(
+            "CURRENT SCREEN",
+            True,
+            COLORS["accent"],
+        )
+        context_heading_y = context.y + 20
+        self.screen.blit(
+            current_label,
+            current_label.get_rect(midleft=(context.x + 18, context_heading_y)),
+        )
+        context_title = self.small_font.render(context_name, True, COLORS["text"])
+        self.screen.blit(
+            context_title,
+            context_title.get_rect(midleft=(context.x + 145, context_heading_y)),
+        )
+        context_text_box = pygame.Rect(
+            context.x + 18,
+            context.y + 38,
+            context.width - 36,
+            38,
+        )
+        self.draw_wrapped_text(
+            context_detail,
+            self.card_font,
+            COLORS["text"],
+            context_text_box,
+            line_spacing=2,
+        )
+
+        rules_heading = self.tutorial_label_font.render(
+            "CLINIC RULES",
+            True,
+            (216, 159, 238),
+        )
+        self.screen.blit(rules_heading, (panel.x + 31, panel.y + 178))
+        rules = self.get_help_rules()
+        for index, (heading, detail) in enumerate(rules):
+            column = index % 2
+            row_index = index // 2
+            rule = pygame.Rect(
+                panel.x + 30 + column * 355,
+                panel.y + 198 + row_index * 70,
+                340,
+                58,
+            )
+            pygame.draw.rect(self.screen, (35, 42, 55), rule, border_radius=8)
+            pygame.draw.rect(self.screen, (92, 72, 111), rule, width=1, border_radius=8)
+            heading_label = self.tutorial_label_font.render(
+                heading,
+                True,
+                (216, 159, 238),
+            )
+            self.screen.blit(heading_label, (rule.x + 14, rule.y + 8))
+            detail_box = pygame.Rect(rule.x + 14, rule.y + 27, rule.width - 28, 26)
+            self.draw_wrapped_text(
+                detail,
+                self.card_font,
+                COLORS["text"],
+                detail_box,
+                line_spacing=1,
+            )
         self.tutorial_begin_button = pygame.Rect(panel.centerx - 145, panel.bottom - 55, 290, 38)
         hovered = self.tutorial_begin_button.collidepoint(self.get_mouse_position())
         color = COLORS["accent"] if hovered else (151, 101, 180)

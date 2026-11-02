@@ -188,6 +188,9 @@ class CosmicClinicGUI(
         self.final_quit_button = pygame.Rect(565, 500, 235, 48)
         self.tutorial_open = False
         self.tutorial_opened_at = None
+        self.help_attention_started_at = None
+        self.help_attention_seen = False
+        self.help_attention_duration = 3200
         self.guided_tutorial_active = False
         self.guided_tutorial_step = None
         self.guided_tutorial_step_started_at = None
@@ -197,7 +200,7 @@ class CosmicClinicGUI(
         self.intro_dialogue_active = False
         self.intro_dialogue_index = 0
         self.intro_dialogue_started_at = None
-        self.help_button = pygame.Rect(976, 16, 108, 31)
+        self.help_button = pygame.Rect(972, 16, 112, 31)
         self.tutorial_begin_button = pygame.Rect(400, 510, 300, 48)
         self.diagnosis_cancel_button = pygame.Rect(315, 410, 210, 48)
         self.diagnosis_confirm_button = pygame.Rect(575, 410, 210, 48)
@@ -341,6 +344,13 @@ class CosmicClinicGUI(
                     continue
                 if self.guided_tutorial_active:
                     self.handle_guided_tutorial_key(event.key)
+                    continue
+                if event.key == pygame.K_h and self.state != GameState.INTRO:
+                    if self.tutorial_open:
+                        self.close_tutorial()
+                    else:
+                        self.play_sfx("button")
+                        self.open_tutorial()
                     continue
                 if self.state != GameState.INTRO and self.tutorial_open:
                     if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):

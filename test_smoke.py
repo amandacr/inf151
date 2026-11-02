@@ -365,6 +365,38 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.state = GameState.SHOP
         self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO SHOP")
 
+    def test_help_is_context_sensitive_and_h_toggles_it(self):
+        """Help should explain the current screen and remain one keypress away."""
+
+        self.game.state = GameState.TITLE
+        self.assertEqual(self.game.get_help_context()[0], "RECEPTION")
+        self.game.state = GameState.PATIENT
+        self.assertEqual(self.game.get_help_context()[0], "EXAMINATION BAY")
+        self.game.switch_active_hand(True)
+        self.assertEqual(self.game.get_help_context()[0], "DIAGNOSIS OPTIONS")
+        self.game.state = GameState.TEST_RESULT
+        self.assertEqual(self.game.get_help_context()[0], "TEST RESULT")
+        self.game.state = GameState.SHOP
+        self.assertEqual(self.game.get_help_context()[0], "SUPPLY SHOP")
+
+        help_copy = " ".join(
+            heading + " " + detail
+            for heading, detail in self.game.get_help_rules()
+        )
+        self.assertIn(f"${DRAW_COST}", help_copy)
+        self.assertIn(str(MAX_TEST_HAND_SIZE), help_copy)
+        self.assertIn(f"${WRONG_DIAGNOSIS_PENALTY}", help_copy)
+        self.assertIn("H Help", help_copy)
+
+        self.assertFalse(self.game.tutorial_open)
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_h))
+        self.game.handle_events()
+        self.assertTrue(self.game.tutorial_open)
+        self.assertTrue(self.game.help_attention_seen)
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_h))
+        self.game.handle_events()
+        self.assertFalse(self.game.tutorial_open)
+
     def test_tutorial_spotlights_have_clickable_hitboxes_and_wrapped_text(self):
         """Highlighted reading targets and lifted card edges should never feel inert."""
 
