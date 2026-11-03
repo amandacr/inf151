@@ -553,30 +553,10 @@ class ExaminationMixin:
         pygame.draw.rect(self.screen, border, pygame.Rect(center[0] - 10, center[1] - 3, 20, 6))
 
     def draw_patient_bay_details(self, bay, platform, entry, idle_time):
-        """Add small environmental clues unique to the current patient."""
+        """Add subtle visual personality without revealing the diagnosis."""
 
         serial = entry["serial"]
-        pulse = (math.sin(idle_time / 260) + 1) / 2
-        if serial.startswith("BLP"):
-            warning = pygame.Rect(bay.x + 7, bay.y + 28, 34, 55)
-            pygame.draw.rect(self.screen, (30, 25, 30), warning, border_radius=5)
-            warning_color = (
-                244,
-                round(111 + 40 * pulse),
-                round(86 + 22 * pulse),
-            )
-            pygame.draw.rect(self.screen, warning_color, warning, width=2, border_radius=5)
-            pygame.draw.line(
-                self.screen,
-                warning_color,
-                (warning.centerx, warning.y + 10),
-                (warning.centerx, warning.y + 32),
-                width=3,
-            )
-            pygame.draw.circle(self.screen, warning_color, (warning.centerx, warning.y + 38), 6)
-            label = self.legible_micro_font.render("TEMP", True, warning_color)
-            self.screen.blit(label, label.get_rect(center=(warning.centerx, warning.bottom - 7)))
-        elif serial.startswith("GRN"):
+        if serial.startswith("GRN"):
             resonance_color = (126, 225, 174)
             for radius in (23, 34, 45):
                 wave = pygame.Rect(
