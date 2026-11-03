@@ -20,17 +20,24 @@ from Player import (
     CLINIC_OPERATING_FEE,
     DIAGNOSIS_REWARD,
     DRAW_COST,
+    LIMITED_EVIDENCE_REWARD,
     MAX_TEST_HAND_SIZE,
     PATIENT_WALKOUT_THRESHOLD,
     PERFECT_DAY_BONUS,
     STARTING_BALANCE,
+    STARTING_TEST_HAND_SIZE,
     WRONG_DIAGNOSIS_PENALTY,
     Player,
 )
 from Tests.AllergyTest import AllergyTest
+from Tests.BloodChemistryTest import BloodChemistryTest
+from Tests.NeuralScanTest import NeuralScanTest
+from Tests.OxygenScanTest import OxygenScanTest
 from Tests.TemperatureTest import TemperatureTest
+from Tests.ToxinScreenTest import ToxinScreenTest
 from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
+from Tests.catalog import create_test_catalog
 from Test import TEST_COSTS_BY_RARITY, get_test_cost
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
@@ -45,7 +52,7 @@ from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
 from gui_results import ResultsMixin
 from gui_shop import SHOP_UPGRADES, ShopMixin
-from gui_theme import WINDOW_SIZE
+from gui_theme import TEST_SUBTITLES, WINDOW_SIZE
 from gui_tutorial import TutorialMixin
 
 
@@ -116,6 +123,126 @@ class SharedModelSmokeTests(unittest.TestCase):
         )
         self.assertEqual(len(deck.contents), 24)
 
+    def test_new_test_cards_have_balanced_metadata_and_rendering_support(self):
+        """New tests should use the same rarity, cost, and visual systems as existing cards."""
+
+        tests = [
+            BloodChemistryTest(),
+            OxygenScanTest(),
+            ToxinScreenTest(),
+            NeuralScanTest(),
+        ]
+
+        self.assertEqual(
+            [(test.name, test.rarity, test.occurrences) for test in tests],
+            [
+                ("BLOOD CHEMISTRY", "Common", 8),
+                ("OXYGEN SCAN", "Common", 8),
+                ("TOXIN SCREEN", "Uncommon", 5),
+                ("NEURAL SCAN", "Rare", 3),
+            ],
+        )
+        self.assertEqual([get_test_cost(test) for test in tests], [10, 10, 15, 20])
+        for test in tests:
+            self.assertTrue(test.description)
+            self.assertIn(test.name, TEST_SUBTITLES)
+
+    def test_full_test_catalog_populates_the_live_deck(self):
+        """Every basic test should be drawable using its configured rarity count."""
+
+        deck = Deck()
+        deck.populate(create_test_catalog())
+        counts = {}
+        for card in deck.contents:
+            counts[card.value.name] = counts.get(card.value.name, 0) + 1
+
+        self.assertEqual(
+            counts,
+            {
+                "TEMPERATURE": 8,
+                "X-RAY": 8,
+                "BLOOD CHEMISTRY": 8,
+                "OXYGEN SCAN": 8,
+                "ULTRASOUND": 5,
+                "TOXIN SCREEN": 5,
+                "ALLERGY": 3,
+                "NEURAL SCAN": 3,
+            },
+        )
+        self.assertEqual(len(deck.contents), 48)
+
+    def test_deck_seed_is_random_in_gameplay_and_reproducible_in_tests(self):
+        """A private seeded RNG should control every shuffle and draw."""
+
+        sequences = []
+        for seed in (151, 151, 815):
+            deck = Deck(seed=seed)
+            deck.populate(create_test_catalog())
+            sequences.append([deck.draw().value.name for _ in range(16)])
+
+        self.assertEqual(sequences[0], sequences[1])
+        self.assertNotEqual(sequences[0], sequences[2])
+        self.assertEqual(Deck(seed=151).seed, 151)
+        with patch("Deck.secrets.randbits", side_effect=(111, 222)):
+            self.assertNotEqual(Deck().seed, Deck().seed)
+
+    def test_every_patient_supports_every_basic_test(self):
+        """A drawable test must always produce a patient-specific result."""
+
+        test_names = {test.name for test in create_test_catalog()}
+        for patient in (
+            create_zorpa(),
+            create_zoogy(),
+            create_titus(),
+            create_conmann(),
+        ):
+            self.assertEqual(set(patient.test_results), test_names)
+            for test_name in test_names:
+                self.assertTrue(patient.perform_test(test_name).startswith("RESULTS: "))
+
+    def test_existing_conditions_define_two_card_clue_paths(self):
+        """Every diagnosis should expose at least two valid two-test evidence routes."""
+
+        from Diagnosis import DIAGNOSES
+
+        available_tests = {test.name for test in create_test_catalog()}
+        for diagnosis in DIAGNOSES.values():
+            self.assertGreaterEqual(len(diagnosis.evidence_combinations), 2)
+            self.assertTrue(
+                all(len(combination) == 2 for combination in diagnosis.evidence_combinations)
+            )
+            for combination in diagnosis.evidence_combinations:
+                self.assertTrue(combination.issubset(available_tests))
+                self.assertTrue(diagnosis.has_supporting_evidence(combination))
+
+        patients_and_evidence = (
+            (create_zorpa(), {"TEMPERATURE", "BLOOD CHEMISTRY"}),
+            (create_zoogy(), {"X-RAY", "NEURAL SCAN"}),
+            (create_titus(), {"ALLERGY", "TOXIN SCREEN"}),
+            (create_conmann(), {"ULTRASOUND", "BLOOD CHEMISTRY"}),
+        )
+        for patient, evidence in patients_and_evidence:
+            self.assertTrue(patient.has_supporting_evidence(evidence))
+            self.assertFalse(patient.has_supporting_evidence({next(iter(evidence))}))
+
+    def test_evidence_progress_tracks_the_best_hidden_two_card_path(self):
+        """The UI should expose clue strength without revealing valid card names."""
+
+        patient = create_zorpa()
+        self.assertEqual(patient.get_evidence_progress(set()), (0, 2))
+        self.assertEqual(
+            patient.get_evidence_progress({"TEMPERATURE"}),
+            (1, 2),
+        )
+        self.assertEqual(
+            patient.get_evidence_progress({"TEMPERATURE", "BLOOD CHEMISTRY"}),
+            (2, 2),
+        )
+        self.assertEqual(
+            patient.get_evidence_progress({"X-RAY", "ALLERGY"}),
+            (0, 2),
+        )
+
     def test_starting_diagnosis_hand_has_five_options_and_all_patient_answers(self):
         """The fixed hand should contain five unique options and every current correct answer."""
 
@@ -165,6 +292,29 @@ class GuiFlowSmokeTests(unittest.TestCase):
         """Release Pygame resources after each test."""
 
         pygame.quit()
+
+    def test_opening_hand_is_dealt_from_the_live_randomized_deck(self):
+        """The training hand should consume five deck cards, not create fixed copies."""
+
+        catalog_total = sum(test.occurrences for test in create_test_catalog())
+        hand_names = [card.value.name for card in self.game.player.test_hand]
+        combined_cards = self.game.player.test_hand + self.game.deck.contents
+        combined_counts = {}
+        for card in combined_cards:
+            combined_counts[card.value.name] = (
+                combined_counts.get(card.value.name, 0) + 1
+            )
+
+        self.assertEqual(len(hand_names), STARTING_TEST_HAND_SIZE)
+        self.assertIn("TEMPERATURE", hand_names)
+        self.assertEqual(
+            len(self.game.deck.contents),
+            catalog_total - STARTING_TEST_HAND_SIZE,
+        )
+        self.assertEqual(
+            combined_counts,
+            {test.name: test.occurrences for test in create_test_catalog()},
+        )
 
     def test_gui_uses_the_extracted_feature_modules(self):
         """The main GUI should receive extracted feature behavior from mixins."""
@@ -345,7 +495,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_guided_tutorial_click((1090, 680))
         self.assertFalse(self.game.guided_tutorial_active)
         self.assertEqual(self.game.daily_correct_diagnoses, 1)
-        self.assertEqual(self.game.daily_evidence_cases, 1)
+        self.assertEqual(self.game.daily_evidence_cases, 0)
+        self.assertFalse(self.game.last_diagnosis_supported)
 
     def test_compact_help_remains_available_after_training(self):
         """The deleted briefing should be replaced by compact reusable Help."""
@@ -636,8 +787,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertFalse(self.game.intro_dialogue_active)
         self.assertIsNone(self.game.intro_dialogue_started_at)
 
-    def test_f10_navigator_prepares_every_missing_story_scene(self):
-        """Opening, tutorial, diagnosis, and shutdown previews should be valid."""
+    def test_f10_navigator_builds_clean_patient_checkpoints(self):
+        """Each patient shortcut should start from one complete clean deal."""
 
         self.game.jump_to_developer_screen(
             self.game.get_developer_scene_index("intro")
@@ -645,51 +796,26 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.state, GameState.INTRO)
         self.game.draw()
 
-        self.game.jump_to_developer_screen(
-            self.game.get_developer_scene_index("dialogue")
-        )
-        self.assertEqual(self.game.state, GameState.TITLE)
-        self.assertTrue(self.game.intro_dialogue_active)
-        self.game.draw()
+        expected_names = [entry["create"]().name for entry in self.game.waiting_room_queue]
+        for patient_number, expected_name in enumerate(expected_names, start=1):
+            self.game.jump_to_developer_screen(
+                self.game.get_developer_scene_index(f"patient_{patient_number}")
+            )
+            self.assertEqual(self.game.state, GameState.PATIENT)
+            self.assertEqual(self.game.patient.name, expected_name)
+            self.assertEqual(self.game.patients_called, patient_number)
+            self.assertEqual(len(self.game.player.test_hand), 5)
+            self.assertEqual(len(self.game.deck.contents), 43)
+            self.game.draw()
 
         self.game.jump_to_developer_screen(
-            self.game.get_developer_scene_index("tutorial")
+            self.game.get_developer_scene_index("patient_2")
         )
-        self.assertTrue(self.game.guided_tutorial_active)
-        self.assertEqual(self.game.guided_tutorial_step, "call_patient")
-        self.game.draw()
-
+        self.assertEqual(len(self.game.deck.contents), 43)
         self.game.jump_to_developer_screen(
-            self.game.get_developer_scene_index("diagnosis_hand")
+            self.game.get_developer_scene_index("patient_2")
         )
-        self.assertEqual(self.game.state, GameState.PATIENT)
-        self.assertTrue(self.game.showing_diagnosis_hand)
-        self.game.draw()
-
-        self.game.jump_to_developer_screen(
-            self.game.get_developer_scene_index("diagnosis_confirm")
-        )
-        self.assertTrue(self.game.diagnosis_confirmation_open)
-        self.assertIsNotNone(self.game.selected_card_index)
-        self.game.draw()
-
-        self.game.jump_to_developer_screen(
-            self.game.get_developer_scene_index("wrong")
-        )
-        self.assertEqual(self.game.state, GameState.OUTCOME)
-        self.assertFalse(self.game.diagnosis_correct)
-        self.game.draw()
-
-        self.game.jump_to_developer_screen(
-            self.game.get_developer_scene_index("shutdown")
-        )
-        self.assertEqual(self.game.state, GameState.TITLE)
-        self.assertEqual(
-            self.game.patients_called,
-            len(self.game.waiting_room_queue),
-        )
-        self.assertIsNotNone(self.game.end_day_shutdown_started_at)
-        self.game.draw()
+        self.assertEqual(len(self.game.deck.contents), 43)
 
     def test_test_cards_accumulate_end_of_day_operating_expenses(self):
         """Running machines should charge by rarity without settling cash early."""
@@ -710,7 +836,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.daily_correct_diagnoses = len(self.game.waiting_room_queue)
         self.assertEqual(
             self.game.get_daily_pay_breakdown()[3],
-            len(self.game.waiting_room_queue) * DIAGNOSIS_REWARD
+            len(self.game.waiting_room_queue) * LIMITED_EVIDENCE_REWARD
             - get_test_cost(first_test)
             - CLINIC_OPERATING_FEE,
         )
@@ -818,12 +944,54 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIn("HAND FULL", self.game.card_draw_notice)
         self.assertIsNotNone(self.game.card_draw_notice_started_at)
 
+    def test_empty_draw_deck_is_safe_visible_and_free(self):
+        """An exhausted deck should refuse draws without charging or mutating the hand."""
+
+        self.game.deck.contents.clear()
+        starting_hand = list(self.game.player.test_hand)
+        starting_expenses = self.game.daily_draw_expenses
+        starting_balance = self.game.get_live_balance()
+
+        self.assertFalse(self.game.draw_card_from_pile())
+        self.assertEqual(self.game.player.test_hand, starting_hand)
+        self.assertEqual(self.game.daily_draw_expenses, starting_expenses)
+        self.assertEqual(self.game.get_live_balance(), starting_balance)
+        self.assertIn("DECK EMPTY", self.game.card_draw_notice)
+        self.game.draw()
+
+    def test_discard_safely_opens_one_slot_before_a_paid_draw(self):
+        """Discarding should remove one card, lock overlapping input, then permit a draw."""
+
+        while len(self.game.player.test_hand) < MAX_TEST_HAND_SIZE:
+            self.assertTrue(self.game.draw_card_from_pile())
+        discarded_card = self.game.player.test_hand[0]
+        self.game.selected_card_index = 0
+        expenses_before_discard = self.game.daily_draw_expenses
+        deck_before_discard = len(self.game.deck.contents)
+
+        self.assertTrue(self.game.discard_selected_test())
+        self.assertEqual(len(self.game.player.test_hand), MAX_TEST_HAND_SIZE - 1)
+        self.assertIs(self.game.discard_pile[-1], discarded_card)
+        self.assertTrue(self.game.discard_animation["locks_input"])
+        self.assertFalse(self.game.draw_card_from_pile())
+        self.assertEqual(self.game.daily_draw_expenses, expenses_before_discard)
+        self.assertEqual(len(self.game.deck.contents), deck_before_discard)
+
+        self.game.discard_animation["started_at"] -= self.game.discard_animation_duration + 1
+        self.game.update()
+        self.assertIsNone(self.game.discard_animation)
+        self.assertTrue(self.game.draw_card_from_pile())
+        self.assertEqual(len(self.game.player.test_hand), MAX_TEST_HAND_SIZE)
+        self.assertEqual(self.game.daily_draw_expenses, expenses_before_discard + DRAW_COST)
+        self.assertEqual(len(self.game.deck.contents), deck_before_discard - 1)
+
     def test_rebalanced_economy_allows_one_efficient_shift_upgrade(self):
         """An efficient first shift should fund one upgrade, not a shopping spree."""
 
         self.assertEqual(self.game.player.balance, STARTING_BALANCE)
         self.assertEqual(STARTING_BALANCE, 100)
         self.assertEqual(DIAGNOSIS_REWARD, 40)
+        self.assertEqual(LIMITED_EVIDENCE_REWARD, 25)
         self.assertEqual(WRONG_DIAGNOSIS_PENALTY, 25)
         self.assertEqual(CLINIC_OPERATING_FEE, 50)
 
@@ -855,10 +1023,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(
             self.game.get_daily_pay_breakdown(),
             (
-                patient_count * DIAGNOSIS_REWARD,
+                patient_count * LIMITED_EVIDENCE_REWARD,
                 0,
                 0,
-                patient_count * DIAGNOSIS_REWARD - CLINIC_OPERATING_FEE,
+                patient_count * LIMITED_EVIDENCE_REWARD
+                - CLINIC_OPERATING_FEE,
             ),
         )
         projected_balance = (
@@ -920,6 +1089,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
             "ULTRASOUND": "Ultrasound imaging found no unusual internal changes.",
             "X-RAY": "X-ray imaging found no fractures or visible bone damage.",
             "ALLERGY": "Severe allergic response detected from: water.",
+            "BLOOD CHEMISTRY": "Lava-blood viscosity is elevated.",
+            "OXYGEN SCAN": "Thermal-lung exchange is slightly slowed.",
+            "TOXIN SCREEN": "No toxic compounds were detected.",
+            "NEURAL SCAN": "Continuous shivering reflexes are firing.",
         }
         self.game.state = GameState.TEST_RESULT
         self.game.test_result_started_at = None
@@ -935,6 +1108,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         """A resolved early case should queue its pay and return to reception."""
 
         starting_balance = self.game.player.balance
+        selected_test_name = self.game.player.test_hand[0].value.name
         self.game.selected_card_index = 0
         self.game.run_selected_test()
 
@@ -942,7 +1116,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(len(self.game.player.test_hand), 4)
         self.assertEqual(len(self.game.discard_pile), 0)
         self.assertIsNotNone(self.game.pending_test_discard)
-        self.assertIn("TEMPERATURE", self.game.notebook.get_entries(self.game.patient))
+        self.assertIn(
+            selected_test_name,
+            self.game.notebook.get_entries(self.game.patient),
+        )
 
         self.game.test_result_started_at = (
             pygame.time.get_ticks() - self.game.test_result_reveal_duration - 1
@@ -983,6 +1160,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertTrue(self.game.diagnosis_correct)
         self.assertEqual(self.game.player.balance, starting_balance)
         self.assertEqual(self.game.daily_correct_diagnoses, 1)
+        self.assertFalse(self.game.last_diagnosis_supported)
+        self.assertEqual(
+            self.game.get_daily_pay_breakdown()[0],
+            LIMITED_EVIDENCE_REWARD,
+        )
 
         self.game.draw()
         self.game.handle_outcome_click(self.game.outcome_button.center)
@@ -991,6 +1173,45 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.player.balance, starting_balance)
         self.assertEqual(len(self.game.player.test_hand), 5)
         self.assertIsNotNone(self.game.queue_shift_started_at)
+
+    def test_supported_diagnosis_earns_full_pay_and_updates_evidence_ui(self):
+        """A valid clue pair should upgrade a correct case from limited to full pay."""
+
+        self.assertEqual(self.game.get_evidence_status_display()[0], "EVIDENCE 0/2")
+        self.game.notebook.add_test(
+            self.game.patient,
+            "TEMPERATURE",
+            "Current temperature: 1700°F",
+        )
+        self.assertEqual(self.game.get_evidence_status_display()[0], "EVIDENCE 1/2")
+        self.game.notebook.add_test(
+            self.game.patient,
+            "BLOOD CHEMISTRY",
+            "Lava circulation is unusually slow.",
+        )
+        self.assertEqual(
+            self.game.get_evidence_status_display()[0],
+            "EVIDENCE SUFFICIENT",
+        )
+
+        self.game.open_notebook()
+        self.game.draw()
+        self.game.state = GameState.PATIENT
+        self.game.switch_active_hand(True)
+        self.game.selected_card_index = next(
+            index
+            for index, card in enumerate(self.game.player.diagnosis_hand)
+            if card.value == self.game.patient.diagnosis
+        )
+        self.game.open_diagnosis_confirmation()
+        self.game.draw()
+        self.game.confirm_selected_diagnosis()
+
+        self.assertTrue(self.game.diagnosis_correct)
+        self.assertTrue(self.game.last_diagnosis_supported)
+        self.assertEqual(self.game.daily_evidence_cases, 1)
+        self.assertEqual(self.game.get_daily_pay_breakdown()[0], DIAGNOSIS_REWARD)
+        self.game.draw()
 
     def test_incorrect_diagnosis_returns_to_test_hand(self):
         """A wrong diagnosis should be discarded before returning to test cards."""
@@ -1162,10 +1383,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(
             self.game.get_daily_pay_breakdown(),
             (
-                len(expected_names) * DIAGNOSIS_REWARD,
+                len(expected_names) * LIMITED_EVIDENCE_REWARD,
                 0,
                 0,
-                len(expected_names) * DIAGNOSIS_REWARD
+                len(expected_names) * LIMITED_EVIDENCE_REWARD
                 - CLINIC_OPERATING_FEE,
             ),
         )
@@ -1175,7 +1396,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(
             self.game.player.balance,
             starting_balance
-            + len(expected_names) * DIAGNOSIS_REWARD
+            + len(expected_names) * LIMITED_EVIDENCE_REWARD
             - CLINIC_OPERATING_FEE,
         )
         paid_balance = self.game.player.balance
@@ -1183,8 +1404,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.player.balance, paid_balance)
 
         self.game.draw()
-        placeholder = SHOP_UPGRADES[-1]
-        placeholder_rect = self.game.get_shop_upgrade_rects()[-1]
+        placeholder = self.game.get_visible_shop_upgrades()[-1]
+        placeholder_rect = self.game.get_shop_upgrade_rects()[
+            len(self.game.get_visible_shop_upgrades()) - 1
+        ]
         self.game.handle_shop_click(placeholder_rect.center)
         self.assertEqual(self.game.selected_shop_upgrade, placeholder["id"])
         self.game.handle_shop_click(self.game.shop_purchase_button.center)
@@ -1211,7 +1434,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.patients_called, 0)
         self.assertEqual(self.game.patient.name, expected_names[0])
         self.assertEqual(self.game.player.balance, starting_balance)
-        self.assertEqual(len(self.game.deck.contents), 24)
+        self.assertEqual(
+            len(self.game.deck.contents),
+            sum(test.occurrences for test in create_test_catalog())
+            - STARTING_TEST_HAND_SIZE,
+        )
         self.assertEqual(self.game.daily_correct_diagnoses, 0)
         self.assertEqual(self.game.daily_wrong_diagnoses, 0)
         self.assertIsNone(self.game.selected_shop_upgrade)
@@ -1324,10 +1551,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(
             self.game.get_daily_pay_breakdown(),
             (
-                len(self.game.waiting_room_queue) * DIAGNOSIS_REWARD,
+                len(self.game.waiting_room_queue) * LIMITED_EVIDENCE_REWARD,
                 2 * WRONG_DIAGNOSIS_PENALTY,
                 0,
-                len(self.game.waiting_room_queue) * DIAGNOSIS_REWARD
+                len(self.game.waiting_room_queue) * LIMITED_EVIDENCE_REWARD
                 - 2 * WRONG_DIAGNOSIS_PENALTY
                 - CLINIC_OPERATING_FEE,
             ),
@@ -1351,7 +1578,18 @@ class GuiFlowSmokeTests(unittest.TestCase):
         for card in self.game.player.test_hand + self.game.deck.contents:
             if card.value.name == "TEMPERATURE":
                 self.assertEqual(self.game.player.get_machine_level(card.value), 2)
-        self.game.selected_card_index = 0
+        temperature_index = next(
+            (
+                index
+                for index, card in enumerate(self.game.player.test_hand)
+                if card.value.name == "TEMPERATURE"
+            ),
+            None,
+        )
+        if temperature_index is None:
+            self.game.player.draw(self.game.deck.draw_matching("TEMPERATURE"))
+            temperature_index = len(self.game.player.test_hand) - 1
+        self.game.selected_card_index = temperature_index
         before = self.game.daily_test_expenses
         self.game.run_selected_test()
         self.assertEqual(self.game.daily_test_expenses - before, 5)
@@ -1359,10 +1597,23 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
     def test_shared_upgrades_stack_and_apply_to_future_draws(self):
         self.game.state = GameState.SHOP
-        purchase_cost = sum(SHOP_UPGRADES[index]["cost"] for index in (0, 4, 5))
+        upgrade_ids = ("temperature", "power", "smart_cards")
+        upgrades = [
+            next(upgrade for upgrade in SHOP_UPGRADES if upgrade["id"] == upgrade_id)
+            for upgrade_id in upgrade_ids
+        ]
+        purchase_cost = sum(upgrade["cost"] for upgrade in upgrades)
         self.game.player.balance = purchase_cost + 100
-        for index in (0, 4, 5):
-            self.game.handle_shop_click(self.game.get_shop_upgrade_rects()[index].center)
+        for upgrade in upgrades:
+            upgrade_index = SHOP_UPGRADES.index(upgrade)
+            self.game.shop_scroll_row = min(
+                upgrade_index // 3,
+                self.game.get_shop_max_scroll_row(),
+            )
+            visible_index = self.game.get_visible_shop_upgrades().index(upgrade)
+            self.game.handle_shop_click(
+                self.game.get_shop_upgrade_rects()[visible_index].center
+            )
             self.game.handle_shop_click(self.game.shop_purchase_button.center)
         self.assertEqual(self.game.player.balance, 100)
         self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 2)
@@ -1382,6 +1633,61 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.restart_game()
         self.assertEqual(self.game.player.machine_levels, {})
         self.assertEqual(self.game.player.test_discount, 0)
+
+    def test_shop_scroll_reveals_and_installs_new_machine_upgrades(self):
+        """The expanded catalog should scroll and upgrade every new test machine."""
+
+        self.game.state = GameState.SHOP
+        self.assertEqual(self.game.shop_scroll_row, 0)
+        self.assertEqual(len(self.game.get_visible_shop_upgrades()), 6)
+
+        pygame.event.post(pygame.event.Event(pygame.MOUSEWHEEL, {"y": -1}))
+        self.game.handle_events()
+        self.assertEqual(self.game.shop_scroll_row, 1)
+        pygame.event.post(pygame.event.Event(pygame.MOUSEWHEEL, {"y": -1}))
+        self.game.handle_events()
+        self.assertEqual(self.game.shop_scroll_row, 2)
+        final_page_ids = {
+            upgrade["id"] for upgrade in self.game.get_visible_shop_upgrades()
+        }
+        self.assertTrue({"toxin", "neural", "power", "smart_cards"} <= final_page_ids)
+
+        new_machine_tests = {
+            "blood": BloodChemistryTest,
+            "oxygen": OxygenScanTest,
+            "toxin": ToxinScreenTest,
+            "neural": NeuralScanTest,
+        }
+        total_cost = sum(
+            next(
+                upgrade["cost"]
+                for upgrade in SHOP_UPGRADES
+                if upgrade["id"] == upgrade_id
+            )
+            for upgrade_id in new_machine_tests
+        )
+        self.game.player.balance = total_cost
+        for upgrade_id, test_type in new_machine_tests.items():
+            upgrade = next(
+                item for item in SHOP_UPGRADES if item["id"] == upgrade_id
+            )
+            upgrade_index = SHOP_UPGRADES.index(upgrade)
+            self.game.shop_scroll_row = min(
+                upgrade_index // 3,
+                self.game.get_shop_max_scroll_row(),
+            )
+            visible_index = self.game.get_visible_shop_upgrades().index(upgrade)
+            self.game.handle_shop_click(
+                self.game.get_shop_upgrade_rects()[visible_index].center
+            )
+            self.game.handle_shop_click(self.game.shop_purchase_button.center)
+            self.assertEqual(self.game.player.get_machine_level(test_type()), 2)
+            self.assertEqual(
+                self.game.player.get_test_cost(test_type()),
+                (get_test_cost(test_type()) + 1) // 2,
+            )
+
+        self.assertEqual(self.game.player.balance, 0)
 
     def test_future_shift_can_load_a_new_patient_roster(self):
         """A later day can replace the queue without erasing earned upgrades."""
@@ -1441,6 +1747,23 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertGreater(hovered.height, resting.height)
         self.assertLess(hovered.y, resting.y)
         self.assertEqual(hovered.centerx, resting.centerx)
+
+    def test_long_test_card_title_renders_without_tiny_fallback(self):
+        """Blood Chemistry should use the crisp wrapped-title path on compact cards."""
+
+        header_width = 84
+        self.assertGreater(
+            self.game.pile_font.size("BLOOD CHEMISTRY")[0],
+            header_width - 8,
+        )
+        self.assertLessEqual(
+            self.game.compact_card_title_font.size("CHEMISTRY")[0],
+            header_width - 8,
+        )
+        self.game.draw_fitted_card_title(
+            "BLOOD CHEMISTRY",
+            pygame.Rect(0, 0, header_width, 25),
+        )
 
     def test_used_test_card_follows_an_arc_to_med_waste(self):
         """The midpoint of the disposal path should rise above a straight-line flight."""

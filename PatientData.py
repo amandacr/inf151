@@ -16,6 +16,10 @@ def create_zorpa():
             "X-RAY": "X-ray imaging found no fractures or visible bone damage.",
             "ULTRASOUND": "Ultrasound imaging found no unusual internal changes.",
             "ALLERGY": "Allergy screening produced no reaction.",
+            "BLOOD CHEMISTRY": "Lava-blood viscosity is elevated and metabolic activity is below the Bloopiter baseline.",
+            "OXYGEN SCAN": "Thermal-lung exchange is slightly slowed, with no respiratory obstruction detected.",
+            "TOXIN SCREEN": "No toxic or foreign compounds were detected in the patient sample.",
+            "NEURAL SCAN": "Continuous shivering reflexes are firing, but the neural pathways remain stable.",
         },
         profile={
             "Species": "Bloopiter Magmoid",
@@ -47,8 +51,12 @@ def create_zoogy():
         {
             "TEMPERATURE": "Current temperature: 95°F",
             "X-RAY": "X-ray imaging displayed what appeared to be motion blur, perhaps caused by a vibration in the skeletal system.",
-            "ULTRASOUND": "Ultrasound imaging found no unusual internal changes.",
+            "ULTRASOUND": "Rhythmic vibration is passing from the crystal skeleton into nearby organs without tissue damage.",
             "ALLERGY": "Allergy screening produced no reaction.",
+            "BLOOD CHEMISTRY": "Crystal minerals and circulating energy levels are within the Arcedian baseline.",
+            "OXYGEN SCAN": "Both rectangular lungs are exchanging gases at the expected rate.",
+            "TOXIN SCREEN": "No poisons, stimulants, or foreign compounds were detected.",
+            "NEURAL SCAN": "Motor signals are pulsing at the same frequency as the skeletal vibration.",
         },
         profile={
             "Species": "Arcedian Resonid",
@@ -82,6 +90,10 @@ def create_titus():
             "X-RAY": "X-ray imaging found no fractures or visible bone damage.",
             "ULTRASOUND": "Ultrasound imaging found no unusual internal changes.",
             "ALLERGY": "Severe allergic response detected from: water.",
+            "BLOOD CHEMISTRY": "Acute inflammatory markers are elevated following a recent contact exposure.",
+            "OXYGEN SCAN": "All three lungs are stable, with no airway swelling or obstruction detected.",
+            "TOXIN SCREEN": "No poison was detected; the external sample contains unusually high water saturation.",
+            "NEURAL SCAN": "Tremors appear to come from systemic stress rather than neural damage.",
         },
         profile={
             "Species": "Goopian Ectomorph",
@@ -113,8 +125,12 @@ def create_conmann():
         {
             "TEMPERATURE": "Current temperature: 35°F",
             "X-RAY": "X-ray imaging found no fractures or visible bone damage.",
-            "ULTRASOUND": "Ultrasound imaging found no unusual internal changes.",
-            "ALLERGY": "Minor intolerant response detected from: lactose.",
+            "ULTRASOUND": "All three fermentation chambers are distended with gas, with no physical obstruction.",
+            "ALLERGY": "No immune allergy detected; a digestive intolerance response to lactose is present.",
+            "BLOOD CHEMISTRY": "Elevated unprocessed lactose metabolites were detected in the patient's oil-blood.",
+            "OXYGEN SCAN": "The oversized lung is operating normally for a Vaygan Oilblood.",
+            "TOXIN SCREEN": "No foodborne toxins or hazardous contaminants were detected.",
+            "NEURAL SCAN": "Neural activity is normal; pain signals originate in the digestive chambers.",
         },
         profile={
             "Species": "Vaygan Oilblood",

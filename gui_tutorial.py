@@ -6,7 +6,13 @@ import pygame
 
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
-from Player import DRAW_COST, MAX_TEST_HAND_SIZE, WRONG_DIAGNOSIS_PENALTY
+from Player import (
+    DIAGNOSIS_REWARD,
+    DRAW_COST,
+    LIMITED_EVIDENCE_REWARD,
+    MAX_TEST_HAND_SIZE,
+    WRONG_DIAGNOSIS_PENALTY,
+)
 
 
 class TutorialMixin:
@@ -143,12 +149,12 @@ class TutorialMixin:
             "test_result": ("Read the observed result, then return to Zorpa.", pygame.Rect(120, 462, 400, 92), False),
             "note_transfer": ("The clinic is filing this result in Patient Notes...", pygame.Rect(650, 172, 400, 92), False),
             "open_notebook": ("The result is recorded. Open Patient Notes.", pygame.Rect(265, 401, 410, 92), False),
-            "review_notebook": ("Compare 2,000°F normal with the current 1,700°F result.", pygame.Rect(350, 12, 400, 104), True),
-            "diagnosis_folder": ("The evidence points to hypothermia. Open Diagnosis.", pygame.Rect(405, 173, 410, 92), False),
+            "review_notebook": ("Temperature is one clue, so Evidence reads 1/2. Two matching clues earn full case pay.", pygame.Rect(350, 12, 400, 104), True),
+            "diagnosis_folder": ("For training, submit early and see the limited-evidence rate. Open Diagnosis.", pygame.Rect(405, 173, 410, 92), False),
             "diagnosis_select": ("Select the Hypothermia case file.", pygame.Rect(650, 173, 400, 92), False),
             "diagnosis_play": ("Submit the selected condition as your diagnosis.", pygame.Rect(650, 173, 400, 92), False),
             "diagnosis_confirm": ("Confirm when you are ready. Incorrect diagnoses cost $25, and repeated mistakes may cause a patient to leave.", pygame.Rect(350, 38, 400, 104), False),
-            "complete": ("Adequate work, Doctor. Three patients remain.", pygame.Rect(350, 12, 400, 104), True),
+            "complete": ("Correct, but only partly supported. Gather 2/2 evidence for full pay on future cases.", pygame.Rect(350, 12, 400, 104), True),
         }
         return prompts.get(self.guided_tutorial_step)
 
@@ -391,10 +397,13 @@ class TutorialMixin:
             ),
             (
                 "DIAGNOSIS",
-                f"An incorrect diagnosis costs ${WRONG_DIAGNOSIS_PENALTY}.",
+                (
+                    f"Correct: ${LIMITED_EVIDENCE_REWARD} limited / "
+                    f"${DIAGNOSIS_REWARD} supported. Wrong: -${WRONG_DIAGNOSIS_PENALTY}."
+                ),
             ),
             ("CONFIDENCE", "Repeated mistakes may cause the patient to leave."),
-            ("SHIFT PAY", "Correct evidence-based cases improve your final pay."),
+            ("EVIDENCE", "Patient Notes tracks progress toward a hidden two-card clue path."),
             ("CONTROLS", "H Help  •  M Sound  •  F11 Fullscreen  •  Esc Menu"),
         )
 

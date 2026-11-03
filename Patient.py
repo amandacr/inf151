@@ -38,3 +38,13 @@ class Patient:
 
     def receive_diagnosis(self, diagnosis):
         return diagnosis == self.diagnosis
+
+    def has_supporting_evidence(self, test_names):
+        """Return whether the collected tests form a clue path for this condition."""
+
+        return self.diagnosis.has_supporting_evidence(test_names)
+
+    def get_evidence_progress(self, test_names):
+        """Return progress toward the strongest evidence path for this patient."""
+
+        return self.diagnosis.get_evidence_progress(test_names)

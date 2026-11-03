@@ -11,6 +11,22 @@ from gui_theme import COLORS, TEST_SUBTITLES, WINDOW_SIZE
 class NotebookMixin:
     """Supply notebook behavior and preview rendering to the main GUI object."""
 
+    def get_evidence_progress(self):
+        """Return collected progress toward the patient's strongest clue pair."""
+
+        test_names = set(self.notebook.get_entries(self.patient)) - {"No tests"}
+        return self.patient.get_evidence_progress(test_names)
+
+    def get_evidence_status_display(self):
+        """Return a non-spoilery evidence label and its interface color."""
+
+        collected, required = self.get_evidence_progress()
+        if required and collected >= required:
+            return "EVIDENCE SUFFICIENT", COLORS["accent"]
+        if collected:
+            return f"EVIDENCE {collected}/{required}", (232, 168, 92)
+        return f"EVIDENCE 0/{required or 2}", (151, 101, 180)
+
     def build_notebook_rects(self):
         """Build the rectangles that position the notebook's pages and buttons."""
 
@@ -490,22 +506,30 @@ class NotebookMixin:
         heading = self.notebook_title_font.render(page_heading, True, ink)
         heading_y = rect.y + 18
         self.screen.blit(heading, (rect.x + 5, heading_y))
-        entry_count = sum(
-            1
-            for kind, text, _ in column
-            if kind == "title"
-            and text.upper() not in ("NO TESTS", "PATIENT INTERVIEW")
+        evidence_text, evidence_color = self.get_evidence_status_display()
+        count_label = self.card_font.render(
+            evidence_text,
+            True,
+            evidence_color,
         )
-        count_text = (
-            "NO RECORDS"
-            if entry_count == 0
-            else f"{entry_count} RECORD" + ("" if entry_count == 1 else "S")
-        )
-        count_label = self.card_font.render(count_text, True, (103, 117, 108))
         self.screen.blit(
             count_label,
             count_label.get_rect(midright=(rect.right - 5, heading_y + 14)),
         )
+        collected, required = self.get_evidence_progress()
+        meter_width = 54
+        meter = pygame.Rect(rect.right - meter_width - 5, heading_y + 34, meter_width, 7)
+        pygame.draw.rect(self.screen, (202, 194, 166), meter, border_radius=3)
+        if required:
+            fill = meter.copy()
+            fill.width = round(meter.width * min(1, collected / required))
+            if fill.width:
+                pygame.draw.rect(
+                    self.screen,
+                    evidence_color,
+                    fill,
+                    border_radius=3,
+                )
 
         content = pygame.Rect(rect.x, rect.y + 63, rect.width, rect.height - 63)
         groups = []

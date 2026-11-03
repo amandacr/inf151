@@ -1,24 +1,19 @@
-"""Hidden screen navigator used to preview the vertical slice during development."""
+"""Hidden checkpoint navigator used to preview the game during development."""
 
 import pygame
 
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
+from Tests.catalog import create_test_catalog
 
 
 DEVELOPER_SCREENS = (
-    ("1", "intro", "OPENING CINEMATIC", GameState.INTRO),
-    ("2", "dialogue", "ABDUCTION DIALOGUE", GameState.TITLE),
-    ("3", "tutorial", "GUIDED TUTORIAL", GameState.TITLE),
-    ("4", "reception", "RECEPTION", GameState.TITLE),
-    ("5", "patient", "EXAM BAY", GameState.PATIENT),
-    ("6", "test_result", "TEST RESULT", GameState.TEST_RESULT),
-    ("7", "notebook", "NOTEBOOK", GameState.NOTEBOOK),
-    ("8", "diagnosis_hand", "DIAGNOSIS HAND", GameState.PATIENT),
-    ("9", "diagnosis_confirm", "CONFIRM DIAGNOSIS", GameState.PATIENT),
-    ("C", "correct", "CORRECT RESULT", GameState.OUTCOME),
-    ("W", "wrong", "WRONG RESULT", GameState.OUTCOME),
-    ("P", "shutdown", "CLINIC POWER DOWN", GameState.TITLE),
+    ("1", "intro", "OPENING STORY", GameState.INTRO),
+    ("2", "reception", "RECEPTION", GameState.TITLE),
+    ("3", "patient_1", "PATIENT 1", GameState.PATIENT),
+    ("4", "patient_2", "PATIENT 2", GameState.PATIENT),
+    ("5", "patient_3", "PATIENT 3", GameState.PATIENT),
+    ("6", "patient_4", "PATIENT 4", GameState.PATIENT),
     ("R", "recap", "SHIFT RECAP", GameState.DAY_COMPLETE),
     ("S", "shop", "SHOP", GameState.SHOP),
     ("U", "ending", "UFO ENDING", GameState.ENDING),
@@ -27,17 +22,11 @@ DEVELOPER_SCREENS = (
 
 DEVELOPER_KEY_MAP = {
     pygame.K_1: "intro",
-    pygame.K_2: "dialogue",
-    pygame.K_3: "tutorial",
-    pygame.K_4: "reception",
-    pygame.K_5: "patient",
-    pygame.K_6: "test_result",
-    pygame.K_7: "notebook",
-    pygame.K_8: "diagnosis_hand",
-    pygame.K_9: "diagnosis_confirm",
-    pygame.K_c: "correct",
-    pygame.K_w: "wrong",
-    pygame.K_p: "shutdown",
+    pygame.K_2: "reception",
+    pygame.K_3: "patient_1",
+    pygame.K_4: "patient_2",
+    pygame.K_5: "patient_3",
+    pygame.K_6: "patient_4",
     pygame.K_r: "recap",
     pygame.K_s: "shop",
     pygame.K_u: "ending",
@@ -68,28 +57,25 @@ class DeveloperMixin:
         self.play_sfx("button")
 
     def infer_developer_scene_id(self):
-        """Identify the precise visible scene before its modal is dismissed."""
+        """Identify the closest clean checkpoint for the visible scene."""
 
         if self.state == GameState.INTRO:
             return "intro"
-        if self.intro_dialogue_active:
-            return "dialogue"
-        if self.guided_tutorial_active:
-            return "tutorial"
-        if self.end_day_shutdown_started_at is not None:
-            return "shutdown"
-        if self.state == GameState.PATIENT:
-            if self.diagnosis_confirmation_open:
-                return "diagnosis_confirm"
-            if self.showing_diagnosis_hand:
-                return "diagnosis_hand"
-            return "patient"
-        if self.state == GameState.OUTCOME:
-            return "correct" if self.diagnosis_correct else "wrong"
+        if self.intro_dialogue_active or self.guided_tutorial_active:
+            return "intro"
+        if self.state in (
+            GameState.PATIENT,
+            GameState.TEST_RESULT,
+            GameState.NOTEBOOK,
+            GameState.OUTCOME,
+        ):
+            patient_index = max(
+                0,
+                min(self.patients_called - 1, len(self.waiting_room_queue) - 1),
+            )
+            return f"patient_{patient_index + 1}"
         preferred_scenes = {
             GameState.TITLE: "reception",
-            GameState.TEST_RESULT: "test_result",
-            GameState.NOTEBOOK: "notebook",
             GameState.DAY_COMPLETE: "recap",
             GameState.SHOP: "shop",
             GameState.ENDING: "ending",
@@ -98,12 +84,12 @@ class DeveloperMixin:
         return preferred_scenes.get(self.state, "intro")
 
     def get_developer_screen_rects(self):
-        """Return the stable four-column scene-directory layout."""
+        """Return the stable two-column checkpoint-directory layout."""
 
         return [
-            pygame.Rect(84 + column * 235, 185 + row * 72, 220, 56)
-            for row in range(4)
-            for column in range(4)
+            pygame.Rect(92 + column * 458, 183 + row * 72, 432, 56)
+            for row in range(5)
+            for column in range(2)
         ]
 
     def get_developer_scene_index(self, scene_id):
@@ -148,7 +134,7 @@ class DeveloperMixin:
                 return
 
     def jump_to_developer_screen(self, index):
-        """Prepare any required preview data and display one selected screen."""
+        """Build and enter one clean development checkpoint."""
 
         _shortcut, scene_id, _label, target_state = DEVELOPER_SCREENS[index]
         # A developer jump intentionally leaves the opening story. Without
@@ -172,66 +158,15 @@ class DeveloperMixin:
             self.state = GameState.INTRO
             self.intro_started_at = pygame.time.get_ticks()
             self.intro_wake_active = False
-        elif scene_id == "dialogue":
-            self.restart_game()
-            self.state = GameState.TITLE
-            self.start_intro_dialogue()
-        elif scene_id == "tutorial":
-            self.restart_game()
-            self.state = GameState.TITLE
-            self.start_guided_tutorial()
         elif scene_id == "reception":
-            self.reset_day()
+            self.restart_game()
             self.state = GameState.TITLE
-        elif scene_id in (
-            "patient",
-            "test_result",
-            "notebook",
-            "diagnosis_hand",
-            "diagnosis_confirm",
-            "correct",
-            "wrong",
-        ):
-            self.prepare_developer_patient_preview()
+        elif scene_id.startswith("patient_"):
+            patient_index = int(scene_id.rsplit("_", 1)[-1]) - 1
+            self.prepare_developer_patient_checkpoint(patient_index)
+        elif scene_id in ("recap", "shop", "ending", "final"):
+            self.prepare_developer_shift_checkpoint()
 
-        if scene_id == "test_result":
-            self.last_test_name = "TEMPERATURE"
-            self.last_test_result = "Current temperature: 1700°F"
-            self.last_test_cost = self.player.get_test_cost(
-                self.player.test_hand[0].value
-            )
-            self.test_result_started_at = pygame.time.get_ticks()
-        elif scene_id == "notebook":
-            self.notebook.add_test(
-                self.patient,
-                "TEMPERATURE",
-                "Current temperature: 1700°F",
-            )
-            self.build_notebook_columns()
-            self.notebook_spread = 0
-        elif scene_id in ("diagnosis_hand", "diagnosis_confirm"):
-            self.switch_active_hand(True)
-            self.diagnosis_folder_animation_started_at = None
-            if scene_id == "diagnosis_confirm":
-                self.selected_card_index = self.get_hypothermia_card_index()
-                self.open_diagnosis_confirmation()
-        elif scene_id == "correct":
-            self.last_diagnosis = self.patient.diagnosis
-            self.diagnosis_correct = True
-        elif scene_id == "wrong":
-            self.last_diagnosis = next(
-                card.value
-                for card in self.player.diagnosis_hand
-                if card.value != self.patient.diagnosis
-            )
-            self.diagnosis_correct = False
-
-        if scene_id in ("shutdown", "recap", "shop", "ending", "final"):
-            self.prepare_developer_shift_preview()
-
-        if scene_id == "shutdown":
-            self.patients_called = len(self.waiting_room_queue)
-            self.begin_end_day_shutdown()
         if scene_id in ("shop", "ending", "final"):
             self.settle_daily_pay()
         if scene_id == "ending":
@@ -239,34 +174,51 @@ class DeveloperMixin:
         elif scene_id == "final":
             self.ending_started_at = None
 
-        if scene_id not in ("intro", "dialogue", "tutorial"):
+        if scene_id != "intro":
             self.state = target_state
         self.developer_scene_id = scene_id
         self.play_sfx("button")
 
-    def prepare_developer_patient_preview(self):
-        """Reset a complete Zorpa encounter for reliable mid-shift previews."""
+    def prepare_developer_patient_checkpoint(self, patient_index):
+        """Start a fresh shift directly inside one selected patient encounter."""
 
-        self.patients_called = 0
+        if not 0 <= patient_index < len(self.waiting_room_queue):
+            raise IndexError("Developer patient checkpoint is outside the roster.")
+
+        # Rebuild the campaign and repopulate once more before selecting the
+        # requested alien. This discards the temporary reception hand created
+        # by restart_game, so the checkpoint always begins with one clean
+        # five-card deal from a complete deck instead of draining live state.
+        self.restart_game()
+        self.deck.populate(create_test_catalog())
+        self.patients_called = patient_index
         self.reset_round()
-        self.patients_called = 1
+        self.patients_called = patient_index + 1
         self.state = GameState.PATIENT
         self.patient_left = False
         self.patient_leave_text = ""
 
-    def prepare_developer_shift_preview(self):
-        """Seed a believable recap only when no real shift activity exists yet."""
+    def prepare_developer_shift_checkpoint(self):
+        """Build a consistent completed-shift state for late-game checkpoints."""
 
-        if (
-            self.daily_correct_diagnoses == 0
-            and self.daily_wrong_diagnoses == 0
-            and self.daily_test_count == 0
-        ):
-            self.daily_correct_diagnoses = len(self.waiting_room_queue)
-            self.daily_test_count = len(self.waiting_room_queue)
-            self.daily_test_expenses = 40
-            self.daily_evidence_cases = len(self.waiting_room_queue)
-            self.daily_payout_applied = False
+        self.restart_game()
+        self.patients_called = len(self.waiting_room_queue)
+        self.daily_correct_diagnoses = len(self.waiting_room_queue)
+        self.daily_test_count = len(self.waiting_room_queue)
+        self.daily_test_expenses = 40
+        self.daily_evidence_cases = len(self.waiting_room_queue)
+        self.daily_payout_applied = False
+
+    def get_developer_checkpoint_label(self, scene_id, label):
+        """Add the current roster name to patient checkpoint buttons."""
+
+        if not scene_id.startswith("patient_"):
+            return label
+        patient_index = int(scene_id.rsplit("_", 1)[-1]) - 1
+        if not 0 <= patient_index < len(self.waiting_room_queue):
+            return label
+        patient_name = self.waiting_room_queue[patient_index]["create"]().name
+        return f"{label}  •  {patient_name.upper()}"
 
     def draw_developer_navigator(self):
         """Draw the hidden clinic screen directory over the current page."""
@@ -282,10 +234,10 @@ class DeveloperMixin:
 
         tag = self.card_font.render("DEVELOPER TOOL", True, (216, 159, 238))
         self.screen.blit(tag, tag.get_rect(center=(panel.centerx, panel.y + 28)))
-        heading = self.heading_font.render("SCREEN NAVIGATOR", True, COLORS["text"])
+        heading = self.heading_font.render("CHECKPOINT NAVIGATOR", True, COLORS["text"])
         self.screen.blit(heading, heading.get_rect(center=(panel.centerx, panel.y + 58)))
         hint = self.card_font.render(
-            "CLICK A SCENE OR USE ITS KEY  •  LEFT/RIGHT CYCLES  •  F10 CLOSES",
+            "CLICK A CHECKPOINT OR USE ITS KEY  •  LEFT/RIGHT CYCLES  •  F10 CLOSES",
             True,
             COLORS["muted"],
         )
@@ -294,7 +246,7 @@ class DeveloperMixin:
         mouse_position = self.get_mouse_position()
         self.developer_button_rects = self.get_developer_screen_rects()
         current_index = self.get_current_developer_scene_index()
-        for index, ((shortcut, _scene_id, label, _target_state), rect) in enumerate(zip(
+        for index, ((shortcut, scene_id, label, _target_state), rect) in enumerate(zip(
             DEVELOPER_SCREENS,
             self.developer_button_rects,
         )):
@@ -314,7 +266,8 @@ class DeveloperMixin:
             pygame.draw.rect(self.screen, fill, rect, border_radius=8)
             pygame.draw.rect(self.screen, border, rect, width=2, border_radius=8)
             number_label = self.body_font.render(shortcut, True, border)
-            screen_label = self.card_font.render(label, True, COLORS["text"])
+            checkpoint_label = self.get_developer_checkpoint_label(scene_id, label)
+            screen_label = self.card_font.render(checkpoint_label, True, COLORS["text"])
             self.screen.blit(
                 number_label,
                 number_label.get_rect(midleft=(rect.x + 14, rect.centery)),

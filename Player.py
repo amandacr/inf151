@@ -1,16 +1,14 @@
 from Diagnosis import DIAGNOSES
-from Tests.AllergyTest import AllergyTest
 from Card import Card
 from Test import get_test_cost as get_base_test_cost
-from Tests.TemperatureTest import TemperatureTest
-from Tests.UltrasoundTest import UltrasoundTest
-from Tests.XrayTest import XrayTest
 
 
 STARTING_BALANCE = 100
 DIAGNOSIS_REWARD = 40
+LIMITED_EVIDENCE_REWARD = 25
 WRONG_DIAGNOSIS_PENALTY = 25
 DRAW_COST = 5
+STARTING_TEST_HAND_SIZE = 5
 MAX_TEST_HAND_SIZE = 8
 PERFECT_DAY_BONUS = 25
 CLINIC_OPERATING_FEE = 50
@@ -30,19 +28,14 @@ class Player:
     def __init__(self, name):
         """
         Initializes a player at the beginning of the game.
-        Players start with $100, five diagnosis cards, and five test cards.
+        Players start with $100 and five diagnosis cards. Test cards are dealt
+        from the shuffled clinic deck by the GUI at the start of each case.
         """
         self.name = name
         self.machine_levels = {}
         self.test_discount = 0
         self.balance = STARTING_BALANCE
-        self.test_hand = [
-            Card("Test", TemperatureTest()),
-            Card("Test", TemperatureTest()),
-            Card("Test", UltrasoundTest()),
-            Card("Test", XrayTest()),
-            Card("Test", AllergyTest())
-        ]
+        self.test_hand = []
         self.diagnosis_hand = [
             Card("Diagnosis", DIAGNOSES["hypothermia"]),
             Card("Diagnosis", DIAGNOSES["acute_water_reaction"]),

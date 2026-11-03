@@ -7,10 +7,7 @@ import random
 
 import pygame
 
-from Tests.AllergyTest import AllergyTest
-from Tests.TemperatureTest import TemperatureTest
-from Tests.UltrasoundTest import UltrasoundTest
-from Tests.XrayTest import XrayTest
+from Tests.catalog import create_test_catalog
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
 from gui_cards import CardMixin
@@ -31,7 +28,7 @@ from gui_theme import (
     WINDOW_SIZE,
 )
 from PatientData import create_zorpa, create_zoogy, create_titus, create_conmann
-from Player import Player
+from Player import Player, STARTING_TEST_HAND_SIZE
 from Notebook import Notebook
 from Deck import Deck
 
@@ -52,7 +49,7 @@ class CosmicClinicGUI(
     TutorialMixin,
 ):
 
-    def __init__(self):
+    def __init__(self, card_seed=None):
         """Set up Pygame, shared game data, layout rectangles, and fonts."""
 
         pygame.init()
@@ -122,8 +119,9 @@ class CosmicClinicGUI(
         self.notebook_preview_progress = 0.0
         self.notebook_preview_last_tick = pygame.time.get_ticks()
         self.notebook_preview_duration = 220
-        self.deck = Deck()
-        self.deck.populate([AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()])
+        self.deck = Deck(seed=card_seed)
+        self.deck.populate(create_test_catalog())
+        self.deal_starting_test_hand(training_hand=True)
         self.hovered_card_index = None
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
@@ -151,6 +149,7 @@ class CosmicClinicGUI(
         self.test_result_reveal_duration = 1400
         self.last_diagnosis = None
         self.diagnosis_correct = None
+        self.last_diagnosis_supported = False
         self.patient_left = False
         self.patient_leave_text = ""
         self.patient_wrong_diagnoses = 0
@@ -176,6 +175,7 @@ class CosmicClinicGUI(
         self.day_complete_button = pygame.Rect(370, 541, 360, 42)
         self.selected_shop_upgrade = None
         self.purchased_shop_upgrades = set()
+        self.shop_scroll_row = 0
         self.shop_message = "Select an upgrade to inspect it."
         self.ending_started_at = None
         self.ending_duration = 4200
@@ -225,6 +225,7 @@ class CosmicClinicGUI(
         self.pile_font = pygame.font.Font(None, 14)
         self.tiny_font = pygame.font.Font(None, 10)
         self.compact_ui_font = pygame.font.SysFont("Arial", 12, bold=True)
+        self.compact_card_title_font = pygame.font.SysFont("Arial", 11, bold=True)
         self.legible_micro_font = pygame.font.SysFont("Arial", 9, bold=True)
         self.id_detail_font = pygame.font.SysFont("Arial", 11, bold=True)
         self.notebook_preview_font = pygame.font.Font(None, 15)
@@ -315,6 +316,14 @@ class CosmicClinicGUI(
                     self.finish_ending_sequence()
                 elif self.state == GameState.FINAL:
                     self.handle_final_screen_click(position)
+            elif event.type == pygame.MOUSEWHEEL:
+                if (
+                    self.state == GameState.SHOP
+                    and not self.developer_navigator_open
+                    and not self.exit_confirmation_open
+                    and not self.tutorial_open
+                ):
+                    self.scroll_shop(-event.y)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_F11:
                     self.toggle_fullscreen()
@@ -566,6 +575,8 @@ class CosmicClinicGUI(
     def handle_shop_click(self, position):
         """Handle upgrade purchases or finish the current shift."""
 
+        if self.handle_shop_scroll_click(position):
+            return
         if self.shop_button.collidepoint(position):
             self.play_sfx("button")
             self.begin_ending_sequence()
@@ -603,13 +614,34 @@ class CosmicClinicGUI(
         self.daily_payout_applied = False
         self.money_deduction_animation = None
         self.selected_shop_upgrade = None
+        self.shop_scroll_row = 0
         self.shop_message = "Select an upgrade to inspect it."
-        self.deck.populate(
-            [AllergyTest(), TemperatureTest(), UltrasoundTest(), XrayTest()]
-        )
+        self.deck.populate(create_test_catalog())
         self.daily_patients_lost = 0
         self.daily_draw_expenses = 0
         self.reset_round()
+
+    def deal_starting_test_hand(self, training_hand=False):
+        """Deal five cards from the live deck without replacement.
+
+        Zorpa's one-time guided lesson requires a Temperature card. Its
+        position and the other four cards are still randomized; later hands
+        are completely unconstrained.
+        """
+
+        self.player.test_hand = []
+        if training_hand:
+            training_card = self.deck.draw_matching("TEMPERATURE")
+            if training_card is not None:
+                self.player.draw(training_card)
+
+        while len(self.player.test_hand) < STARTING_TEST_HAND_SIZE:
+            card = self.deck.draw()
+            if card is None:
+                break
+            self.player.draw(card)
+
+        self.deck.shuffle_cards(self.player.test_hand)
 
     def reset_round(self):
         """Prepare a fresh patient encounter while preserving earned money."""
@@ -624,6 +656,7 @@ class CosmicClinicGUI(
         self.player.balance = current_balance
         self.player.machine_levels = machine_levels
         self.player.test_discount = test_discount
+        self.deal_starting_test_hand()
         self.notebook = Notebook()
         self.notebook.add_patient(self.patient)
         self.notebook_columns = []
@@ -650,6 +683,7 @@ class CosmicClinicGUI(
         self.test_result_started_at = None
         self.last_diagnosis = None
         self.diagnosis_correct = None
+        self.last_diagnosis_supported = False
         self.patient_left = False
         self.patient_leave_text = ""
         self.patient_wrong_diagnoses = 0

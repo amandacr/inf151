@@ -5,7 +5,11 @@ import math
 import pygame
 
 from gui_theme import COLORS, TEST_SUBTITLES, WINDOW_SIZE
-from Player import DIAGNOSIS_REWARD, WRONG_DIAGNOSIS_PENALTY
+from Player import (
+    DIAGNOSIS_REWARD,
+    LIMITED_EVIDENCE_REWARD,
+    WRONG_DIAGNOSIS_PENALTY,
+)
 
 
 class ResultsMixin:
@@ -44,6 +48,7 @@ class ResultsMixin:
         progress = self.get_test_result_reveal_progress()
         revealed = progress >= 1.0
         status_color = COLORS["accent"]
+        machine_color = self.get_test_scan_color(test_name)
 
         header = pygame.Rect(panel.x + 24, panel.y + 18, panel.width - 48, 68)
         pygame.draw.rect(self.screen, (7, 22, 28), header, border_radius=10)
@@ -56,10 +61,15 @@ class ResultsMixin:
         )
         icon = pygame.Rect(header.x + 13, header.y + 10, 48, 48)
         pygame.draw.rect(self.screen, (202, 219, 208), icon, border_radius=7)
-        pygame.draw.rect(self.screen, COLORS["accent"], icon, width=2, border_radius=7)
-        self.draw_test_icon(test_name, icon, COLORS["accent"])
+        pygame.draw.rect(self.screen, machine_color, icon, width=2, border_radius=7)
+        self.draw_test_icon(test_name, icon, machine_color)
 
-        heading = self.heading_font.render(test_name + " SCAN", True, COLORS["text"])
+        heading_label = (
+            test_name
+            if test_name.endswith(("SCAN", "SCREEN"))
+            else test_name + " SCAN"
+        )
+        heading = self.heading_font.render(heading_label, True, COLORS["text"])
         self.screen.blit(heading, heading.get_rect(midleft=(icon.right + 15, header.y + 25)))
         patient = self.card_font.render(
             "PATIENT: " + self.patient.name.upper(),
@@ -231,13 +241,7 @@ class ResultsMixin:
                 (visual.right - 12, grid_y),
             )
 
-        test_colors = {
-            "TEMPERATURE": COLORS["accent"],
-            "ULTRASOUND": (117, 190, 255),
-            "X-RAY": (150, 238, 205),
-            "ALLERGY": (219, 118, 239),
-        }
-        scan_color = test_colors.get(test_name, COLORS["accent"])
+        scan_color = self.get_test_scan_color(test_name)
         display = pygame.Rect(
             visual.x + 20,
             visual.y + 24,
@@ -277,6 +281,22 @@ class ResultsMixin:
         self.screen.blit(percentage, percentage.get_rect(center=(visual.centerx, visual.bottom - 15)))
 
 
+    def get_test_scan_color(self, test_name):
+        """Return the distinct machine color assigned to one test type."""
+
+        test_colors = {
+            "TEMPERATURE": COLORS["accent"],
+            "ULTRASOUND": (117, 190, 255),
+            "X-RAY": (150, 238, 205),
+            "ALLERGY": (219, 118, 239),
+            "BLOOD CHEMISTRY": (245, 126, 112),
+            "OXYGEN SCAN": (82, 209, 235),
+            "TOXIN SCREEN": (202, 226, 91),
+            "NEURAL SCAN": (195, 132, 245),
+        }
+        return test_colors.get(test_name, COLORS["accent"])
+
+
     def draw_test_specific_readout(self, display, test_name, scan_color, progress):
         """Draw the selected machine's own diagnostic visualization."""
 
@@ -288,6 +308,14 @@ class ResultsMixin:
             self.draw_xray_readout(display, scan_color, progress)
         elif test_name == "ALLERGY":
             self.draw_allergy_readout(display, scan_color, progress)
+        elif test_name == "BLOOD CHEMISTRY":
+            self.draw_blood_chemistry_readout(display, scan_color, progress)
+        elif test_name == "OXYGEN SCAN":
+            self.draw_oxygen_readout(display, scan_color, progress)
+        elif test_name == "TOXIN SCREEN":
+            self.draw_toxin_readout(display, scan_color, progress)
+        elif test_name == "NEURAL SCAN":
+            self.draw_neural_readout(display, scan_color, progress)
         else:
             icon = display.inflate(-54, -20)
             self.draw_test_icon(test_name, icon, scan_color)
@@ -468,6 +496,230 @@ class ResultsMixin:
             )
 
 
+    def draw_blood_chemistry_readout(self, display, scan_color, progress):
+        """Draw an animated fluid vial beside its developing marker panel."""
+
+        title = self.compact_ui_font.render("FLUID CHEMISTRY", True, COLORS["text"])
+        self.screen.blit(title, title.get_rect(center=(display.centerx, display.y + 16)))
+
+        vial = pygame.Rect(display.x + 20, display.y + 38, 48, 91)
+        pygame.draw.rect(self.screen, (16, 38, 45), vial, border_radius=11)
+        pygame.draw.rect(self.screen, (213, 232, 225), vial, width=2, border_radius=11)
+        cap = pygame.Rect(vial.x + 8, vial.y - 5, vial.width - 16, 10)
+        pygame.draw.rect(self.screen, (83, 105, 105), cap, border_radius=3)
+        pygame.draw.rect(self.screen, scan_color, cap, width=2, border_radius=3)
+
+        fluid_height = max(9, round(57 * progress))
+        fluid = pygame.Rect(
+            vial.x + 5,
+            vial.bottom - 6 - fluid_height,
+            vial.width - 10,
+            fluid_height,
+        )
+        fluid_surface = pygame.Surface(fluid.size, pygame.SRCALPHA)
+        fluid_surface.fill((*scan_color, 185))
+        self.screen.blit(fluid_surface, fluid.topleft)
+        pygame.draw.line(
+            self.screen,
+            (255, 208, 189),
+            (fluid.x + 2, fluid.y),
+            (fluid.right - 2, fluid.y),
+            width=2,
+        )
+
+        phase = pygame.time.get_ticks() / 280
+        particles = ((12, 13), (28, 23), (18, 38), (32, 49), (10, 56))
+        for index, (offset_x, offset_y) in enumerate(particles):
+            particle_y = fluid.bottom - 6 - (offset_y % max(7, fluid_height - 3))
+            particle_y += round(math.sin(phase + index) * 2)
+            if fluid.y + 3 <= particle_y <= fluid.bottom - 3:
+                pygame.draw.circle(
+                    self.screen,
+                    (255, 230, 214),
+                    (fluid.x + offset_x, particle_y),
+                    2,
+                )
+
+        bar_x = display.x + 85
+        labels = ("VISC", "CELL", "MIN")
+        marker_levels = (0.82, 0.58, 0.70)
+        for index, (label_text, marker_level) in enumerate(zip(labels, marker_levels)):
+            y = display.y + 48 + index * 30
+            label = self.legible_micro_font.render(label_text, True, COLORS["muted"])
+            self.screen.blit(label, (bar_x, y))
+            bar = pygame.Rect(bar_x + 36, y + 2, 79, 8)
+            pygame.draw.rect(self.screen, (19, 48, 54), bar, border_radius=4)
+            fill = bar.copy()
+            fill.width = max(2, round(bar.width * marker_level * progress))
+            pygame.draw.rect(self.screen, scan_color, fill, border_radius=4)
+            pygame.draw.line(
+                self.screen,
+                (221, 238, 230),
+                (bar.centerx, bar.y - 2),
+                (bar.centerx, bar.bottom + 2),
+                width=1,
+            )
+
+        status = self.compact_ui_font.render("SAMPLE ANALYSIS", True, scan_color)
+        self.screen.blit(status, status.get_rect(center=(display.x + 140, display.bottom - 14)))
+
+
+    def draw_oxygen_readout(self, display, scan_color, progress):
+        """Draw breathing organs, rising gas bubbles, and an exchange waveform."""
+
+        title = self.compact_ui_font.render("RESPIRATORY EXCHANGE", True, COLORS["text"])
+        self.screen.blit(title, title.get_rect(center=(display.centerx, display.y + 16)))
+
+        phase = pygame.time.get_ticks() / 330
+        pulse = 1 + round((math.sin(phase) + 1) * 1.5)
+        airway_x = display.x + 58
+        pygame.draw.line(
+            self.screen,
+            (209, 237, 240),
+            (airway_x, display.y + 36),
+            (airway_x, display.y + 62),
+            width=3,
+        )
+        for direction in (-1, 1):
+            lung = pygame.Rect(0, 0, 31 + pulse, 50 + pulse)
+            lung.midtop = (
+                airway_x + direction * 18,
+                display.y + 58,
+            )
+            lung_surface = pygame.Surface(lung.size, pygame.SRCALPHA)
+            pygame.draw.ellipse(lung_surface, (*scan_color, 70 + round(100 * progress)), lung_surface.get_rect())
+            pygame.draw.ellipse(lung_surface, scan_color, lung_surface.get_rect(), width=2)
+            self.screen.blit(lung_surface, lung.topleft)
+            pygame.draw.line(
+                self.screen,
+                (209, 237, 240),
+                (airway_x, display.y + 55),
+                (lung.centerx, lung.y + 15),
+                width=2,
+            )
+
+        bubble_area = pygame.Rect(display.x + 102, display.y + 38, 91, 68)
+        for index, (offset_x, speed, radius) in enumerate(((9, 0.9, 3), (31, 1.2, 4), (55, 0.7, 3), (76, 1.0, 2))):
+            travel = (pygame.time.get_ticks() / (900 / speed) + index * 0.23) % 1
+            bubble_y = bubble_area.bottom - round(travel * bubble_area.height)
+            pygame.draw.circle(
+                self.screen,
+                scan_color,
+                (bubble_area.x + offset_x, bubble_y),
+                radius,
+                width=1,
+            )
+
+        wave_points = []
+        wave_left = display.x + 103
+        wave_right = display.right - 12
+        visible_right = wave_left + round((wave_right - wave_left) * max(0.08, progress))
+        for wave_x in range(wave_left, visible_right + 1, 3):
+            distance = wave_x - wave_left
+            wave_y = display.bottom - 25 + round(math.sin(distance / 7 - phase) * 7)
+            wave_points.append((wave_x, wave_y))
+        if len(wave_points) > 1:
+            pygame.draw.lines(self.screen, scan_color, False, wave_points, width=2)
+        label = self.legible_micro_font.render("GAS FLOW", True, COLORS["muted"])
+        self.screen.blit(label, label.get_rect(center=(display.x + 61, display.bottom - 18)))
+
+
+    def draw_toxin_readout(self, display, scan_color, progress):
+        """Draw a bubbling sample flask and three contaminant channels."""
+
+        title = self.compact_ui_font.render("COMPOUND SCREEN", True, COLORS["text"])
+        self.screen.blit(title, title.get_rect(center=(display.centerx, display.y + 16)))
+
+        neck = pygame.Rect(display.x + 29, display.y + 37, 28, 28)
+        pygame.draw.rect(self.screen, (16, 39, 43), neck, border_radius=4)
+        pygame.draw.rect(self.screen, (218, 235, 220), neck, width=2, border_radius=4)
+        flask_points = (
+            (neck.x + 3, neck.bottom - 2),
+            (neck.right - 3, neck.bottom - 2),
+            (display.x + 73, display.y + 119),
+            (display.x + 13, display.y + 119),
+        )
+        pygame.draw.polygon(self.screen, (13, 36, 42), flask_points)
+        pygame.draw.polygon(self.screen, (218, 235, 220), flask_points, width=2)
+        fluid_points = (
+            (display.x + 21, display.y + 94),
+            (display.x + 65, display.y + 94),
+            (display.x + 72, display.y + 117),
+            (display.x + 14, display.y + 117),
+        )
+        fluid_surface = pygame.Surface(display.size, pygame.SRCALPHA)
+        local_fluid = tuple((x - display.x, y - display.y) for x, y in fluid_points)
+        pygame.draw.polygon(fluid_surface, (*scan_color, 175), local_fluid)
+        self.screen.blit(fluid_surface, display.topleft)
+
+        phase = pygame.time.get_ticks() / 240
+        for index, (x, y, radius) in enumerate(((31, 104, 3), (47, 110, 2), (57, 100, 3))):
+            bubble_y = display.y + y - round((math.sin(phase + index) + 1) * 3)
+            pygame.draw.circle(self.screen, (239, 250, 206), (display.x + x, bubble_y), radius)
+
+        channel_x = display.x + 91
+        for index, label_text in enumerate(("A", "B", "C")):
+            channel = pygame.Rect(channel_x + index * 36, display.y + 48, 24, 63)
+            pygame.draw.rect(self.screen, (17, 43, 47), channel, border_radius=6)
+            pygame.draw.rect(self.screen, scan_color, channel, width=2, border_radius=6)
+            fill = pygame.Rect(
+                channel.x + 5,
+                channel.bottom - 5 - round(43 * progress),
+                channel.width - 10,
+                round(43 * progress),
+            )
+            if fill.height > 0:
+                pygame.draw.rect(self.screen, scan_color, fill, border_radius=3)
+            marker = self.legible_micro_font.render(label_text, True, COLORS["text"])
+            self.screen.blit(marker, marker.get_rect(center=(channel.centerx, channel.bottom + 12)))
+
+        status = self.compact_ui_font.render("TOXIN FILTER", True, scan_color)
+        self.screen.blit(status, status.get_rect(midbottom=(display.right - 12, display.bottom - 5)))
+
+
+    def draw_neural_readout(self, display, scan_color, progress):
+        """Draw a pulsing nervous-system map with a live signal trace."""
+
+        title = self.compact_ui_font.render("NEURAL SIGNAL MAP", True, COLORS["text"])
+        self.screen.blit(title, title.get_rect(center=(display.centerx, display.y + 16)))
+
+        nodes = (
+            (display.x + 42, display.y + 48),
+            (display.x + 86, display.y + 39),
+            (display.x + 129, display.y + 53),
+            (display.x + 64, display.y + 82),
+            (display.x + 111, display.y + 91),
+            (display.x + 165, display.y + 75),
+        )
+        links = ((0, 1), (0, 3), (1, 2), (1, 3), (2, 4), (2, 5), (3, 4), (4, 5))
+        revealed_links = max(1, round(len(links) * progress))
+        for index, (start, end) in enumerate(links):
+            color = scan_color if index < revealed_links else (45, 61, 72)
+            pygame.draw.line(self.screen, color, nodes[start], nodes[end], width=2)
+
+        active_node = int(pygame.time.get_ticks() / 190) % len(nodes)
+        for index, node in enumerate(nodes):
+            active = index == active_node and progress > index / len(nodes)
+            pygame.draw.circle(self.screen, (11, 29, 39), node, 8 if active else 6)
+            pygame.draw.circle(self.screen, scan_color, node, 8 if active else 6, width=2)
+            if active:
+                pygame.draw.circle(self.screen, (245, 226, 255), node, 3)
+
+        phase = pygame.time.get_ticks() / 150
+        wave_points = []
+        wave_left = display.x + 20
+        wave_right = display.right - 20
+        visible_right = wave_left + round((wave_right - wave_left) * max(0.08, progress))
+        for wave_x in range(wave_left, visible_right + 1, 3):
+            distance = wave_x - wave_left
+            spike = math.sin(distance / 6 - phase) * 4
+            if distance % 43 < 7:
+                spike -= 8 * math.sin((distance % 43) / 7 * math.pi)
+            wave_points.append((wave_x, display.bottom - 18 + round(spike)))
+        if len(wave_points) > 1:
+            pygame.draw.lines(self.screen, scan_color, False, wave_points, width=2)
+
+
     def draw_med_waste_notice(self, footer):
         """Draw the compact used-card notice beside the result-screen button."""
 
@@ -503,7 +755,14 @@ class ResultsMixin:
 
         correct = bool(self.diagnosis_correct)
         left = bool(self.patient_left)
-        status_color = COLORS["accent"] if correct else (245, 130, 115)
+        supported = correct and self.last_diagnosis_supported
+        status_color = (
+            COLORS["accent"]
+            if supported
+            else (232, 168, 92)
+            if correct
+            else (245, 130, 115)
+        )
         diagnosis_name = self.last_diagnosis.name if self.last_diagnosis else "Unknown"
         panel = pygame.Rect(105, 105, 890, 455)
         pygame.draw.rect(self.screen, (2, 8, 13), panel.move(8, 9), border_radius=16)
@@ -525,7 +784,15 @@ class ResultsMixin:
         pygame.draw.rect(self.screen, status_color, seal, width=2, border_radius=8)
         self.draw_outcome_seal(seal, correct, status_color)
 
-        heading_text = "CASE RESOLVED" if correct else "PATIENT LEFT" if left else "CASE REQUIRES REVIEW"
+        heading_text = (
+            "SUPPORTED DIAGNOSIS"
+            if supported
+            else "DIAGNOSIS CORRECT"
+            if correct
+            else "PATIENT LEFT"
+            if left
+            else "CASE REQUIRES REVIEW"
+        )
         heading = self.heading_font.render(heading_text, True, COLORS["text"])
         self.screen.blit(heading, heading.get_rect(midleft=(seal.right + 15, header.y + 25)))
         patient = self.card_font.render(
@@ -539,7 +806,13 @@ class ResultsMixin:
         pygame.draw.rect(self.screen, (11, 28, 34), badge, border_radius=17)
         pygame.draw.rect(self.screen, status_color, badge, width=2, border_radius=17)
         badge_text = self.card_font.render(
-            "CONFIRMED" if correct else "PATIENT LEFT" if left else "NOT CONFIRMED",
+            "FULL EVIDENCE"
+            if supported
+            else "LIMITED EVIDENCE"
+            if correct
+            else "PATIENT LEFT"
+            if left
+            else "NOT CONFIRMED",
             True,
             status_color,
         )
@@ -595,7 +868,8 @@ class ResultsMixin:
             line_spacing=6,
         )
         filing_note = self.card_font.render(
-            "CASE FILE UPDATED" if correct
+            "CASE FILE UPDATED: FULL SUPPORT" if supported
+            else "CASE FILE UPDATED: LIMITED SUPPORT" if correct
             else "CASE CLOSED: UNSUCCESSFUL" if left
             else "REJECTED CARD MARKED FOR MED-WASTE",
             True, status_color
@@ -846,14 +1120,25 @@ class ResultsMixin:
         pygame.draw.circle(self.screen, (255, 230, 150), coin_center, 17, width=2)
         coin = self.small_font.render("$", True, (80, 61, 36))
         self.screen.blit(coin, coin.get_rect(center=coin_center))
+        case_reward = (
+            DIAGNOSIS_REWARD
+            if self.last_diagnosis_supported
+            else LIMITED_EVIDENCE_REWARD
+        )
         reward_text = (
-            f"PENDING CASE PAY  +${DIAGNOSIS_REWARD}"
+            f"PENDING CASE PAY  +${case_reward}"
             if correct
             else f"DIAGNOSIS FEE  -${WRONG_DIAGNOSIS_PENALTY}"
         )
         reward = self.card_font.render(reward_text, True, status_color)
         payment_note = self.card_font.render(
-            "PAID AT END OF DAY" if correct else "DEDUCTED FROM LIVE BALANCE",
+            (
+                "FULL EVIDENCE RATE  •  PAID AT SHIFT END"
+                if correct and self.last_diagnosis_supported
+                else "LIMITED EVIDENCE RATE  •  PAID AT SHIFT END"
+                if correct
+                else "DEDUCTED FROM LIVE BALANCE"
+            ),
             True,
             COLORS["muted"],
         )

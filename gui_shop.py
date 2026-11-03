@@ -7,6 +7,7 @@ from Player import (
     CLINIC_OPERATING_FEE,
     DIAGNOSIS_REWARD,
     DRAW_COST,
+    LIMITED_EVIDENCE_REWARD,
     PERFECT_DAY_BONUS,
     WRONG_DIAGNOSIS_PENALTY,
 )
@@ -21,11 +22,34 @@ SHOP_UPGRADES = (
      "description": "Level 2: ultrasound tests cost 50% less.", "machine": "ULTRASOUND"},
     {"id": "allergy", "name": "ALLERGEN ANALYZER", "category": "ALLERGY", "cost": 200,
      "description": "Level 2: allergy tests cost 50% less.", "machine": "ALLERGY"},
+    {"id": "blood", "name": "PLASMA SEPARATOR", "category": "BLOOD CHEMISTRY", "cost": 125,
+     "description": "Level 2: blood chemistry tests cost 50% less.", "machine": "BLOOD CHEMISTRY"},
+    {"id": "oxygen", "name": "RESPIRATORY TUNER", "category": "OXYGEN SCAN", "cost": 125,
+     "description": "Level 2: oxygen scans cost 50% less.", "machine": "OXYGEN SCAN"},
+    {"id": "toxin", "name": "TOXIN SPECTROMETER", "category": "TOXIN SCREEN", "cost": 175,
+     "description": "Level 2: toxin screens cost 50% less.", "machine": "TOXIN SCREEN"},
+    {"id": "neural", "name": "SYNAPSE MAPPER", "category": "NEURAL SCAN", "cost": 200,
+     "description": "Level 2: neural scans cost 50% less.", "machine": "NEURAL SCAN"},
     {"id": "power", "name": "EFFICIENT POWER CORE", "category": "ALL MACHINES", "cost": 150,
      "description": "Every test costs $2 less. Stacks with calibrations.", "discount": 2},
     {"id": "smart_cards", "name": "SMART TEST CARDS", "category": "CARD UPGRADE", "cost": 100,
      "description": "Every test costs $1 less. Stacks with upgrades.", "discount": 1},
 )
+
+SHOP_COLUMNS = 3
+SHOP_VISIBLE_ROWS = 2
+SHOP_PRODUCT_COLORS = {
+    "temperature": (242, 160, 83),
+    "xray": (103, 176, 244),
+    "ultrasound": (105, 201, 222),
+    "allergy": (215, 126, 226),
+    "blood": (245, 126, 112),
+    "oxygen": (82, 209, 235),
+    "toxin": (202, 226, 91),
+    "neural": (195, 132, 245),
+    "power": (112, 255, 181),
+    "smart_cards": (190, 143, 229),
+}
 
 
 class ShopMixin:
@@ -173,8 +197,12 @@ class ShopMixin:
         )
         self.screen.blit(balance, balance.get_rect(center=(balance_badge.centerx + 10, balance_badge.centery)))
 
-        for upgrade, rect in zip(SHOP_UPGRADES, self.get_shop_upgrade_rects()):
+        for upgrade, rect in zip(
+            self.get_visible_shop_upgrades(),
+            self.get_shop_upgrade_rects(),
+        ):
             self.draw_shop_shelf(upgrade, rect)
+        self.draw_shop_scroll_controls()
         selected = self.get_selected_shop_upgrade()
         owned = selected and selected["id"] in self.purchased_shop_upgrades
         can_buy = selected and not owned and self.player.balance >= selected["cost"]
@@ -293,9 +321,21 @@ class ShopMixin:
         self.screen.blit(badge_text, badge_text.get_rect(center=case_badge.center))
 
         base_pay, penalties, bonus, total = self.get_daily_pay_breakdown()
-        care_detail = (
-            f"{self.daily_correct_diagnoses} confirmed cases × ${DIAGNOSIS_REWARD}"
+        supported_cases = min(
+            self.daily_evidence_cases,
+            self.daily_correct_diagnoses,
         )
+        limited_cases = self.daily_correct_diagnoses - supported_cases
+        care_parts = []
+        if supported_cases:
+            care_parts.append(
+                f"{supported_cases} supported × ${DIAGNOSIS_REWARD}"
+            )
+        if limited_cases:
+            care_parts.append(
+                f"{limited_cases} limited × ${LIMITED_EVIDENCE_REWARD}"
+            )
+        care_detail = "  •  ".join(care_parts) or "No confirmed cases"
         if self.daily_patients_lost:
             care_detail += f"  •  {self.daily_patients_lost} walked out"
         cards_drawn = self.daily_draw_expenses // DRAW_COST
@@ -478,7 +518,15 @@ class ShopMixin:
     def get_daily_pay_breakdown(self):
         """Return earnings, diagnosis penalties, bonus, and net shift payout."""
 
-        base_pay = self.daily_correct_diagnoses * DIAGNOSIS_REWARD
+        supported_cases = min(
+            self.daily_evidence_cases,
+            self.daily_correct_diagnoses,
+        )
+        limited_cases = self.daily_correct_diagnoses - supported_cases
+        base_pay = (
+            supported_cases * DIAGNOSIS_REWARD
+            + limited_cases * LIMITED_EVIDENCE_REWARD
+        )
         penalties = self.daily_wrong_diagnoses * WRONG_DIAGNOSIS_PENALTY
         perfect_day = (
             self.daily_correct_diagnoses == len(self.waiting_room_queue)
@@ -506,14 +554,121 @@ class ShopMixin:
         self.money_deduction_animation = None
 
     def get_shop_upgrade_rects(self):
-        """Stable three-column, two-row layout matching the concept art."""
-        return [pygame.Rect(x, y, 290, 154) for y in (198, 367) for x in (95, 405, 715)]
+        """Return the six fixed shelf positions inside the scrolling viewport."""
+
+        return [
+            pygame.Rect(x, y, 280, 154)
+            for y in (198, 367)
+            for x in (92, 392, 692)
+        ]
+
+    def get_shop_total_rows(self):
+        """Return the number of catalog rows required by all current products."""
+
+        return (len(SHOP_UPGRADES) + SHOP_COLUMNS - 1) // SHOP_COLUMNS
+
+    def get_shop_max_scroll_row(self):
+        """Return the last valid first-row position in the Shop viewport."""
+
+        return max(0, self.get_shop_total_rows() - SHOP_VISIBLE_ROWS)
+
+    def get_visible_shop_upgrades(self):
+        """Return the products represented by the six visible Shop shelves."""
+
+        first_index = self.shop_scroll_row * SHOP_COLUMNS
+        visible_count = SHOP_COLUMNS * SHOP_VISIBLE_ROWS
+        return SHOP_UPGRADES[first_index:first_index + visible_count]
+
+    def scroll_shop(self, row_delta):
+        """Move the Shop viewport by complete product rows."""
+
+        old_row = self.shop_scroll_row
+        self.shop_scroll_row = max(
+            0,
+            min(self.shop_scroll_row + row_delta, self.get_shop_max_scroll_row()),
+        )
+        return self.shop_scroll_row != old_row
+
+    def get_shop_scroll_rects(self):
+        """Return up button, down button, and scrollbar track rectangles."""
+
+        return (
+            pygame.Rect(981, 187, 27, 20),
+            pygame.Rect(981, 514, 27, 20),
+            pygame.Rect(989, 211, 11, 299),
+        )
+
+    def handle_shop_scroll_click(self, position):
+        """Scroll when either catalog navigation button is clicked."""
+
+        up_button, down_button, _track = self.get_shop_scroll_rects()
+        if up_button.collidepoint(position):
+            if self.scroll_shop(-1):
+                self.play_sfx("button")
+            return True
+        if down_button.collidepoint(position):
+            if self.scroll_shop(1):
+                self.play_sfx("button")
+            return True
+        return False
+
+    def draw_shop_scroll_controls(self):
+        """Draw paging arrows, a proportional thumb, and the visible item count."""
+
+        up_button, down_button, track = self.get_shop_scroll_rects()
+        max_scroll = self.get_shop_max_scroll_row()
+        mouse_position = self.get_mouse_position()
+        for button, direction, enabled in (
+            (up_button, -1, self.shop_scroll_row > 0),
+            (down_button, 1, self.shop_scroll_row < max_scroll),
+        ):
+            hovered = enabled and button.collidepoint(mouse_position)
+            border = (206, 158, 233) if enabled else (71, 67, 84)
+            fill = (50, 37, 68) if hovered else (20, 25, 37)
+            pygame.draw.rect(self.screen, fill, button, border_radius=6)
+            pygame.draw.rect(self.screen, border, button, width=2, border_radius=6)
+            arrow_y = button.centery + (2 if direction > 0 else -2)
+            arrow = (
+                (button.centerx - 5, arrow_y - 3 * direction),
+                (button.centerx + 5, arrow_y - 3 * direction),
+                (button.centerx, arrow_y + 4 * direction),
+            )
+            pygame.draw.polygon(self.screen, border, arrow)
+
+        pygame.draw.rect(self.screen, (13, 18, 29), track, border_radius=6)
+        pygame.draw.rect(self.screen, (79, 65, 96), track, width=1, border_radius=6)
+        total_rows = self.get_shop_total_rows()
+        thumb_height = max(
+            42,
+            round(track.height * SHOP_VISIBLE_ROWS / total_rows),
+        )
+        thumb_travel = track.height - thumb_height
+        thumb_y = track.y
+        if max_scroll:
+            thumb_y += round(thumb_travel * self.shop_scroll_row / max_scroll)
+        thumb = pygame.Rect(track.x + 2, thumb_y + 2, track.width - 4, thumb_height - 4)
+        pygame.draw.rect(self.screen, (206, 158, 233), thumb, border_radius=4)
+
+        first_item = self.shop_scroll_row * SHOP_COLUMNS + 1
+        last_item = min(
+            len(SHOP_UPGRADES),
+            first_item + SHOP_COLUMNS * SHOP_VISIBLE_ROWS - 1,
+        )
+        count = self.card_font.render(
+            f"{first_item}-{last_item} OF {len(SHOP_UPGRADES)}",
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(count, count.get_rect(midright=(796, 162)))
 
     def get_selected_shop_upgrade(self):
         return next((item for item in SHOP_UPGRADES if item["id"] == self.selected_shop_upgrade), None)
 
     def handle_shop_upgrade_click(self, position):
-        for upgrade, rect in zip(SHOP_UPGRADES, self.get_shop_upgrade_rects()):
+        for upgrade, rect in zip(
+            self.get_visible_shop_upgrades(),
+            self.get_shop_upgrade_rects(),
+        ):
             if rect.collidepoint(position):
                 self.play_sfx("button")
                 self.selected_shop_upgrade = upgrade["id"]
@@ -545,15 +700,7 @@ class ShopMixin:
         owned = upgrade["id"] in self.purchased_shop_upgrades
         hovered = shelf.collidepoint(self.get_mouse_position())
         affordable = self.player.balance >= upgrade["cost"]
-        product_colors = {
-            "temperature": (242, 160, 83),
-            "xray": (103, 176, 244),
-            "ultrasound": (105, 201, 222),
-            "allergy": (215, 126, 226),
-            "power": (112, 255, 181),
-            "smart_cards": (190, 143, 229),
-        }
-        product_color = product_colors[upgrade["id"]]
+        product_color = SHOP_PRODUCT_COLORS[upgrade["id"]]
         border = (
             COLORS["accent"]
             if owned
@@ -675,15 +822,7 @@ class ShopMixin:
     def draw_shop_purchase_icon(self, upgrade, center):
         """Show the selected product's symbol inside the purchase control."""
 
-        product_colors = {
-            "temperature": (242, 160, 83),
-            "xray": (103, 176, 244),
-            "ultrasound": (105, 201, 222),
-            "allergy": (215, 126, 226),
-            "power": (112, 255, 181),
-            "smart_cards": (190, 143, 229),
-        }
-        color = product_colors[upgrade["id"]]
+        color = SHOP_PRODUCT_COLORS[upgrade["id"]]
         pygame.draw.circle(self.screen, (9, 17, 27), center, 14)
         pygame.draw.circle(self.screen, color, center, 14, width=2)
         item_id = upgrade["id"]
@@ -700,6 +839,12 @@ class ShopMixin:
         elif item_id == "allergy":
             pygame.draw.circle(self.screen, color, (center[0], center[1] + 3), 6)
             pygame.draw.polygon(self.screen, color, ((center[0], center[1] - 9), (center[0] - 5, center[1] + 1), (center[0] + 5, center[1] + 1)))
+        elif item_id in ("blood", "oxygen", "toxin", "neural"):
+            self.draw_test_icon(
+                upgrade["machine"],
+                pygame.Rect(center[0] - 11, center[1] - 11, 22, 22),
+                color,
+            )
         elif item_id == "power":
             pygame.draw.polygon(self.screen, color, ((center[0] + 2, center[1] - 10), (center[0] - 6, center[1] + 1), (center[0], center[1] + 1), (center[0] - 2, center[1] + 10), (center[0] + 7, center[1] - 2), (center[0] + 1, center[1] - 2)))
         else:
@@ -794,6 +939,60 @@ class ShopMixin:
             )
             pygame.draw.polygon(self.screen, color, drop)
             pygame.draw.circle(self.screen, (247, 230, 250), (cx + 3, cy + 5), 3)
+        elif item_id == "blood":
+            vial = pygame.Rect(cx - 17, cy - 27, 34, 58)
+            pygame.draw.rect(self.screen, (20, 34, 43), vial, border_radius=8)
+            pygame.draw.rect(self.screen, color, vial, width=2, border_radius=8)
+            pygame.draw.rect(
+                self.screen,
+                color,
+                pygame.Rect(vial.x + 4, vial.centery, vial.width - 8, 24),
+                border_radius=5,
+            )
+            pygame.draw.rect(self.screen, color, pygame.Rect(cx - 12, cy - 34, 24, 9), border_radius=3)
+            for offset_x, offset_y in ((-7, 7), (6, 13), (-2, 21)):
+                pygame.draw.circle(self.screen, (255, 227, 212), (cx + offset_x, cy + offset_y), 2)
+        elif item_id == "oxygen":
+            pygame.draw.line(self.screen, color, (cx, cy - 28), (cx, cy + 15), width=3)
+            for direction in (-1, 1):
+                lung = pygame.Rect(0, 0, 27, 49)
+                lung.midtop = (cx + direction * 15, cy - 14)
+                pygame.draw.ellipse(self.screen, (20, 46, 55), lung)
+                pygame.draw.ellipse(self.screen, color, lung, width=3)
+                pygame.draw.line(self.screen, color, (cx, cy - 10), (lung.centerx, lung.y + 13), width=2)
+            for bubble_x, bubble_y, radius in ((26, -24, 3), (33, -12, 2), (-28, -27, 2)):
+                pygame.draw.circle(self.screen, color, (cx + bubble_x, cy + bubble_y), radius, width=1)
+        elif item_id == "toxin":
+            neck = pygame.Rect(cx - 7, cy - 31, 14, 24)
+            pygame.draw.rect(self.screen, (24, 37, 43), neck, border_radius=3)
+            pygame.draw.rect(self.screen, color, neck, width=2, border_radius=3)
+            flask = (
+                (neck.x + 2, neck.bottom - 2),
+                (neck.right - 2, neck.bottom - 2),
+                (cx + 25, cy + 28),
+                (cx - 25, cy + 28),
+            )
+            pygame.draw.polygon(self.screen, (20, 38, 43), flask)
+            pygame.draw.polygon(self.screen, color, flask, width=2)
+            fluid = ((cx - 19, cy + 12), (cx + 19, cy + 12), (cx + 24, cy + 26), (cx - 24, cy + 26))
+            pygame.draw.polygon(self.screen, color, fluid)
+            pygame.draw.circle(self.screen, (239, 250, 206), (cx - 6, cy + 18), 3)
+            pygame.draw.circle(self.screen, (239, 250, 206), (cx + 9, cy + 22), 2)
+        elif item_id == "neural":
+            nodes = (
+                (cx, cy - 28),
+                (cx - 25, cy - 10),
+                (cx + 25, cy - 10),
+                (cx - 17, cy + 24),
+                (cx + 17, cy + 24),
+                (cx, cy + 7),
+            )
+            links = ((0, 1), (0, 2), (1, 3), (2, 4), (1, 5), (2, 5), (3, 5), (4, 5))
+            for start, end in links:
+                pygame.draw.line(self.screen, color, nodes[start], nodes[end], width=2)
+            for index, node in enumerate(nodes):
+                pygame.draw.circle(self.screen, (234, 221, 246), node, 5)
+                pygame.draw.circle(self.screen, color, node, 5, width=2)
         elif item_id == "power":
             pygame.draw.circle(self.screen, (16, 41, 39), (cx, cy), 30)
             pygame.draw.circle(self.screen, color, (cx, cy), 30, width=3)

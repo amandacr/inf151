@@ -14,7 +14,9 @@ from gui_theme import (
     WINDOW_SIZE,
 )
 from Player import (
+    DIAGNOSIS_REWARD,
     DRAW_COST,
+    LIMITED_EVIDENCE_REWARD,
     MAX_TEST_HAND_SIZE,
     PATIENT_LEAVES_CHANCE,
     PATIENT_LEAVES_TEXT,
@@ -162,7 +164,14 @@ class CardMixin:
         """Move the selected test card to the throwaway pile without running it."""
 
         if self.showing_diagnosis_hand or self.selected_card_index is None:
-            return
+            return False
+        if self.discard_animation is not None:
+            self.set_card_draw_notice("MED-WASTE IN USE  •  PLEASE WAIT")
+            return False
+        if not 0 <= self.selected_card_index < len(self.player.test_hand):
+            self.selected_card_index = None
+            self.refresh_hand_layout()
+            return False
 
         selected_rect = self.get_selected_card_rect(self.selected_card_index)
         card = self.player.test_hand.pop(self.selected_card_index)
@@ -171,11 +180,14 @@ class CardMixin:
             "card": card,
             "start": selected_rect.center,
             "started_at": pygame.time.get_ticks(),
+            "locks_input": True,
         }
         self.selected_card_index = None
         self.run_test_button = None
         self.discard_button = None
         self.refresh_hand_layout()
+        self.set_card_draw_notice("SLOT OPEN  •  DRAW WHEN READY")
+        return True
 
 
     def start_pending_test_discard_animation(self):
@@ -272,9 +284,13 @@ class CardMixin:
         self.last_diagnosis = card.value
         self.player.play(card)
         self.diagnosis_correct = self.patient.receive_diagnosis(card.value)
+        performed_tests = set(self.notebook.get_entries(self.patient)) - {"No tests"}
+        self.last_diagnosis_supported = self.patient.has_supporting_evidence(
+            performed_tests
+        )
         if self.diagnosis_correct:
             self.daily_correct_diagnoses += 1
-            if self.notebook_has_test_results():
+            if self.last_diagnosis_supported:
                 self.daily_evidence_cases += 1
             self.play_sfx("correct")
         else:
@@ -491,11 +507,14 @@ class CardMixin:
 
     def draw_card_from_pile(self):
         """Move the top card of the deck into the player's hand for DRAW_COST."""
+        if self.discard_animation is not None:
+            self.set_card_draw_notice("MED-WASTE IN USE  •  PLEASE WAIT")
+            return False
         if not self.deck.contents:
+            self.set_card_draw_notice("DRAW DECK EMPTY  •  NO CHARGE")
             return False
         if len(self.player.test_hand) >= MAX_TEST_HAND_SIZE:
-            self.card_draw_notice = "HAND FULL  •  DISCARD FIRST"
-            self.card_draw_notice_started_at = pygame.time.get_ticks()
+            self.set_card_draw_notice("HAND FULL  •  DISCARD FIRST")
             return False
 
         # Drawn cards belong to the test hand. Reveal that hand immediately so
@@ -503,12 +522,26 @@ class CardMixin:
         if self.showing_diagnosis_hand:
             self.switch_active_hand(False)
         card = self.deck.draw()
+        if card is None:
+            self.set_card_draw_notice("DRAW DECK EMPTY  •  NO CHARGE")
+            return False
         self.player.draw(card)
         self.start_live_money_deduction(DRAW_COST, "CARD DRAW")
         self.daily_draw_expenses += DRAW_COST
         self.selected_card_index = None
         self.refresh_hand_layout()
+        remaining = len(self.deck.contents)
+        if remaining == 0:
+            self.set_card_draw_notice("LAST CARD DRAWN  •  DECK EMPTY")
+        elif remaining <= 5:
+            self.set_card_draw_notice(f"LOW DECK  •  {remaining} CARDS LEFT")
         return True
+
+    def set_card_draw_notice(self, message):
+        """Show a short draw-pile status without changing cards or charging money."""
+
+        self.card_draw_notice = message
+        self.card_draw_notice_started_at = pygame.time.get_ticks()
 
     def get_hovered_card_index(self, position):
         """Return the single card under the mouse, or None."""
@@ -551,6 +584,34 @@ class CardMixin:
 
     def draw_fitted_card_title(self, title, area, selected=False):
         """Choose the largest existing font that keeps a card title inside its header."""
+
+        if (
+            not selected
+            and " " in title
+            and self.pile_font.size(title)[0] > area.width - 8
+        ):
+            words = title.split()
+            split_index = min(
+                range(1, len(words)),
+                key=lambda index: max(
+                    self.compact_card_title_font.size(" ".join(words[:index]))[0],
+                    self.compact_card_title_font.size(" ".join(words[index:]))[0],
+                ),
+            )
+            title_lines = (
+                " ".join(words[:split_index]),
+                " ".join(words[split_index:]),
+            )
+            line_offset = self.compact_card_title_font.get_linesize() // 2
+            for line_index, line_text in enumerate(title_lines):
+                line = self.compact_card_title_font.render(
+                    line_text,
+                    True,
+                    COLORS["card_text"],
+                )
+                line_y = area.centery + (-line_offset if line_index == 0 else line_offset)
+                self.screen.blit(line, line.get_rect(center=(area.centerx, line_y)))
+            return
 
         fonts = (
             (self.body_font, self.small_font, self.card_font)
@@ -991,6 +1052,90 @@ class CardMixin:
                 (center_x + 3, center_y + 3),
                 3,
             )
+        elif test_name == "BLOOD CHEMISTRY":
+            vial = pygame.Rect(center_x - 8, center_y - 13, 16, 25)
+            pygame.draw.rect(icon_surface, (238, 246, 228), vial, border_radius=4)
+            pygame.draw.rect(icon_surface, ink, vial, width=2, border_radius=4)
+            pygame.draw.line(
+                icon_surface,
+                ink,
+                (vial.x - 2, vial.y),
+                (vial.right + 2, vial.y),
+                width=3,
+            )
+            fluid = pygame.Rect(vial.x + 3, vial.centery, vial.width - 6, 9)
+            pygame.draw.rect(icon_surface, rarity_color, fluid, border_radius=3)
+            pygame.draw.circle(
+                icon_surface,
+                (238, 246, 228),
+                (fluid.x + 3, fluid.y + 3),
+                2,
+            )
+        elif test_name == "OXYGEN SCAN":
+            pygame.draw.line(
+                icon_surface,
+                ink,
+                (center_x, center_y - 14),
+                (center_x, center_y + 12),
+                width=3,
+            )
+            for direction in (-1, 1):
+                lung = pygame.Rect(
+                    center_x + direction * 2 - (12 if direction < 0 else 0),
+                    center_y - 7,
+                    11,
+                    22,
+                )
+                pygame.draw.ellipse(icon_surface, rarity_color, lung)
+                pygame.draw.ellipse(icon_surface, ink, lung, width=2)
+            for bubble_x, bubble_y, radius in ((8, -13, 3), (14, -7, 2), (-12, -15, 2)):
+                pygame.draw.circle(
+                    icon_surface,
+                    rarity_color,
+                    (center_x + bubble_x, center_y + bubble_y),
+                    radius,
+                    width=1,
+                )
+        elif test_name == "TOXIN SCREEN":
+            flask_points = (
+                (center_x - 5, center_y - 14),
+                (center_x + 5, center_y - 14),
+                (center_x + 5, center_y - 4),
+                (center_x + 13, center_y + 12),
+                (center_x - 13, center_y + 12),
+                (center_x - 5, center_y - 4),
+            )
+            pygame.draw.polygon(icon_surface, (238, 246, 228), flask_points)
+            pygame.draw.polygon(icon_surface, ink, flask_points, width=2)
+            fluid_points = (
+                (center_x - 9, center_y + 5),
+                (center_x + 9, center_y + 5),
+                (center_x + 12, center_y + 11),
+                (center_x - 12, center_y + 11),
+            )
+            pygame.draw.polygon(icon_surface, rarity_color, fluid_points)
+            pygame.draw.circle(icon_surface, ink, (center_x, center_y + 8), 2)
+            pygame.draw.circle(icon_surface, rarity_color, (center_x + 13, center_y - 8), 3)
+        elif test_name == "NEURAL SCAN":
+            nodes = (
+                (center_x, center_y - 13),
+                (center_x - 13, center_y - 4),
+                (center_x + 13, center_y - 4),
+                (center_x - 9, center_y + 12),
+                (center_x + 9, center_y + 12),
+                (center_x, center_y + 4),
+            )
+            links = ((0, 1), (0, 2), (1, 3), (2, 4), (1, 5), (2, 5), (3, 5), (4, 5))
+            for start, end in links:
+                pygame.draw.line(icon_surface, ink, nodes[start], nodes[end], width=2)
+            for index, node in enumerate(nodes):
+                pygame.draw.circle(
+                    icon_surface,
+                    rarity_color if index in (0, 5) else (238, 246, 228),
+                    node,
+                    4,
+                )
+                pygame.draw.circle(icon_surface, ink, node, 4, width=1)
         else:
             icon_text = self.body_font.render(test_name[0], True, ink)
             icon_surface.blit(icon_text, icon_text.get_rect(center=icon_area.center))
@@ -1175,12 +1320,28 @@ class CardMixin:
         )
         self.screen.blit(question, question.get_rect(center=(panel.centerx, panel.y + 186)))
 
-        warning = self.small_font.render(
-            "An incorrect diagnosis will be discarded before you return.",
-            True,
-            COLORS["muted"],
+        evidence_text, evidence_color = self.get_evidence_status_display()
+        evidence_panel = pygame.Rect(panel.centerx - 220, panel.y + 207, 440, 31)
+        pygame.draw.rect(self.screen, (19, 24, 34), evidence_panel, border_radius=15)
+        pygame.draw.rect(
+            self.screen,
+            evidence_color,
+            evidence_panel,
+            width=2,
+            border_radius=15,
         )
-        self.screen.blit(warning, warning.get_rect(center=(panel.centerx, panel.y + 222)))
+        evidence_note = self.small_font.render(
+            (
+                f"{evidence_text}  •  CORRECT CASE PAY $"
+                f"{DIAGNOSIS_REWARD if evidence_text == 'EVIDENCE SUFFICIENT' else LIMITED_EVIDENCE_REWARD}"
+            ),
+            True,
+            evidence_color,
+        )
+        self.screen.blit(
+            evidence_note,
+            evidence_note.get_rect(center=evidence_panel.center),
+        )
 
         mouse_position = self.get_mouse_position()
         cancel_color = (
