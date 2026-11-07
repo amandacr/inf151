@@ -10,7 +10,7 @@ def create_zorpa():
         None,
         None,
         "uncontrollable shaking",
-        DIAGNOSES["hypothermia"],
+        DIAGNOSES["thermal_core_hypothermia"],
         {
             "TEMPERATURE": "Current temperature: 1700°F",
             "X-RAY": "X-ray imaging found no fractures or visible bone damage.",
@@ -38,6 +38,13 @@ def create_zorpa():
             "Even the lights feel cold.",
             "It started after my last tour.",
         ),
+        diagnosis_options=(
+            DIAGNOSES["neural_tremor_syndrome"],
+            DIAGNOSES["lava_blood_coagulation"],
+            DIAGNOSES["thermal_core_hypothermia"],
+            DIAGNOSES["thermal_lung_exchange_failure"],
+            DIAGNOSES["event_horizon_toxin_exposure"],
+        ),
     )
 
 
@@ -51,7 +58,7 @@ def create_zoogy():
         {
             "TEMPERATURE": "Current temperature: 95°F",
             "X-RAY": "X-ray imaging displayed what appeared to be motion blur, perhaps caused by a vibration in the skeletal system.",
-            "ULTRASOUND": "Rhythmic vibration is passing from the crystal skeleton into nearby organs without tissue damage.",
+            "ULTRASOUND": "Rhythmic vibration is passing from the dense internal frame into nearby organs without tissue damage.",
             "ALLERGY": "Allergy screening produced no reaction.",
             "BLOOD CHEMISTRY": "Crystal minerals and circulating energy levels are within the Arcedian baseline.",
             "OXYGEN SCAN": "Both rectangular lungs are exchanging gases at the expected rate.",
@@ -75,6 +82,13 @@ def create_zoogy():
             "It gets worse when I tense up.",
             "I blamed orb-bowling at first.",
         ),
+        diagnosis_options=(
+            DIAGNOSES["neural_oscillation_disorder"],
+            DIAGNOSES["crystal_lattice_microfracture"],
+            DIAGNOSES["skeletal_resonance"],
+            DIAGNOSES["resonant_lung_compression"],
+            DIAGNOSES["mineral_energy_imbalance"],
+        ),
     )
 
 
@@ -89,7 +103,7 @@ def create_titus():
             "TEMPERATURE": "Current temperature: 50°F",
             "X-RAY": "X-ray imaging found no fractures or visible bone damage.",
             "ULTRASOUND": "Ultrasound imaging found no unusual internal changes.",
-            "ALLERGY": "Severe allergic response detected from: water.",
+            "ALLERGY": "Severe reaction detected to the sprinkler-residue sample.",
             "BLOOD CHEMISTRY": "Acute inflammatory markers are elevated following a recent contact exposure.",
             "OXYGEN SCAN": "All three lungs are stable, with no airway swelling or obstruction detected.",
             "TOXIN SCREEN": "No poison was detected; the external sample contains unusually high water saturation.",
@@ -112,6 +126,13 @@ def create_titus():
             "It started after the sprinklers.",
             "I've never reacted like this.",
         ),
+        diagnosis_options=(
+            DIAGNOSES["membrane_toxin_absorption"],
+            DIAGNOSES["ectomorphic_hypothermia"],
+            DIAGNOSES["acute_water_reaction"],
+            DIAGNOSES["neural_shock_tremor"],
+            DIAGNOSES["respiratory_anaphylaxis"],
+        ),
     )
 
 
@@ -126,8 +147,8 @@ def create_conmann():
             "TEMPERATURE": "Current temperature: 35°F",
             "X-RAY": "X-ray imaging found no fractures or visible bone damage.",
             "ULTRASOUND": "All three fermentation chambers are distended with gas, with no physical obstruction.",
-            "ALLERGY": "No immune allergy detected; a digestive intolerance response to lactose is present.",
-            "BLOOD CHEMISTRY": "Elevated unprocessed lactose metabolites were detected in the patient's oil-blood.",
+            "ALLERGY": "No immune response was detected to the moon-cheese sample.",
+            "BLOOD CHEMISTRY": "Elevated unprocessed dairy-sugar metabolites were detected in the patient's oil-blood.",
             "OXYGEN SCAN": "The oversized lung is operating normally for a Vaygan Oilblood.",
             "TOXIN SCREEN": "No foodborne toxins or hazardous contaminants were detected.",
             "NEURAL SCAN": "Neural activity is normal; pain signals originate in the digestive chambers.",
@@ -148,5 +169,12 @@ def create_conmann():
             "My stomach may explode.",
             "I got bloated after lunch.",
             "I tried the moon-cheese special.",
+        ),
+        diagnosis_options=(
+            DIAGNOSES["moon_cheese_allergy"],
+            DIAGNOSES["fermentation_chamber_blockage"],
+            DIAGNOSES["lactose_intolerance"],
+            DIAGNOSES["foodborne_toxin_exposure"],
+            DIAGNOSES["oil_blood_metabolic_failure"],
         ),
     )

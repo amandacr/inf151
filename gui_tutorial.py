@@ -63,11 +63,34 @@ class TutorialMixin:
                 return index
         return None
 
-    def get_hypothermia_card_index(self):
-        """Return the Hypothermia card in the current diagnosis hand."""
+    def get_correct_diagnosis_card_index(self):
+        """Return the current patient's correct diagnosis card."""
 
         for index, card in enumerate(self.player.diagnosis_hand):
-            if card.value.name == "Hypothermia":
+            if card.value == self.patient.diagnosis:
+                return index
+        return None
+
+    def get_diagnosis_choice_area(self):
+        """Return one spotlight covering every visible diagnosis option.
+
+        Training should teach the player to compare the case files, so the
+        tutorial deliberately highlights the whole hand instead of revealing
+        the correct card's shuffled position.
+        """
+
+        if not self.card_rects:
+            return None
+        choice_area = self.card_rects[0].copy()
+        for card_rect in self.card_rects[1:]:
+            choice_area.union_ip(card_rect)
+        return choice_area
+
+    def get_diagnosis_card_index_at(self, position):
+        """Return the diagnosis card clicked during the guided comparison."""
+
+        for index, card_rect in enumerate(self.card_rects):
+            if card_rect.collidepoint(position):
                 return index
         return None
 
@@ -103,10 +126,7 @@ class TutorialMixin:
         if step == "diagnosis_folder":
             return self.layout["diagnosis"]
         if step == "diagnosis_select":
-            index = self.get_hypothermia_card_index()
-            if index is not None and index < len(self.card_rects):
-                resting = self.card_rects[index]
-                return resting.union(self.get_hovered_card_rect(resting))
+            return self.get_diagnosis_choice_area()
         if step == "diagnosis_play" and self.selected_card_index is not None:
             selected = self.get_selected_card_rect(self.selected_card_index)
             return self.get_card_action_button(selected)
@@ -151,7 +171,11 @@ class TutorialMixin:
             "open_notebook": ("The result is recorded. Open Patient Notes.", pygame.Rect(265, 401, 410, 92), False),
             "review_notebook": ("Temperature is one clue, so Evidence reads 1/2. Two matching clues earn full case pay.", pygame.Rect(350, 12, 400, 104), True),
             "diagnosis_folder": ("For training, submit early and see the limited-evidence rate. Open Diagnosis.", pygame.Rect(405, 173, 410, 92), False),
-            "diagnosis_select": ("Select the Hypothermia case file.", pygame.Rect(650, 173, 400, 92), False),
+            "diagnosis_select": (
+                "Zorpa is 1,700°F—300°F below the 2,000°F baseline. Choose the case file that best explains dangerous cooling and shivering; the other conditions need neural, blood, lung, or toxin evidence.",
+                pygame.Rect(620, 158, 430, 132),
+                False,
+            ),
             "diagnosis_play": ("Submit the selected condition as your diagnosis.", pygame.Rect(650, 173, 400, 92), False),
             "diagnosis_confirm": ("Confirm when you are ready. Incorrect diagnoses cost $25, and repeated mistakes may cause a patient to leave.", pygame.Rect(350, 38, 400, 104), False),
             "complete": ("Correct, but only partly supported. Gather 2/2 evidence for full pay on future cases.", pygame.Rect(350, 12, 400, 104), True),
@@ -226,11 +250,19 @@ class TutorialMixin:
             self.set_guided_tutorial_step("diagnosis_select")
             return
         if step == "diagnosis_select":
-            index = self.get_hypothermia_card_index()
-            if index is not None and target_clicked:
+            index = self.get_diagnosis_card_index_at(position)
+            if (
+                index is not None
+                and self.player.diagnosis_hand[index].value == self.patient.diagnosis
+            ):
                 self.selected_card_index = index
                 self.play_sfx("card_select")
                 self.set_guided_tutorial_step("diagnosis_play")
+                return
+            if index is not None:
+                self.nudge_guided_tutorial(
+                    "That file needs evidence you have not collected. Follow the 300°F temperature drop."
+                )
                 return
         if step == "diagnosis_play" and self.selected_card_index is not None:
             selected = self.get_selected_card_rect(self.selected_card_index)

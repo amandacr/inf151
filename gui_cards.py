@@ -700,32 +700,9 @@ class CardMixin:
             (header.x + 6, header.bottom),
             (header.right - 6, header.bottom),
         )
-        # Base this decision on the resting 96-pixel card, not the slightly wider
-        # hover rectangle, so titles never switch fonts while the mouse moves.
-        resting_single_line_width = 80
-        if (
-            self.diagnosis_card_font.size(diagnosis.name)[0]
-            <= resting_single_line_width
-        ):
-            title = self.diagnosis_card_font.render(
-                diagnosis.name,
-                True,
-                COLORS["card_text"],
-            )
-            self.screen.blit(title, title.get_rect(center=header.center))
-        else:
-            name_parts = diagnosis.name.split(maxsplit=1)
-            for line_index, line_text in enumerate(name_parts):
-                title = self.diagnosis_card_font.render(
-                    line_text,
-                    True,
-                    COLORS["card_text"],
-                )
-                line_y = header.centery - 7 + line_index * 14
-                self.screen.blit(
-                    title,
-                    title.get_rect(center=(header.centerx, line_y)),
-                )
+        # The shared fitter balances longer condition names across two stable
+        # lines, so hovering never changes the title font or clips new cards.
+        self.draw_fitted_card_title(diagnosis.name, header)
 
         icon = pygame.Rect(card_rect.centerx - 28, card_rect.y + 50, 56, 54)
         pygame.draw.rect(self.screen, (210, 211, 216), icon, border_radius=6)
@@ -1303,7 +1280,12 @@ class CardMixin:
         )
         self.screen.blit(heading, heading.get_rect(center=(panel.centerx, panel.y + 93)))
 
-        diagnosis_name = self.heading_font.render(
+        diagnosis_name_font = self.heading_font
+        for candidate in (self.heading_font, self.body_font, self.small_font):
+            diagnosis_name_font = candidate
+            if candidate.size(diagnosis.name)[0] <= panel.width - 70:
+                break
+        diagnosis_name = diagnosis_name_font.render(
             diagnosis.name,
             True,
             (216, 159, 238),
@@ -1314,7 +1296,7 @@ class CardMixin:
         )
 
         question = self.body_font.render(
-            f"Submit {diagnosis.name} as your final diagnosis?",
+            "Submit this condition as your final diagnosis?",
             True,
             COLORS["text"],
         )

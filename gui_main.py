@@ -112,6 +112,8 @@ class CosmicClinicGUI(
         self.patient = self.waiting_room_queue[0]["create"]()
         self.patient_dialogue_index = 0
         self.player = Player("Dr GUI")
+        if self.patient.diagnosis_options:
+            self.player.set_diagnosis_hand(self.patient.diagnosis_options)
         self.notebook = Notebook()
         self.notebook.add_patient(self.patient)
         self.notebook_columns = []
@@ -121,6 +123,7 @@ class CosmicClinicGUI(
         self.notebook_preview_duration = 220
         self.deck = Deck(seed=card_seed)
         self.deck.populate(create_test_catalog())
+        self.deck.shuffle_cards(self.player.diagnosis_hand)
         self.deal_starting_test_hand(training_hand=True)
         self.hovered_card_index = None
         self.showing_health_id = False
@@ -656,6 +659,9 @@ class CosmicClinicGUI(
         self.player.balance = current_balance
         self.player.machine_levels = machine_levels
         self.player.test_discount = test_discount
+        if self.patient.diagnosis_options:
+            self.player.set_diagnosis_hand(self.patient.diagnosis_options)
+        self.deck.shuffle_cards(self.player.diagnosis_hand)
         self.deal_starting_test_hand()
         self.notebook = Notebook()
         self.notebook.add_patient(self.patient)

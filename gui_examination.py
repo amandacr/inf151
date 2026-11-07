@@ -450,7 +450,7 @@ class ExaminationMixin:
             else (88, 93, 111)
         )
 
-        tray = pygame.Rect(panel.x + 6, panel.y + 30, panel.width - 12, panel.height - 36)
+        tray = pygame.Rect(panel.x + 6, panel.y + 39, panel.width - 12, panel.height - 45)
         pygame.draw.rect(self.screen, (5, 12, 18), tray.move(4, 5), border_radius=10)
         pygame.draw.rect(self.screen, (38, 47, 60), tray, border_radius=10)
         pygame.draw.rect(
@@ -461,17 +461,30 @@ class ExaminationMixin:
             border_radius=10,
         )
 
-        plaque = pygame.Rect(panel.x + 6, panel.y + 3, panel.width - 12, 25)
+        plaque = pygame.Rect(panel.x + 6, panel.y + 3, panel.width - 12, 34)
         pygame.draw.rect(self.screen, (43, 51, 64), plaque, border_radius=5)
-        plaque_text = (
-            "DRAW DECK EMPTY"
+        plaque_title = self.small_font.render("DRAW DECK", True, COLORS["text"])
+        self.screen.blit(
+            plaque_title,
+            plaque_title.get_rect(center=(plaque.centerx, plaque.y + 10)),
+        )
+        plaque_status = (
+            "EMPTY"
             if deck_empty
             else
-            f"TEST HAND FULL  {MAX_TEST_HAND_SIZE}/{MAX_TEST_HAND_SIZE}"
+            f"HAND FULL  {MAX_TEST_HAND_SIZE}/{MAX_TEST_HAND_SIZE}"
             if hand_full
-            else f"DRAW DECK ${DRAW_COST} PER CARD"
+            else f"${DRAW_COST} PER DRAW"
         )
-        self.draw_centered_label(plaque_text, plaque, plaque.centery)
+        plaque_detail = self.compact_ui_font.render(
+            plaque_status,
+            True,
+            warning_color if deck_empty or hand_full else COLORS["muted"],
+        )
+        self.screen.blit(
+            plaque_detail,
+            plaque_detail.get_rect(center=(plaque.centerx, plaque.y + 25)),
+        )
 
         if hovered or notice_active:
             tip_text = (
@@ -557,83 +570,112 @@ class ExaminationMixin:
 
         serial = entry["serial"]
         if serial.startswith("GRN"):
-            resonance_color = (126, 225, 174)
-            for radius in (23, 34, 45):
-                wave = pygame.Rect(
-                    platform.centerx - radius,
-                    platform.centery - radius,
-                    radius * 2,
-                    radius * 2,
-                )
-                pygame.draw.arc(
-                    self.screen,
-                    resonance_color,
-                    wave,
-                    math.pi + 0.35,
-                    math.tau - 0.35,
-                    width=1,
-                )
-            for offset in (-1, 1):
-                x = platform.centerx + offset * 72
-                pygame.draw.line(
-                    self.screen,
-                    (71, 132, 105),
-                    (x, bay.y + 29),
-                    (x, bay.y + 81),
-                    width=2,
-                )
-                for line_y in range(bay.y + 35, bay.y + 79, 11):
-                    pygame.draw.line(
-                        self.screen,
-                        resonance_color,
-                        (x - 4, line_y),
-                        (x + 4, line_y),
-                        width=1,
-                    )
-        elif serial.startswith("BLU"):
-            droplet_color = (105, 201, 222)
-            droplets = (
-                (bay.x + 38, bay.y + 32, 5),
-                (bay.x + 57, bay.y + 73, 4),
-                (bay.right - 34, bay.y + 25, 4),
-            )
-            for drop_x, drop_y, radius in droplets:
-                bob = round(math.sin(idle_time / 320 + drop_x) * 2)
-                points = (
-                    (drop_x, drop_y - radius * 2 + bob),
-                    (drop_x - radius, drop_y + bob),
-                    (drop_x, drop_y + radius + bob),
-                    (drop_x + radius, drop_y + bob),
-                )
-                pygame.draw.polygon(self.screen, droplet_color, points)
-                pygame.draw.circle(
-                    self.screen,
-                    (186, 235, 241),
-                    (drop_x - 1, drop_y - 1 + bob),
-                    1,
-                )
-        elif serial.startswith("ORG"):
-            container = pygame.Rect(bay.right - 60, platform.y - 25, 43, 27)
-            pygame.draw.rect(self.screen, (74, 42, 38), container.move(2, 2), border_radius=4)
-            pygame.draw.rect(self.screen, (239, 186, 111), container, border_radius=4)
-            pygame.draw.rect(self.screen, (160, 74, 63), container, width=2, border_radius=4)
-            lid = pygame.Rect(container.x - 3, container.y - 5, container.width + 6, 8)
-            pygame.draw.rect(self.screen, (248, 210, 143), lid, border_radius=3)
-            pygame.draw.rect(self.screen, (160, 74, 63), lid, width=1, border_radius=3)
+            # Zoogy keeps a tiny orb-bowling trophy beside the exam platform.
+            # It reflects his job without suggesting anything about his bones.
+            plaque = pygame.Rect(bay.x + 14, bay.y + 24, 42, 53)
+            pygame.draw.rect(self.screen, (16, 47, 42), plaque, border_radius=6)
+            pygame.draw.rect(self.screen, (85, 157, 119), plaque, width=1, border_radius=6)
+            trophy_color = (229, 190, 91)
+            cup = pygame.Rect(plaque.centerx - 9, plaque.y + 11, 18, 14)
+            pygame.draw.arc(self.screen, trophy_color, cup, 0, math.pi, width=3)
             pygame.draw.arc(
                 self.screen,
-                (255, 236, 188),
-                pygame.Rect(container.centerx - 10, container.y - 21, 9, 16),
-                math.pi,
-                math.tau,
+                trophy_color,
+                pygame.Rect(cup.x - 7, cup.y + 1, 9, 10),
+                math.pi / 2,
+                math.pi * 1.5,
                 width=2,
             )
             pygame.draw.arc(
                 self.screen,
-                (255, 236, 188),
-                pygame.Rect(container.centerx + 2, container.y - 18, 9, 13),
-                math.pi,
-                math.tau,
+                trophy_color,
+                pygame.Rect(cup.right - 2, cup.y + 1, 9, 10),
+                -math.pi / 2,
+                math.pi / 2,
+                width=2,
+            )
+            pygame.draw.line(
+                self.screen,
+                trophy_color,
+                (plaque.centerx, cup.bottom - 1),
+                (plaque.centerx, cup.bottom + 9),
+                width=2,
+            )
+            pygame.draw.rect(
+                self.screen,
+                trophy_color,
+                pygame.Rect(plaque.centerx - 9, cup.bottom + 8, 18, 4),
+                border_radius=2,
+            )
+            orb_glow = 1 + round((math.sin(idle_time / 420) + 1) / 2)
+            pygame.draw.circle(
+                self.screen,
+                (126, 225, 174),
+                (plaque.centerx, plaque.bottom - 8),
+                4 + orb_glow,
+                width=1,
+            )
+        elif serial.startswith("BLU"):
+            # Titus brought his orbital tax ledger; no medical clue is shown.
+            tablet = pygame.Rect(bay.x + 14, bay.y + 25, 43, 56)
+            pygame.draw.rect(self.screen, (13, 35, 46), tablet.move(2, 2), border_radius=5)
+            pygame.draw.rect(self.screen, (87, 161, 181), tablet, border_radius=5)
+            pygame.draw.rect(
+                self.screen,
+                (193, 231, 235),
+                tablet.inflate(-6, -7),
+                border_radius=3,
+            )
+            ink = (54, 105, 121)
+            for line_y, width in ((tablet.y + 13, 24), (tablet.y + 21, 17)):
+                pygame.draw.line(
+                    self.screen,
+                    ink,
+                    (tablet.x + 9, line_y),
+                    (tablet.x + 9 + width, line_y),
+                    width=2,
+                )
+            for row in range(2):
+                for column in range(3):
+                    key = pygame.Rect(
+                        tablet.x + 9 + column * 8,
+                        tablet.y + 31 + row * 8,
+                        5,
+                        5,
+                    )
+                    pygame.draw.rect(self.screen, ink, key, border_radius=1)
+        elif serial.startswith("ORG"):
+            # Conmann's reviewer badge replaces the former food container.
+            badge = pygame.Rect(bay.x + 14, bay.y + 25, 44, 53)
+            pygame.draw.rect(self.screen, (53, 31, 38), badge, border_radius=6)
+            pygame.draw.rect(self.screen, (198, 103, 83), badge, width=1, border_radius=6)
+            star_color = (248, 198, 92)
+            for index in range(3):
+                center_x = badge.x + 12 + index * 10
+                center_y = badge.y + 17
+                points = []
+                for point_index in range(10):
+                    radius = 4 if point_index % 2 == 0 else 2
+                    angle = -math.pi / 2 + point_index * math.pi / 5
+                    points.append(
+                        (
+                            center_x + math.cos(angle) * radius,
+                            center_y + math.sin(angle) * radius,
+                        )
+                    )
+                pygame.draw.polygon(self.screen, star_color, points)
+            pygame.draw.line(
+                self.screen,
+                (223, 174, 139),
+                (badge.x + 9, badge.y + 31),
+                (badge.right - 9, badge.y + 31),
+                width=2,
+            )
+            pygame.draw.line(
+                self.screen,
+                (223, 174, 139),
+                (badge.x + 9, badge.y + 39),
+                (badge.x + 28, badge.y + 39),
                 width=2,
             )
 

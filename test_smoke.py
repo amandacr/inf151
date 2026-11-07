@@ -14,6 +14,7 @@ import pygame
 
 import main as game_launcher
 from Deck import Deck
+from Diagnosis import DIAGNOSES
 from Notebook import Notebook
 from PatientData import create_conmann, create_titus, create_zoogy, create_zorpa
 from Player import (
@@ -83,7 +84,9 @@ class SharedModelSmokeTests(unittest.TestCase):
             " ".join(titus.medical_info.values()).lower(),
         )
         self.assertIn("None documented", titus.medical_info.values())
-        self.assertIn("water", titus.test_results["ALLERGY"].lower())
+        allergy_result = titus.test_results["ALLERGY"].lower()
+        self.assertNotIn("water", allergy_result)
+        self.assertIn("sprinkler-residue", allergy_result)
 
         notebook = Notebook()
         notebook.add_patient(titus)
@@ -200,6 +203,22 @@ class SharedModelSmokeTests(unittest.TestCase):
             for test_name in test_names:
                 self.assertTrue(patient.perform_test(test_name).startswith("RESULTS: "))
 
+    def test_key_results_describe_clues_without_naming_the_answer(self):
+        """Later cases should require inference instead of printing diagnoses."""
+
+        zoogy_ultrasound = create_zoogy().test_results["ULTRASOUND"].lower()
+        titus_allergy = create_titus().test_results["ALLERGY"].lower()
+        conmann = create_conmann()
+        conmann_allergy = conmann.test_results["ALLERGY"].lower()
+        conmann_blood = conmann.test_results["BLOOD CHEMISTRY"].lower()
+
+        self.assertNotIn("skeletal resonance", zoogy_ultrasound)
+        self.assertNotIn("skeleton", zoogy_ultrasound)
+        self.assertNotIn("water", titus_allergy)
+        self.assertNotIn("lactose", conmann_allergy)
+        self.assertNotIn("intolerance", conmann_allergy)
+        self.assertNotIn("lactose", conmann_blood)
+
     def test_existing_conditions_define_two_card_clue_paths(self):
         """Every diagnosis should expose at least two valid two-test evidence routes."""
 
@@ -243,8 +262,8 @@ class SharedModelSmokeTests(unittest.TestCase):
             (0, 2),
         )
 
-    def test_starting_diagnosis_hand_has_five_options_and_all_patient_answers(self):
-        """The fixed hand should contain five unique options and every current correct answer."""
+    def test_legacy_diagnosis_hand_remains_available_for_future_patient_sets(self):
+        """The original five conditions remain available while sets are expanded."""
 
         player = Player("Test Doctor")
         diagnosis_names = [card.value.name for card in player.diagnosis_hand]
@@ -261,16 +280,210 @@ class SharedModelSmokeTests(unittest.TestCase):
                 "Lactose Intolerance",
             ],
         )
-        for patient in (
-            create_zorpa(),
-            create_zoogy(),
-            create_titus(),
-            create_conmann(),
-        ):
-            self.assertEqual(
-                sum(card.value == patient.diagnosis for card in player.diagnosis_hand),
-                1,
-            )
+        self.assertIn("hypothermia", DIAGNOSES)
+
+    def test_zorpa_has_five_curated_diagnosis_options(self):
+        """Zorpa should receive one answer and four evidence-based distractors."""
+
+        patient = create_zorpa()
+        diagnosis_names = [diagnosis.name for diagnosis in patient.diagnosis_options]
+
+        self.assertEqual(
+            diagnosis_names,
+            [
+                "Neural Tremor Syndrome",
+                "Lava-Blood Coagulation",
+                "Thermal-Core Hypothermia",
+                "Thermal-Lung Exchange Failure",
+                "Event-Horizon Toxin Exposure",
+            ],
+        )
+        self.assertEqual(len(set(diagnosis_names)), 5)
+        self.assertEqual(
+            sum(diagnosis == patient.diagnosis for diagnosis in patient.diagnosis_options),
+            1,
+        )
+        self.assertIsNot(patient.diagnosis, DIAGNOSES["hypothermia"])
+        distractors = [
+            diagnosis
+            for diagnosis in patient.diagnosis_options
+            if diagnosis != patient.diagnosis
+        ]
+        self.assertTrue(
+            all(diagnosis.rejection_reason for diagnosis in distractors)
+        )
+        self.assertTrue(
+            all(diagnosis.rejection_tests for diagnosis in distractors)
+        )
+
+    def test_detailed_rejection_feedback_requires_every_referenced_test(self):
+        """A wrong guess must not reveal findings from tests never performed."""
+
+        cases = (
+            (
+                DIAGNOSES["neural_tremor_syndrome"],
+                {"NEURAL SCAN", "TEMPERATURE"},
+            ),
+            (
+                DIAGNOSES["lava_blood_coagulation"],
+                {"ULTRASOUND", "BLOOD CHEMISTRY", "TEMPERATURE"},
+            ),
+            (
+                DIAGNOSES["thermal_lung_exchange_failure"],
+                {"OXYGEN SCAN", "BLOOD CHEMISTRY"},
+            ),
+            (
+                DIAGNOSES["event_horizon_toxin_exposure"],
+                {"TOXIN SCREEN", "BLOOD CHEMISTRY"},
+            ),
+            (
+                DIAGNOSES["neural_oscillation_disorder"],
+                {"NEURAL SCAN", "X-RAY"},
+            ),
+            (
+                DIAGNOSES["crystal_lattice_microfracture"],
+                {"X-RAY", "ULTRASOUND"},
+            ),
+            (
+                DIAGNOSES["resonant_lung_compression"],
+                {"OXYGEN SCAN"},
+            ),
+            (
+                DIAGNOSES["mineral_energy_imbalance"],
+                {"BLOOD CHEMISTRY"},
+            ),
+            (
+                DIAGNOSES["membrane_toxin_absorption"],
+                {"TOXIN SCREEN"},
+            ),
+            (
+                DIAGNOSES["ectomorphic_hypothermia"],
+                {"TEMPERATURE"},
+            ),
+            (
+                DIAGNOSES["neural_shock_tremor"],
+                {"NEURAL SCAN"},
+            ),
+            (
+                DIAGNOSES["respiratory_anaphylaxis"],
+                {"OXYGEN SCAN"},
+            ),
+            (
+                DIAGNOSES["moon_cheese_allergy"],
+                {"ALLERGY"},
+            ),
+            (
+                DIAGNOSES["fermentation_chamber_blockage"],
+                {"ULTRASOUND"},
+            ),
+            (
+                DIAGNOSES["foodborne_toxin_exposure"],
+                {"TOXIN SCREEN"},
+            ),
+            (
+                DIAGNOSES["oil_blood_metabolic_failure"],
+                {"BLOOD CHEMISTRY"},
+            ),
+        )
+        for diagnosis, required_tests in cases:
+            with self.subTest(diagnosis=diagnosis.name):
+                partial_tests = set(required_tests)
+                partial_tests.pop()
+                self.assertIsNone(diagnosis.get_rejection_reason(set()))
+                self.assertIsNone(
+                    diagnosis.get_rejection_reason(partial_tests)
+                )
+                self.assertEqual(
+                    diagnosis.get_rejection_reason(required_tests),
+                    diagnosis.rejection_reason,
+                )
+
+    def test_zoogy_has_five_curated_diagnosis_options(self):
+        """Zoogy should receive one answer and four evidence-based distractors."""
+
+        patient = create_zoogy()
+        diagnosis_names = [diagnosis.name for diagnosis in patient.diagnosis_options]
+
+        self.assertEqual(
+            diagnosis_names,
+            [
+                "Neural Oscillation Disorder",
+                "Crystal-Lattice Microfracture",
+                "Skeletal Resonance",
+                "Resonant Lung Compression",
+                "Mineral-Energy Imbalance",
+            ],
+        )
+        self.assertEqual(len(set(diagnosis_names)), 5)
+        self.assertEqual(
+            sum(diagnosis == patient.diagnosis for diagnosis in patient.diagnosis_options),
+            1,
+        )
+        distractors = [
+            diagnosis
+            for diagnosis in patient.diagnosis_options
+            if diagnosis != patient.diagnosis
+        ]
+        self.assertTrue(all(diagnosis.rejection_reason for diagnosis in distractors))
+        self.assertTrue(all(diagnosis.rejection_tests for diagnosis in distractors))
+
+    def test_titus_has_five_curated_diagnosis_options(self):
+        """Titus should receive one answer and four evidence-based distractors."""
+
+        patient = create_titus()
+        diagnosis_names = [diagnosis.name for diagnosis in patient.diagnosis_options]
+
+        self.assertEqual(
+            diagnosis_names,
+            [
+                "Membrane Toxin Absorption",
+                "Ectomorphic Hypothermia",
+                "Acute Water Reaction",
+                "Neural Shock Tremor",
+                "Respiratory Anaphylaxis",
+            ],
+        )
+        self.assertEqual(len(set(diagnosis_names)), 5)
+        self.assertEqual(
+            sum(diagnosis == patient.diagnosis for diagnosis in patient.diagnosis_options),
+            1,
+        )
+        distractors = [
+            diagnosis
+            for diagnosis in patient.diagnosis_options
+            if diagnosis != patient.diagnosis
+        ]
+        self.assertTrue(all(diagnosis.rejection_reason for diagnosis in distractors))
+        self.assertTrue(all(diagnosis.rejection_tests for diagnosis in distractors))
+
+    def test_conmann_has_five_curated_diagnosis_options(self):
+        """Conmann should receive one answer and four evidence-based distractors."""
+
+        patient = create_conmann()
+        diagnosis_names = [diagnosis.name for diagnosis in patient.diagnosis_options]
+
+        self.assertEqual(
+            diagnosis_names,
+            [
+                "Moon-Cheese Allergy",
+                "Fermentation Chamber Blockage",
+                "Lactose Intolerance",
+                "Foodborne Toxin Exposure",
+                "Oil-Blood Metabolic Failure",
+            ],
+        )
+        self.assertEqual(len(set(diagnosis_names)), 5)
+        self.assertEqual(
+            sum(diagnosis == patient.diagnosis for diagnosis in patient.diagnosis_options),
+            1,
+        )
+        distractors = [
+            diagnosis
+            for diagnosis in patient.diagnosis_options
+            if diagnosis != patient.diagnosis
+        ]
+        self.assertTrue(all(diagnosis.rejection_reason for diagnosis in distractors))
+        self.assertTrue(all(diagnosis.rejection_tests for diagnosis in distractors))
 
 
 class GuiFlowSmokeTests(unittest.TestCase):
@@ -287,6 +500,98 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.tutorial_opened_at = None
         self.game.patients_called = 1
         self.game.state = GameState.PATIENT
+
+    def test_patient_specific_diagnosis_hand_switches_with_the_case(self):
+        """Each completed patient set should replace the legacy case files."""
+
+        self.assertEqual(
+            set(card.value for card in self.game.player.diagnosis_hand),
+            set(self.game.patient.diagnosis_options),
+        )
+        self.assertEqual(
+            len(self.game.player.diagnosis_hand),
+            len(self.game.patient.diagnosis_options),
+        )
+        self.assertEqual(
+            sum(
+                card.value == self.game.patient.diagnosis
+                for card in self.game.player.diagnosis_hand
+            ),
+            1,
+        )
+
+        self.game.patients_called = 3
+        self.game.reset_round()
+        self.assertEqual(self.game.patient.name, "Conmann Cheester")
+        self.assertEqual(
+            set(card.value for card in self.game.player.diagnosis_hand),
+            set(self.game.patient.diagnosis_options),
+        )
+        self.assertEqual(
+            len(self.game.player.diagnosis_hand),
+            len(self.game.patient.diagnosis_options),
+        )
+        self.assertEqual(
+            sum(
+                card.value == self.game.patient.diagnosis
+                for card in self.game.player.diagnosis_hand
+            ),
+            1,
+        )
+
+        self.game.patients_called = 2
+        self.game.reset_round()
+        self.assertEqual(self.game.patient.name, "Titus McMightus")
+        self.assertEqual(
+            set(card.value for card in self.game.player.diagnosis_hand),
+            set(self.game.patient.diagnosis_options),
+        )
+        self.assertEqual(
+            len(self.game.player.diagnosis_hand),
+            len(self.game.patient.diagnosis_options),
+        )
+        self.assertEqual(
+            sum(
+                card.value == self.game.patient.diagnosis
+                for card in self.game.player.diagnosis_hand
+            ),
+            1,
+        )
+
+        self.game.patients_called = 1
+        self.game.reset_round()
+        self.assertEqual(self.game.patient.name, "Zoogy Zinglestar")
+        self.assertEqual(
+            set(card.value for card in self.game.player.diagnosis_hand),
+            set(self.game.patient.diagnosis_options),
+        )
+        self.assertEqual(
+            len(self.game.player.diagnosis_hand),
+            len(self.game.patient.diagnosis_options),
+        )
+        self.assertEqual(
+            sum(
+                card.value == self.game.patient.diagnosis
+                for card in self.game.player.diagnosis_hand
+            ),
+            1,
+        )
+
+    def test_diagnosis_hand_shuffle_is_random_and_seed_reproducible(self):
+        """Case-file order should vary without breaking deterministic tests."""
+
+        orders = []
+        correct_slots = []
+        for seed in (1, 1, 2, 7):
+            game = CosmicClinicGUI(card_seed=seed)
+            order = tuple(card.value.name for card in game.player.diagnosis_hand)
+            orders.append(order)
+            correct_slots.append(order.index(game.patient.diagnosis.name))
+
+        self.assertEqual(orders[0], orders[1])
+        self.assertNotEqual(orders[0], orders[2])
+        self.assertGreaterEqual(len(set(orders)), 3)
+        self.assertGreaterEqual(len(set(correct_slots)), 2)
 
     def tearDown(self):
         """Release Pygame resources after each test."""
@@ -483,7 +788,26 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.guided_tutorial_step, "review_notebook")
         self.game.handle_guided_tutorial_click((1090, 680))
         self.game.handle_guided_tutorial_click(self.game.layout["diagnosis"].center)
-        hypothermia_index = self.game.get_hypothermia_card_index()
+        prompt_text, _prompt_rect, _click_anywhere = (
+            self.game.get_guided_tutorial_prompt()
+        )
+        self.assertNotIn("Thermal-Core Hypothermia", prompt_text)
+        self.assertIn("300°F below", prompt_text)
+        choice_area = self.game.get_guided_tutorial_target()
+        self.assertTrue(
+            all(choice_area.contains(rect) for rect in self.game.card_rects)
+        )
+        wrong_index = next(
+            index
+            for index, card in enumerate(self.game.player.diagnosis_hand)
+            if card.value != self.game.patient.diagnosis
+        )
+        self.game.handle_guided_tutorial_click(
+            self.game.card_rects[wrong_index].center
+        )
+        self.assertEqual(self.game.guided_tutorial_step, "diagnosis_select")
+        self.assertIn("evidence you have not collected", self.game.guided_tutorial_nudge)
+        hypothermia_index = self.game.get_correct_diagnosis_card_index()
         self.game.handle_guided_tutorial_click(self.game.card_rects[hypothermia_index].center)
         selected = self.game.get_selected_card_rect(self.game.selected_card_index)
         self.game.handle_guided_tutorial_click(self.game.get_card_action_button(selected).center)
@@ -870,7 +1194,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game.state = GameState.PATIENT
         self.game.showing_diagnosis_hand = True
-        self.game.selected_card_index = 1
+        self.game.selected_card_index = next(
+            index
+            for index, card in enumerate(self.game.player.diagnosis_hand)
+            if card.value != self.game.patient.diagnosis
+        )
         self.game.play_selected_diagnosis()
         expected_live_balance = (
             starting_balance - test_cost - WRONG_DIAGNOSIS_PENALTY
@@ -1154,7 +1482,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(len(self.game.discard_pile), 1)
 
         self.game.switch_active_hand(True)
-        self.game.selected_card_index = 0
+        self.game.selected_card_index = next(
+            index
+            for index, card in enumerate(self.game.player.diagnosis_hand)
+            if card.value == self.game.patient.diagnosis
+        )
         self.game.play_selected_diagnosis()
         self.assertEqual(self.game.state, GameState.OUTCOME)
         self.assertTrue(self.game.diagnosis_correct)
@@ -1218,8 +1550,12 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         starting_balance = self.game.player.balance
         self.game.switch_active_hand(True)
-        self.game.selected_card_index = 1
-        wrong_card = self.game.player.diagnosis_hand[1]
+        self.game.selected_card_index = next(
+            index
+            for index, card in enumerate(self.game.player.diagnosis_hand)
+            if card.value != self.game.patient.diagnosis
+        )
+        wrong_card = self.game.player.diagnosis_hand[self.game.selected_card_index]
         self.game.play_selected_diagnosis()
 
         self.assertEqual(self.game.state, GameState.OUTCOME)
@@ -1253,7 +1589,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         with patch("gui_cards.random.random", return_value=0.0):
             self.game.switch_active_hand(True)
-            self.game.selected_card_index = 1
+            self.game.selected_card_index = next(
+                index
+                for index, card in enumerate(self.game.player.diagnosis_hand)
+                if card.value != self.game.patient.diagnosis
+            )
             self.game.play_selected_diagnosis()
 
         self.assertFalse(self.game.patient_left)

@@ -22,6 +22,14 @@ PATIENT_LEAVES_TEXT = [
     "{name} called the diagnosis 'amateur hour' and teleported away.",
 ]
 
+DEFAULT_DIAGNOSIS_KEYS = (
+    "hypothermia",
+    "acute_water_reaction",
+    "skeletal_resonance",
+    "lava_flow_blockage",
+    "lactose_intolerance",
+)
+
 
 class Player:
 
@@ -36,12 +44,17 @@ class Player:
         self.test_discount = 0
         self.balance = STARTING_BALANCE
         self.test_hand = []
+        self.diagnosis_hand = []
+        self.set_diagnosis_hand(
+            DIAGNOSES[key] for key in DEFAULT_DIAGNOSIS_KEYS
+        )
+
+    def set_diagnosis_hand(self, diagnoses):
+        """Replace the case files with one patient's curated five-card set."""
+
         self.diagnosis_hand = [
-            Card("Diagnosis", DIAGNOSES["hypothermia"]),
-            Card("Diagnosis", DIAGNOSES["acute_water_reaction"]),
-            Card("Diagnosis", DIAGNOSES["skeletal_resonance"]),
-            Card("Diagnosis", DIAGNOSES["lava_flow_blockage"]),
-            Card("Diagnosis", DIAGNOSES["lactose_intolerance"]),
+            Card("Diagnosis", diagnosis)
+            for diagnosis in diagnoses
         ]
 
     def get_machine_level(self, test):

@@ -855,8 +855,20 @@ class ResultsMixin:
                 + " The case is closed and cannot be recovered."
             )
         else:
+            performed_tests = set(self.notebook.get_entries(self.patient)) - {
+                "No tests"
+            }
+            rejection_reason = (
+                self.last_diagnosis.get_rejection_reason(performed_tests)
+                if self.last_diagnosis
+                else None
+            )
             detail_text = (
-                f"{diagnosis_name} does not match the available evidence. "
+                f"{rejection_reason} Return to the examination and collect "
+                "more information."
+                if rejection_reason
+                else f"{diagnosis_name} is not supported by the evidence you "
+                "have collected. "
                 "Return to the examination and collect more information."
             )
         detail_box = pygame.Rect(report.x + 20, report.y + 117, report.width - 40, 88)
