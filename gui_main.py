@@ -101,6 +101,9 @@ class CosmicClinicGUI(
                 "portrait": ((240, 212, 196), (159, 70, 66), (226, 127, 91), (249, 170, 119)),
             },
         ]
+        # Future content can populate this roster without changing the ending
+        # flow. The final screen exposes a Day 2 start button automatically.
+        self.next_shift_queue = []
         self.patients_called = 0
         self.daily_correct_diagnoses = 0
         self.daily_wrong_diagnoses = 0

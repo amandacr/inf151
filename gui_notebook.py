@@ -27,6 +27,19 @@ class NotebookMixin:
             return f"EVIDENCE {collected}/{required}", (232, 168, 92)
         return f"EVIDENCE 0/{required or 2}", (151, 101, 180)
 
+    def get_diagnosis_clue_display(self):
+        """Return neutral clue progress for the diagnosis confirmation dialog."""
+
+        collected, required = self.get_evidence_progress()
+        required = required or 2
+        if collected >= required:
+            color = COLORS["accent"]
+        elif collected:
+            color = (232, 168, 92)
+        else:
+            color = (151, 101, 180)
+        return f"{collected}/{required} CLUES COLLECTED", color
+
     def build_notebook_rects(self):
         """Build the rectangles that position the notebook's pages and buttons."""
 

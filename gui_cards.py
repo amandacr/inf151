@@ -14,9 +14,7 @@ from gui_theme import (
     WINDOW_SIZE,
 )
 from Player import (
-    DIAGNOSIS_REWARD,
     DRAW_COST,
-    LIMITED_EVIDENCE_REWARD,
     MAX_TEST_HAND_SIZE,
     PATIENT_LEAVES_CHANCE,
     PATIENT_LEAVES_TEXT,
@@ -728,11 +726,13 @@ class CardMixin:
         pygame.draw.rect(self.screen, diagnosis_color, icon, width=2, border_radius=7)
         self.draw_diagnosis_file_icon(icon, diagnosis_color)
 
+        self.play_diagnosis_button = self.get_card_action_button(card_rect)
+        description_y = card_rect.y + 69
         description_box = pygame.Rect(
             card_rect.x + 84,
-            card_rect.y + 69,
+            description_y,
             card_rect.width - 100,
-            100,
+            self.play_diagnosis_button.y - description_y - 3,
         )
         self.draw_wrapped_text(
             diagnosis.description,
@@ -741,7 +741,6 @@ class CardMixin:
             description_box,
         )
 
-        self.play_diagnosis_button = self.get_card_action_button(card_rect)
         pygame.draw.rect(
             self.screen,
             diagnosis_color,
@@ -1302,27 +1301,37 @@ class CardMixin:
         )
         self.screen.blit(question, question.get_rect(center=(panel.centerx, panel.y + 186)))
 
-        evidence_text, evidence_color = self.get_evidence_status_display()
-        evidence_panel = pygame.Rect(panel.centerx - 220, panel.y + 207, 440, 31)
-        pygame.draw.rect(self.screen, (19, 24, 34), evidence_panel, border_radius=15)
+        evidence_text, evidence_color = self.get_diagnosis_clue_display()
+        evidence_panel = pygame.Rect(panel.centerx - 235, panel.y + 203, 470, 49)
+        pygame.draw.rect(self.screen, (19, 24, 34), evidence_panel, border_radius=12)
         pygame.draw.rect(
             self.screen,
             evidence_color,
             evidence_panel,
             width=2,
-            border_radius=15,
+            border_radius=12,
         )
-        evidence_note = self.small_font.render(
-            (
-                f"{evidence_text}  •  CORRECT CASE PAY $"
-                f"{DIAGNOSIS_REWARD if evidence_text == 'EVIDENCE SUFFICIENT' else LIMITED_EVIDENCE_REWARD}"
-            ),
+        evidence_heading = self.small_font.render(
+            evidence_text,
             True,
             evidence_color,
         )
         self.screen.blit(
-            evidence_note,
-            evidence_note.get_rect(center=evidence_panel.center),
+            evidence_heading,
+            evidence_heading.get_rect(
+                center=(evidence_panel.centerx, evidence_panel.y + 17),
+            ),
+        )
+        evidence_caution = self.card_font.render(
+            "Evidence quantity does not guarantee this diagnosis.",
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(
+            evidence_caution,
+            evidence_caution.get_rect(
+                center=(evidence_panel.centerx, evidence_panel.y + 34),
+            ),
         )
 
         mouse_position = self.get_mouse_position()

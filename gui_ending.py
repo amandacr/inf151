@@ -145,19 +145,6 @@ class EndingMixin:
         )
         self.screen.blit(clinic, clinic.get_rect(center=center))
 
-        message_progress = max(0.0, min(1.0, (progress - 0.42) / 0.2))
-        if message_progress > 0:
-            heading = self.title_font.render("SHIFT COMPLETE", True, COLORS["accent"])
-            heading.set_alpha(round(255 * message_progress))
-            self.screen.blit(heading, heading.get_rect(center=(550, 430)))
-            message = self.body_font.render(
-                "The Cosmic Clinic is closing for the night...",
-                True,
-                COLORS["text"],
-            )
-            message.set_alpha(round(255 * message_progress))
-            self.screen.blit(message, message.get_rect(center=(550, 478)))
-
         self.draw_cinematic_skip_prompt()
 
     def draw_clinic_window_farewell(self, surface, elapsed):
@@ -213,85 +200,88 @@ class EndingMixin:
                 pygame.draw.circle(surface, (56, 66, 82), position, 5)
 
     def draw_final_screen(self):
-        """Draw the completed first-shift report and replay/quit controls."""
+        """Draw an empty Day 2 reception that is ready for a future roster."""
 
-        self.draw_space_background()
-        self.draw_game_logo((550, 55), scale=0.72)
-        panel = pygame.Rect(185, 105, 730, 465)
-        pygame.draw.rect(self.screen, (4, 10, 17), panel.move(8, 9), border_radius=18)
-        pygame.draw.rect(self.screen, COLORS["panel"], panel, border_radius=18)
-        pygame.draw.rect(
-            self.screen,
-            COLORS["panel_border"],
-            panel,
-            width=3,
-            border_radius=18,
+        self.screen.fill(COLORS["background"])
+        self.draw_game_logo((WINDOW_SIZE[0] // 2, 38), scale=0.86)
+        subtitle = self.small_font.render("DAY 2  //  RECEPTION", True, COLORS["muted"])
+        self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_SIZE[0] // 2, 76)))
+
+        self.draw_reception_room()
+        self.draw_waiting_room_windows()
+        self.draw_waiting_room_door()
+        self.draw_waiting_room_chairs()
+        self.draw_reception_desk()
+        self.draw_next_day_status()
+
+        has_roster = bool(self.next_shift_queue)
+        action_label = "START DAY 2" if has_roster else "REPLAY DAY 1"
+        self.draw_ending_button(self.final_replay_button, action_label, False)
+        self.draw_ending_button(self.final_quit_button, "QUIT GAME", True)
+        hint = self.card_font.render(
+            (
+                "New patient files received. Day 2 is ready to begin."
+                if has_roster
+                else "New patient files can be added to the Day 2 roster here."
+            ),
+            True,
+            COLORS["muted"],
         )
+        self.screen.blit(hint, hint.get_rect(center=(WINDOW_SIZE[0] // 2, 584)))
 
-        heading = self.heading_font.render(
-            "FIRST SHIFT COMPLETE",
+    def draw_next_day_status(self):
+        """Draw the Day 2 monitor and roster-pending message over empty chairs."""
+
+        status = pygame.Rect(30, 100, 1040, 49)
+        pygame.draw.rect(self.screen, (54, 78, 78), status, border_radius=10)
+        pygame.draw.rect(self.screen, COLORS["panel_border"], status, width=2, border_radius=10)
+        display = status.inflate(-10, -10)
+        pygame.draw.rect(self.screen, (5, 19, 24), display, border_radius=7)
+
+        has_roster = bool(self.next_shift_queue)
+        status_color = COLORS["accent"] if has_roster else (255, 198, 75)
+        pygame.draw.circle(self.screen, status_color, (display.x + 15, display.centery), 5)
+        day_label = self.body_font.render("DAY 2 RECEPTION", True, COLORS["text"])
+        roster_label = self.small_font.render(
+            "PATIENT ROSTER READY" if has_roster else "NO PATIENTS SCHEDULED YET",
+            True,
+            status_color,
+        )
+        money_label = self.body_font.render(
+            f"MONEY: ${self.get_displayed_balance()}",
             True,
             COLORS["accent"],
         )
-        self.screen.blit(heading, heading.get_rect(center=(panel.centerx, 148)))
-        system_message = self.body_font.render(
-            "Adequate work, Doctor. Return authorization remains pending.",
+        self.screen.blit(day_label, day_label.get_rect(midleft=(display.x + 29, display.centery)))
+        self.screen.blit(roster_label, roster_label.get_rect(center=display.center))
+        self.screen.blit(
+            money_label,
+            money_label.get_rect(midright=(display.right - 13, display.centery)),
+        )
+
+        notice = pygame.Rect(342, 238, 416, 92)
+        pygame.draw.rect(self.screen, (4, 12, 20), notice.move(5, 6), border_radius=13)
+        pygame.draw.rect(self.screen, (19, 31, 45), notice, border_radius=13)
+        pygame.draw.rect(self.screen, status_color, notice, width=2, border_radius=13)
+        notice_heading = self.heading_font.render(
+            "ROSTER READY" if has_roster else "ROSTER PENDING",
+            True,
+            status_color,
+        )
+        notice_body = self.small_font.render(
+            (
+                (
+                    f"{len(self.next_shift_queue)} patient"
+                    f"{'s are' if len(self.next_shift_queue) != 1 else ' is'} waiting for Day 2."
+                )
+                if has_roster
+                else "The clinic is waiting for new patient files."
+            ),
             True,
             COLORS["text"],
         )
-        self.screen.blit(
-            system_message,
-            system_message.get_rect(center=(panel.centerx, 184)),
-        )
-
-        roster_status = pygame.Rect(panel.centerx - 175, 202, 350, 24)
-        pygame.draw.rect(self.screen, (7, 22, 28), roster_status, border_radius=12)
-        pygame.draw.rect(
-            self.screen,
-            (65, 101, 98),
-            roster_status,
-            width=1,
-            border_radius=12,
-        )
-        roster_label = self.card_font.render(
-            "WAITING ROOM CLEAR  //  NEXT SHIFT ROSTER PENDING",
-            True,
-            COLORS["muted"],
-        )
-        self.screen.blit(
-            roster_label,
-            roster_label.get_rect(center=roster_status.center),
-        )
-
-        total_earned = self.get_daily_pay_breakdown()[3]
-        total_earned_label = (
-            f"-${abs(total_earned)}" if total_earned < 0 else f"${total_earned}"
-        )
-        summary = pygame.Rect(panel.x + 105, 235, panel.width - 210, 195)
-        pygame.draw.rect(self.screen, (7, 22, 28), summary, border_radius=12)
-        pygame.draw.rect(self.screen, (65, 101, 98), summary, width=2, border_radius=12)
-        stats = (
-            ("PATIENTS TREATED", str(self.daily_correct_diagnoses)),
-            ("SHIFT EARNINGS", total_earned_label),
-            ("INCORRECT DIAGNOSES", str(self.daily_wrong_diagnoses)),
-            ("UPGRADES PURCHASED", str(len(self.purchased_shop_upgrades))),
-            ("FINAL BALANCE", f"${self.player.balance}"),
-        )
-        for index, (label_text, value_text) in enumerate(stats):
-            y = summary.y + 20 + index * 36
-            label = self.small_font.render(label_text, True, COLORS["muted"])
-            value = self.small_font.render(value_text, True, COLORS["accent"])
-            self.screen.blit(label, (summary.x + 24, y))
-            self.screen.blit(value, value.get_rect(topright=(summary.right - 24, y)))
-
-        self.draw_ending_button(self.final_replay_button, "REPLAY FIRST SHIFT", False)
-        self.draw_ending_button(self.final_quit_button, "QUIT GAME", True)
-        hint = self.card_font.render(
-            "The next patient roster has not arrived. Replay returns to reception.",
-            True,
-            COLORS["muted"],
-        )
-        self.screen.blit(hint, hint.get_rect(center=(panel.centerx, 466)))
+        self.screen.blit(notice_heading, notice_heading.get_rect(center=(notice.centerx, notice.y + 31)))
+        self.screen.blit(notice_body, notice_body.get_rect(center=(notice.centerx, notice.y + 63)))
 
     def draw_ending_button(self, rect, label, danger=False):
         """Draw a reusable final-screen or exit-dialog button."""
@@ -313,11 +303,16 @@ class EndingMixin:
         self.screen.blit(text, text.get_rect(center=rect.center))
 
     def handle_final_screen_click(self, position):
-        """Replay the first shift or close the game from the final report."""
+        """Start an available Day 2 roster, replay Day 1, or close the game."""
 
         if self.final_replay_button.collidepoint(position):
             self.play_sfx("button")
-            self.restart_game()
+            if self.next_shift_queue:
+                next_roster = list(self.next_shift_queue)
+                self.next_shift_queue = []
+                self.start_next_shift(next_roster)
+            else:
+                self.restart_game()
         elif self.final_quit_button.collidepoint(position):
             self.play_sfx("button")
             self.running = False

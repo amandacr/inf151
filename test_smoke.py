@@ -1757,6 +1757,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.game.get_evidence_status_display()[0],
             "EVIDENCE SUFFICIENT",
         )
+        self.assertEqual(
+            self.game.get_diagnosis_clue_display()[0],
+            "2/2 CLUES COLLECTED",
+        )
 
         self.game.open_notebook()
         self.game.draw()
@@ -2277,6 +2281,22 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.patient.name, next_roster[0]["create"]().name)
         self.assertEqual(self.game.player.balance, 175)
         self.assertEqual(self.game.player.machine_levels["TEMPERATURE"], 2)
+
+    def test_final_reception_starts_day_two_when_a_roster_is_available(self):
+        """The empty ending should become a working Day 2 entry point."""
+
+        next_roster = [self.game.waiting_room_queue[1]]
+        self.game.next_shift_queue = next_roster
+        self.game.player.balance = 175
+        self.game.state = GameState.FINAL
+        self.game.draw()
+        self.game.handle_final_screen_click(self.game.final_replay_button.center)
+
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertEqual(self.game.waiting_room_queue, next_roster)
+        self.assertEqual(self.game.next_shift_queue, [])
+        self.assertEqual(self.game.patient.name, "Zoogy Zinglestar")
+        self.assertEqual(self.game.player.balance, 175)
 
     def test_shop_blocks_an_unaffordable_upgrade_purchase(self):
         """A selected upgrade should not charge or unlock when money is too low."""
