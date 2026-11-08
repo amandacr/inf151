@@ -135,10 +135,8 @@ class TutorialMixin:
             selected = self.get_selected_card_rect(self.selected_card_index)
             return self.get_run_test_button(selected)
         if step == "test_result":
-            if self.get_test_result_reveal_progress() >= 1.0:
-                return self.continue_button
-            return pygame.Rect(105, 105, 890, 455)
-        if step in ("note_transfer", "open_notebook"):
+            return None
+        if step == "open_notebook":
             return self.layout["notebook"]
         if step == "review_notebook":
             return self.notebook_layout["book"]
@@ -157,10 +155,8 @@ class TutorialMixin:
             selected = self.get_selected_card_rect(self.selected_card_index)
             return self.get_run_test_button(selected)
         if step == "second_test_result":
-            if self.get_test_result_reveal_progress() >= 1.0:
-                return self.continue_button
-            return pygame.Rect(105, 105, 890, 455)
-        if step in ("second_note_transfer", "second_open_notebook"):
+            return None
+        if step == "second_open_notebook":
             return self.layout["notebook"]
         if step == "second_review_notebook":
             return self.notebook_layout["book"]
@@ -210,8 +206,22 @@ class TutorialMixin:
     def get_guided_tutorial_prompt(self):
         """Return instruction text, position, and whether any click advances it."""
 
+        if self.guided_tutorial_step == "symptom":
+            current = self.patient_dialogue_index + 1
+            total = len(self.patient.dialogue)
+            if current >= total:
+                message = (
+                    f"INTERVIEW {current}/{total}  •  You have heard every response. "
+                    "Click Zorpa once more to continue."
+                )
+            else:
+                message = (
+                    f"INTERVIEW {current}/{total}  •  Read Zorpa's response, then "
+                    "click the patient to ask another follow-up."
+                )
+            return message, pygame.Rect(620, 168, 400, 104), False
+
         prompts = {
-            "symptom": ("Read Zorpa's concern, then click the highlighted patient to ask a follow-up.", pygame.Rect(620, 168, 400, 104), False),
             "inspect_id": ("Inspect Zorpa's Intergalactic ID.", pygame.Rect(62, 178, 375, 92), False),
             "review_health_id": ("Normal temperature: 2,000°F. Remember this baseline.", pygame.Rect(62, 174, 410, 104), True),
             "temperature_select": (
@@ -221,7 +231,6 @@ class TutorialMixin:
             ),
             "temperature_run": ("Run the selected test. Its cost is deducted immediately.", pygame.Rect(650, 174, 400, 92), False),
             "test_result": ("Read the observed result, then return to Zorpa.", pygame.Rect(120, 462, 400, 92), False),
-            "note_transfer": ("The clinic is filing this result in Patient Notes...", pygame.Rect(650, 172, 400, 92), False),
             "open_notebook": ("The result is recorded. Open Patient Notes.", pygame.Rect(265, 401, 410, 92), False),
             "review_notebook": ("Temperature is one clue, so Evidence reads 1/2. Two matching clues earn full case pay.", pygame.Rect(350, 12, 400, 104), True),
             "card_shop_open": ("One clue is not enough. Open Card Shop to request BLOOD CHEMISTRY from the live deck.", pygame.Rect(650, 174, 400, 104), False),
@@ -230,7 +239,6 @@ class TutorialMixin:
             "blood_select": ("Now select BLOOD CHEMISTRY for a second, independent clue.", pygame.Rect(650, 174, 400, 92), False),
             "blood_run": ("Run Blood Chemistry and compare it with the temperature result.", pygame.Rect(650, 174, 400, 92), False),
             "second_test_result": ("Read the blood analysis, then return to Zorpa.", pygame.Rect(120, 462, 400, 92), False),
-            "second_note_transfer": ("The second result is being filed in Patient Notes...", pygame.Rect(650, 172, 400, 92), False),
             "second_open_notebook": ("Open Patient Notes again to confirm the evidence pair.", pygame.Rect(265, 401, 410, 92), False),
             "second_review_notebook": ("Evidence is now 2/2. A supported correct diagnosis earns the full $50 case pay.", pygame.Rect(350, 12, 400, 104), True),
             "diagnosis_folder": ("You have enough evidence. Open Diagnosis and compare the five case files.", pygame.Rect(405, 173, 410, 92), False),
@@ -265,8 +273,11 @@ class TutorialMixin:
         # through to the dimmed game screen underneath the tutorial.
         if step == "symptom":
             if self.layout["alien"].collidepoint(position):
-                self.advance_patient_dialogue()
-                self.set_guided_tutorial_step("inspect_id")
+                if self.patient_dialogue_index < len(self.patient.dialogue) - 1:
+                    self.advance_patient_dialogue()
+                else:
+                    self.play_sfx("button")
+                    self.set_guided_tutorial_step("inspect_id")
                 return
         if step == "inspect_id" and self.layout["id_card"].collidepoint(position):
             self.play_sfx("button")
@@ -392,7 +403,7 @@ class TutorialMixin:
             self.finish_guided_tutorial()
             return
 
-        if step not in ("patient_arrival", "note_transfer"):
+        if step not in ("patient_arrival", "note_transfer", "second_note_transfer"):
             self.nudge_guided_tutorial()
 
     def handle_guided_tutorial_key(self, key):
@@ -406,7 +417,9 @@ class TutorialMixin:
         step = self.guided_tutorial_step
         if step == "call_patient":
             self.handle_guided_tutorial_click(self.start_button.center)
-        elif step in ("symptom", "review_health_id", "review_notebook", "second_review_notebook", "complete"):
+        elif step == "symptom":
+            self.handle_guided_tutorial_click(self.layout["alien"].center)
+        elif step in ("review_health_id", "review_notebook", "second_review_notebook", "complete"):
             self.handle_guided_tutorial_click((10, 10))
         else:
             self.nudge_guided_tutorial("Use the highlighted clinic control.")
@@ -699,9 +712,15 @@ class TutorialMixin:
         if not self.guided_tutorial_active:
             return
         step = self.guided_tutorial_step
+        # The used card already communicates its own discard with a visible
+        # flight into med-waste. Do not cover that animation with another
+        # tutorial message; the timed update advances training when it ends.
+        if step in ("note_transfer", "second_note_transfer"):
+            return
         target = self.get_guided_tutorial_target()
+        reading_report = step in ("test_result", "second_test_result")
         pulse = (math.sin(pygame.time.get_ticks() / 210) + 1) / 2
-        if step != "patient_arrival":
+        if step != "patient_arrival" and not reading_report:
             dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
             # Reception remains visible during the first lesson so the player
             # understands where the highlighted call control lives.
@@ -759,6 +778,10 @@ class TutorialMixin:
         skip = self.pile_font.render("SKIP TRAINING", True, (224, 202, 234))
         self.screen.blit(skip, skip.get_rect(center=self.tutorial_skip_button.center))
 
+        if reading_report:
+            self.draw_guided_report_hint()
+            return
+
         # The first action is intentionally communicated only by light and motion.
         prompt = self.get_guided_tutorial_prompt()
         if prompt is None or step == "patient_arrival":
@@ -808,3 +831,19 @@ class TutorialMixin:
             pygame.draw.rect(self.screen, (45, 24, 31), nudge_panel, border_radius=6)
             pygame.draw.rect(self.screen, (216, 105, 95), nudge_panel, width=1, border_radius=6)
             self.screen.blit(nudge, nudge.get_rect(center=nudge_panel.center))
+
+    def draw_guided_report_hint(self):
+        """Show non-blocking guidance while leaving the diagnostic report bright."""
+
+        revealed = self.get_test_result_reveal_progress() >= 1.0
+        message = (
+            "READ THE REPORT  •  RETURN TO PATIENT WHEN READY"
+            if revealed
+            else "LET THE SCAN FINISH  •  THEN READ THE REPORT"
+        )
+        hint = pygame.Rect(330, 592, 440, 28)
+        pygame.draw.rect(self.screen, (3, 8, 13), hint.move(3, 4), border_radius=8)
+        pygame.draw.rect(self.screen, (13, 31, 38), hint, border_radius=8)
+        pygame.draw.rect(self.screen, COLORS["accent"], hint, width=1, border_radius=8)
+        label = self.tutorial_label_font.render(message, True, COLORS["accent"])
+        self.screen.blit(label, label.get_rect(center=hint.center))

@@ -50,7 +50,10 @@ class CardMixin:
         """Calculate a centered fan for any number of cards without changing game data."""
 
         panel = self.layout["active_hand"]
-        card_width = 96
+        # Give a normal five-card hand enough width for condition names such as
+        # "Thermal-Lung Exchange Failure." Larger hands retain the narrower
+        # overlapping layout so eight cards still fit inside the same tray.
+        card_width = 108 if card_count <= 5 else 96
         card_height = 118
 
         if card_count == 0:
@@ -580,49 +583,111 @@ class CardMixin:
         self.screen.blit(overlay, card_rect.topleft)
 
 
-    def draw_fitted_card_title(self, title, area, selected=False):
-        """Choose the largest existing font that keeps a card title inside its header."""
+    def wrap_card_title(self, title, font, width):
+        """Wrap a card title at word boundaries for a particular font and width."""
 
-        if (
-            not selected
-            and " " in title
-            and self.pile_font.size(title)[0] > area.width - 8
-        ):
-            words = title.split()
-            split_index = min(
-                range(1, len(words)),
-                key=lambda index: max(
-                    self.compact_card_title_font.size(" ".join(words[:index]))[0],
-                    self.compact_card_title_font.size(" ".join(words[index:]))[0],
-                ),
-            )
-            title_lines = (
-                " ".join(words[:split_index]),
-                " ".join(words[split_index:]),
-            )
-            line_offset = self.compact_card_title_font.get_linesize() // 2
-            for line_index, line_text in enumerate(title_lines):
-                line = self.compact_card_title_font.render(
-                    line_text,
-                    True,
-                    COLORS["card_text"],
-                )
-                line_y = area.centery + (-line_offset if line_index == 0 else line_offset)
-                self.screen.blit(line, line.get_rect(center=(area.centerx, line_y)))
-            return
+        lines = []
+        current = []
+        for word in title.split():
+            candidate = " ".join(current + [word])
+            if current and font.size(candidate)[0] > width:
+                lines.append(" ".join(current))
+                current = [word]
+            else:
+                current.append(word)
+        if current:
+            lines.append(" ".join(current))
+        return lines or [title]
+
+    def get_fitted_card_title_layout(self, title, area, selected=False, max_lines=2):
+        """Return a font and wrapped lines guaranteed to fit a card header."""
 
         fonts = (
-            (self.body_font, self.small_font, self.card_font)
+            (
+                self.body_font,
+                self.small_font,
+                self.diagnosis_card_font,
+                self.compact_card_title_font,
+                self.legible_micro_font,
+            )
             if selected
-            else (self.card_font, self.pile_font, self.tiny_font)
+            else (
+                self.diagnosis_card_font,
+                self.compact_card_title_font,
+                self.legible_micro_font,
+                self.tiny_font,
+            )
         )
-        font = fonts[-1]
-        for candidate in fonts:
-            if candidate.size(title)[0] <= area.width - 8:
-                font = candidate
-                break
-        title_surface = font.render(title, True, COLORS["card_text"])
-        self.screen.blit(title_surface, title_surface.get_rect(center=area.center))
+        usable_width = max(1, area.width - 8)
+        usable_height = max(1, area.height - 4)
+        for font in fonts:
+            lines = self.wrap_card_title(title, font, usable_width)
+            line_height = font.get_linesize()
+            if (
+                len(lines) <= max_lines
+                and len(lines) * line_height <= usable_height
+                and all(font.size(line)[0] <= usable_width for line in lines)
+            ):
+                return font, lines
+
+        # The clip used while drawing is the final safety net for an unusually
+        # long unbroken word introduced by future content.
+        fallback = fonts[-1]
+        lines = self.wrap_card_title(title, fallback, usable_width)[:max_lines]
+        return fallback, lines
+
+    def draw_fitted_card_title(self, title, area, selected=False, max_lines=2):
+        """Draw a wrapped title while strictly clipping it to the card header."""
+
+        font, title_lines = self.get_fitted_card_title_layout(
+            title,
+            area,
+            selected=selected,
+            max_lines=max_lines,
+        )
+        line_height = font.get_linesize()
+        first_y = area.centery - (len(title_lines) * line_height) / 2 + line_height / 2
+        previous_clip = self.screen.get_clip()
+        self.screen.set_clip(area)
+        try:
+            for line_index, line_text in enumerate(title_lines):
+                line = font.render(line_text, True, COLORS["card_text"])
+                line_center = (area.centerx, round(first_y + line_index * line_height))
+                self.screen.blit(line, line.get_rect(center=line_center))
+        finally:
+            self.screen.set_clip(previous_clip)
+
+    def get_fitted_card_description_layout(self, text, area, line_spacing=2):
+        """Return readable wrapped description text that fits its card area."""
+
+        for font in (self.card_font, self.pile_font, self.legible_micro_font):
+            lines = self.wrap_text(text, font, area.width)
+            total_height = (
+                len(lines) * font.get_height()
+                + max(0, len(lines) - 1) * line_spacing
+            )
+            if total_height <= area.height:
+                return font, lines
+        return self.legible_micro_font, self.wrap_text(
+            text,
+            self.legible_micro_font,
+            area.width,
+        )
+
+    def draw_fitted_card_description(self, text, area, color):
+        """Draw a complete card description without allowing text to escape."""
+
+        font, lines = self.get_fitted_card_description_layout(text, area)
+        previous_clip = self.screen.get_clip()
+        self.screen.set_clip(area)
+        try:
+            y = area.y
+            for line_text in lines:
+                line = font.render(line_text, True, color)
+                self.screen.blit(line, (area.x, y))
+                y += line.get_height() + 2
+        finally:
+            self.screen.set_clip(previous_clip)
 
 
     def draw_rarity_badge(self, test, card_rect):
@@ -690,7 +755,7 @@ class CardMixin:
     def draw_compact_diagnosis_card(self, diagnosis, card_rect, diagnosis_color):
         """Draw a diagnosis option with the same hierarchy as a compact test card."""
 
-        header = pygame.Rect(card_rect.x + 6, card_rect.y + 6, card_rect.width - 12, 38)
+        header = pygame.Rect(card_rect.x + 6, card_rect.y + 6, card_rect.width - 12, 44)
         pygame.draw.rect(self.screen, (218, 199, 226), header, border_radius=5)
         pygame.draw.line(
             self.screen,
@@ -698,11 +763,11 @@ class CardMixin:
             (header.x + 6, header.bottom),
             (header.right - 6, header.bottom),
         )
-        # The shared fitter balances longer condition names across two stable
-        # lines, so hovering never changes the title font or clips new cards.
-        self.draw_fitted_card_title(diagnosis.name, header)
+        # The shared fitter balances long condition names across stable lines,
+        # so hovering never changes the title font or clips new cards.
+        self.draw_fitted_card_title(diagnosis.name, header, max_lines=3)
 
-        icon = pygame.Rect(card_rect.centerx - 28, card_rect.y + 50, 56, 54)
+        icon = pygame.Rect(card_rect.centerx - 25, card_rect.y + 53, 50, 39)
         pygame.draw.rect(self.screen, (210, 211, 216), icon, border_radius=6)
         pygame.draw.rect(self.screen, diagnosis_color, icon, width=2, border_radius=6)
         self.draw_diagnosis_file_icon(icon, diagnosis_color)
@@ -729,16 +794,15 @@ class CardMixin:
         self.play_diagnosis_button = self.get_card_action_button(card_rect)
         description_y = card_rect.y + 69
         description_box = pygame.Rect(
-            card_rect.x + 84,
+            card_rect.x + 80,
             description_y,
-            card_rect.width - 100,
+            card_rect.width - 90,
             self.play_diagnosis_button.y - description_y - 3,
         )
-        self.draw_wrapped_text(
+        self.draw_fitted_card_description(
             diagnosis.description,
-            self.card_font,
-            COLORS["card_text"],
             description_box,
+            COLORS["card_text"],
         )
 
         pygame.draw.rect(
@@ -854,7 +918,9 @@ class CardMixin:
     def draw_compact_card(self, test, card_rect, rarity_color):
         """Draw the compact header, artwork, subtitle, and rarity badge of a test card."""
 
-        header = pygame.Rect(card_rect.x + 6, card_rect.y + 6, card_rect.width - 12, 25)
+        # Two-line names such as Blood Chemistry need enough vertical space to
+        # remain legible instead of falling back to the smallest UI font.
+        header = pygame.Rect(card_rect.x + 6, card_rect.y + 6, card_rect.width - 12, 31)
         header_color = tuple(max(0, channel - 18) for channel in RARITY_CARD_COLORS.get(
             test.rarity,
             COLORS["card"],
@@ -869,7 +935,7 @@ class CardMixin:
         )
         self.draw_fitted_card_title(test.name, header)
 
-        icon = pygame.Rect(card_rect.centerx - 25, card_rect.y + 35, 50, 45)
+        icon = pygame.Rect(card_rect.centerx - 24, card_rect.y + 41, 48, 41)
         pygame.draw.rect(self.screen, (201, 214, 205), icon, border_radius=6)
         pygame.draw.rect(self.screen, rarity_color, icon, width=2, border_radius=6)
         self.draw_test_icon(test.name, icon, rarity_color)
@@ -881,7 +947,7 @@ class CardMixin:
         )
         self.screen.blit(
             subtitle,
-            subtitle.get_rect(center=(card_rect.centerx, card_rect.y + 88)),
+            subtitle.get_rect(center=(card_rect.centerx, card_rect.y + 89)),
         )
         self.draw_rarity_badge(test, card_rect)
 
@@ -919,17 +985,18 @@ class CardMixin:
             subtitle.get_rect(center=(icon.centerx, icon.bottom + 9)),
         )
 
+        description_y = card_rect.y + 67
+        action_top = self.get_run_test_button(card_rect).y
         description_box = pygame.Rect(
-            card_rect.x + 84,
-            card_rect.y + 67,
-            card_rect.width - 100,
-            100,
+            card_rect.x + 80,
+            description_y,
+            card_rect.width - 90,
+            action_top - description_y - 3,
         )
-        self.draw_wrapped_text(
+        self.draw_fitted_card_description(
             test.description,
-            self.card_font,
-            COLORS["card_text"],
             description_box,
+            COLORS["card_text"],
         )
 
         self.run_test_button = self.get_run_test_button(card_rect)

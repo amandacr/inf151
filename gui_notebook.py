@@ -18,14 +18,14 @@ class NotebookMixin:
         return self.patient.get_evidence_progress(test_names)
 
     def get_evidence_status_display(self):
-        """Return a non-spoilery evidence label and its interface color."""
+        """Return a non-spoilery label in ink colors readable on notebook paper."""
 
         collected, required = self.get_evidence_progress()
         if required and collected >= required:
-            return "EVIDENCE SUFFICIENT", COLORS["accent"]
+            return "EVIDENCE SUFFICIENT", (24, 122, 87)
         if collected:
-            return f"EVIDENCE {collected}/{required}", (232, 168, 92)
-        return f"EVIDENCE 0/{required or 2}", (151, 101, 180)
+            return f"EVIDENCE {collected}/{required}", (171, 101, 30)
+        return f"EVIDENCE 0/{required or 2}", (112, 70, 145)
 
     def get_diagnosis_clue_display(self):
         """Return neutral clue progress for the diagnosis confirmation dialog."""

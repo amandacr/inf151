@@ -1,4 +1,4 @@
-"""Smoke tests for shared game data and the GUI vertical slice."""
+"""Smoke tests for shared game data and The Cosmic Clinic interface."""
 
 import os
 import unittest
@@ -493,7 +493,7 @@ class SharedModelSmokeTests(unittest.TestCase):
 
 
 class GuiFlowSmokeTests(unittest.TestCase):
-    """Exercise the current vertical-slice state changes with headless Pygame."""
+    """Exercise the current playable game loop with headless Pygame."""
 
     def setUp(self):
         """Create a fresh GUI session for every flow test."""
@@ -771,6 +771,14 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.state, GameState.PATIENT)
         self.assertEqual(self.game.guided_tutorial_step, "symptom")
 
+        for expected_dialogue_index in range(1, len(self.game.patient.dialogue)):
+            self.game.handle_guided_tutorial_click(self.game.layout["alien"].center)
+            self.assertEqual(self.game.patient_dialogue_index, expected_dialogue_index)
+            self.assertEqual(self.game.guided_tutorial_step, "symptom")
+        self.assertEqual(
+            self.game.notebook.get_interview(self.game.patient),
+            self.game.patient.dialogue,
+        )
         self.game.handle_guided_tutorial_click(self.game.layout["alien"].center)
         self.assertEqual(self.game.guided_tutorial_step, "inspect_id")
         self.game.handle_guided_tutorial_click(self.game.layout["id_card"].center)
@@ -950,8 +958,18 @@ class GuiFlowSmokeTests(unittest.TestCase):
         symptom_target = self.game.get_guided_tutorial_target()
         self.assertEqual(symptom_target.size, (105, 76))
         self.assertEqual(self.game.patient_dialogue_index, 0)
+        for expected_dialogue_index in range(1, len(self.game.patient.dialogue)):
+            self.game.handle_guided_tutorial_click(self.game.layout["alien"].center)
+            self.assertEqual(self.game.patient_dialogue_index, expected_dialogue_index)
+            self.assertEqual(self.game.guided_tutorial_step, "symptom")
+            prompt, _prompt_rect, _click_anywhere = (
+                self.game.get_guided_tutorial_prompt()
+            )
+            self.assertIn(
+                f"INTERVIEW {expected_dialogue_index + 1}/{len(self.game.patient.dialogue)}",
+                prompt,
+            )
         self.game.handle_guided_tutorial_click(self.game.layout["alien"].center)
-        self.assertEqual(self.game.patient_dialogue_index, 1)
         self.assertEqual(self.game.guided_tutorial_step, "inspect_id")
 
         self.game.showing_health_id = True
@@ -968,6 +986,15 @@ class GuiFlowSmokeTests(unittest.TestCase):
             (temperature_target.x + 1, temperature_target.y + 1)
         )
         self.assertEqual(self.game.guided_tutorial_step, "temperature_run")
+
+        for report_step in ("test_result", "second_test_result"):
+            self.game.set_guided_tutorial_step(report_step)
+            self.assertIsNone(self.game.get_guided_tutorial_target())
+
+        for transfer_step in ("note_transfer", "second_note_transfer"):
+            self.game.set_guided_tutorial_step(transfer_step)
+            self.assertIsNone(self.game.get_guided_tutorial_target())
+            self.assertIsNone(self.game.get_guided_tutorial_prompt())
 
         self.game.open_notebook()
         self.game.guided_tutorial_active = True
@@ -989,7 +1016,6 @@ class GuiFlowSmokeTests(unittest.TestCase):
             "temperature_select",
             "temperature_run",
             "test_result",
-            "note_transfer",
             "open_notebook",
             "review_notebook",
             "card_shop_open",
@@ -998,7 +1024,6 @@ class GuiFlowSmokeTests(unittest.TestCase):
             "blood_select",
             "blood_run",
             "second_test_result",
-            "second_note_transfer",
             "second_open_notebook",
             "second_review_notebook",
             "diagnosis_folder",
@@ -1741,22 +1766,25 @@ class GuiFlowSmokeTests(unittest.TestCase):
     def test_supported_diagnosis_earns_full_pay_and_updates_evidence_ui(self):
         """A valid clue pair should upgrade a correct case from limited to full pay."""
 
-        self.assertEqual(self.game.get_evidence_status_display()[0], "EVIDENCE 0/2")
+        status, status_color = self.game.get_evidence_status_display()
+        self.assertEqual(status, "EVIDENCE 0/2")
+        self.assertEqual(status_color, (112, 70, 145))
         self.game.notebook.add_test(
             self.game.patient,
             "TEMPERATURE",
             "Current temperature: 1700°F",
         )
-        self.assertEqual(self.game.get_evidence_status_display()[0], "EVIDENCE 1/2")
+        status, status_color = self.game.get_evidence_status_display()
+        self.assertEqual(status, "EVIDENCE 1/2")
+        self.assertEqual(status_color, (171, 101, 30))
         self.game.notebook.add_test(
             self.game.patient,
             "BLOOD CHEMISTRY",
             "Lava circulation is unusually slow.",
         )
-        self.assertEqual(
-            self.game.get_evidence_status_display()[0],
-            "EVIDENCE SUFFICIENT",
-        )
+        status, status_color = self.game.get_evidence_status_display()
+        self.assertEqual(status, "EVIDENCE SUFFICIENT")
+        self.assertEqual(status_color, (24, 122, 87))
         self.assertEqual(
             self.game.get_diagnosis_clue_display()[0],
             "2/2 CLUES COLLECTED",
@@ -2344,21 +2372,87 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(hovered.centerx, resting.centerx)
 
     def test_long_test_card_title_renders_without_tiny_fallback(self):
-        """Blood Chemistry should use the crisp wrapped-title path on compact cards."""
+        """Every card title and description should remain inside its text area."""
 
-        header_width = 84
-        self.assertGreater(
-            self.game.pile_font.size("BLOOD CHEMISTRY")[0],
-            header_width - 8,
-        )
-        self.assertLessEqual(
-            self.game.compact_card_title_font.size("CHEMISTRY")[0],
-            header_width - 8,
-        )
-        self.game.draw_fitted_card_title(
-            "BLOOD CHEMISTRY",
-            pygame.Rect(0, 0, header_width, 25),
-        )
+        compact_test_header = pygame.Rect(0, 0, 96, 31)
+        compact_diagnosis_header = pygame.Rect(0, 0, 96, 44)
+        selected_header = pygame.Rect(0, 0, 202, 39)
+        description_area = pygame.Rect(0, 0, 130, 108)
+
+        for test in create_test_catalog():
+            font, lines = self.game.get_fitted_card_title_layout(
+                test.name,
+                compact_test_header,
+            )
+            self.assertLessEqual(len(lines), 2)
+            self.assertEqual(" ".join(lines), test.name)
+            self.assertLessEqual(
+                len(lines) * font.get_linesize(),
+                compact_test_header.height - 4,
+            )
+            self.assertTrue(
+                all(font.size(line)[0] <= compact_test_header.width - 8 for line in lines)
+            )
+            if test.name == "BLOOD CHEMISTRY":
+                self.assertIs(font, self.game.compact_card_title_font)
+            detail_font, detail_lines = self.game.get_fitted_card_description_layout(
+                test.description,
+                description_area,
+            )
+            detail_height = len(detail_lines) * detail_font.get_height() + max(
+                0,
+                len(detail_lines) - 1,
+            ) * 2
+            self.assertLessEqual(detail_height, description_area.height)
+
+        for diagnosis in DIAGNOSES.values():
+            font, lines = self.game.get_fitted_card_title_layout(
+                diagnosis.name,
+                compact_diagnosis_header,
+                max_lines=3,
+            )
+            self.assertLessEqual(len(lines), 3)
+            self.assertEqual(" ".join(lines), diagnosis.name)
+            self.assertIn(
+                font,
+                (self.game.diagnosis_card_font, self.game.compact_card_title_font),
+            )
+            self.assertLessEqual(
+                len(lines) * font.get_linesize(),
+                compact_diagnosis_header.height - 4,
+            )
+            self.assertTrue(
+                all(
+                    font.size(line)[0] <= compact_diagnosis_header.width - 8
+                    for line in lines
+                )
+            )
+            selected_font, selected_lines = self.game.get_fitted_card_title_layout(
+                diagnosis.name,
+                selected_header,
+                selected=True,
+            )
+            self.assertLessEqual(len(selected_lines), 2)
+            self.assertEqual(" ".join(selected_lines), diagnosis.name)
+            self.assertLessEqual(
+                len(selected_lines) * selected_font.get_linesize(),
+                selected_header.height - 4,
+            )
+            self.assertTrue(
+                all(
+                    selected_font.size(line)[0] <= selected_header.width - 8
+                    for line in selected_lines
+                )
+            )
+            detail_font, detail_lines = self.game.get_fitted_card_description_layout(
+                diagnosis.description,
+                description_area,
+            )
+            detail_height = len(detail_lines) * detail_font.get_height() + max(
+                0,
+                len(detail_lines) - 1,
+            ) * 2
+            self.assertLessEqual(detail_height, description_area.height)
 
     def test_used_test_card_follows_an_arc_to_med_waste(self):
         """The midpoint of the disposal path should rise above a straight-line flight."""

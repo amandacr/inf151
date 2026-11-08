@@ -4,7 +4,7 @@ from enum import Enum, auto
 
 
 class GameState(Enum):
-    """Screens used by the GUI version of the prototype."""
+    """Screens used by The Cosmic Clinic's playable game loop."""
 
     INTRO = auto()
     TITLE = auto()

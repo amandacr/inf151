@@ -1102,8 +1102,14 @@ class ExaminationMixin:
             line_y = first_y + line_index * line_height
             self.screen.blit(line, line.get_rect(midtop=(bubble.centerx, line_y)))
 
+        interview_complete = (
+            self.guided_tutorial_active
+            and self.guided_tutorial_step == "symptom"
+            and self.patient_dialogue_index == len(self.patient.dialogue) - 1
+        )
+        footer_action = "CONTINUE" if interview_complete else "ASK MORE"
         footer = self.legible_micro_font.render(
-            f"ASK MORE  {self.patient_dialogue_index + 1}/{len(self.patient.dialogue)}",
+            f"{footer_action}  {self.patient_dialogue_index + 1}/{len(self.patient.dialogue)}",
             True,
             (102, 86, 112),
         )

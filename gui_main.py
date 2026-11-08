@@ -1,4 +1,4 @@
-"""Pygame interface for The Cosmic Clinic vertical-slice prototype.
+"""Pygame interface for The Cosmic Clinic.
 
 Run the game through main.py or launch this module directly.
 """

@@ -126,7 +126,23 @@ class IntroMixin:
                 (218, 230, 244),
             )
             location.set_alpha(location_alpha)
-            self.screen.blit(location, location.get_rect(center=(550, 72)))
+            location_rect = location.get_rect(center=(550, 72))
+            # Mask stars behind the location card. A bright star previously
+            # showed through the letter spacing and looked like a stray white
+            # line or a broken "EARTH" label during the opening movie.
+            location_backing = pygame.Surface(
+                location_rect.inflate(30, 14).size,
+                pygame.SRCALPHA,
+            )
+            pygame.draw.rect(
+                location_backing,
+                (3, 8, 18, location_alpha),
+                location_backing.get_rect(),
+                border_radius=8,
+            )
+            backing_rect = location_backing.get_rect(center=location_rect.center)
+            self.screen.blit(location_backing, backing_rect)
+            self.screen.blit(location, location_rect)
 
         # The abduction flashes white before the ship snaps away into the distance.
         flash_in = self._intro_smooth((elapsed - 7500) / 280)
@@ -143,7 +159,7 @@ class IntroMixin:
             self.screen.blit(blackout, (0, 0))
 
     def draw_earth_sky(self, elapsed):
-        """Draw stars, a moon, clouds, and a tiny crossing satellite."""
+        """Draw an unobstructed field of stars, moonlight, and drifting clouds."""
 
         pygame.draw.circle(self.screen, (196, 213, 224), (908, 105), 46)
         pygame.draw.circle(self.screen, (169, 190, 208), (892, 91), 8)
@@ -175,31 +191,6 @@ class IntroMixin:
                     (round(cloud.get_width() * cloud_scale), round(cloud.get_height() * cloud_scale)),
                 )
             self.screen.blit(cloud, (x, cloud_y))
-
-        satellite_progress = self._intro_clamp((elapsed - 450) / 3000)
-        if 0 < satellite_progress < 1:
-            satellite_x = round(80 + 500 * satellite_progress)
-            satellite_y = round(132 - 55 * satellite_progress)
-            pygame.draw.line(
-                self.screen,
-                (107, 150, 184),
-                (satellite_x - 12, satellite_y + 4),
-                (satellite_x + 12, satellite_y - 4),
-                width=2,
-            )
-            pygame.draw.rect(
-                self.screen,
-                (91, 142, 181),
-                pygame.Rect(satellite_x - 19, satellite_y - 2, 10, 7),
-                width=1,
-            )
-            pygame.draw.rect(
-                self.screen,
-                (91, 142, 181),
-                pygame.Rect(satellite_x + 9, satellite_y - 5, 10, 7),
-                width=1,
-            )
-            pygame.draw.circle(self.screen, (218, 230, 228), (satellite_x, satellite_y), 4)
 
     def draw_earth_landscape(self, elapsed):
         """Draw layered mountains, rolling fields, fencing, and natural trees."""
