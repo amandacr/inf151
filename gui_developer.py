@@ -192,7 +192,7 @@ class DeveloperMixin:
         self.restart_game()
         self.deck.populate(create_test_catalog())
         self.patients_called = patient_index
-        self.reset_round()
+        self.reset_round(recycle_unused_cards=False)
         self.patients_called = patient_index + 1
         self.state = GameState.PATIENT
         self.patient_left = False
@@ -204,8 +204,8 @@ class DeveloperMixin:
         self.restart_game()
         self.patients_called = len(self.waiting_room_queue)
         self.daily_correct_diagnoses = len(self.waiting_room_queue)
-        self.daily_test_count = len(self.waiting_room_queue)
-        self.daily_test_expenses = 40
+        self.daily_test_count = len(self.waiting_room_queue) * 2
+        self.daily_test_expenses = 100
         self.daily_evidence_cases = len(self.waiting_room_queue)
         self.daily_payout_applied = False
 

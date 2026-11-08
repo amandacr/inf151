@@ -53,6 +53,15 @@ class Deck:
 
         self._random.shuffle(cards)
 
+    def return_cards(self, cards):
+        """Return unused cards to the live deck and randomize their positions."""
+
+        returned = list(cards)
+        if not returned:
+            return
+        self.contents.extend(returned)
+        self._random.shuffle(self.contents)
+
     def add_card(self, test):
         """
         Randomly inserts a new test card type within the deck. Used when player unlocks a new test mid-round.

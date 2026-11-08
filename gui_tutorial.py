@@ -32,6 +32,7 @@ class TutorialMixin:
     def finish_guided_tutorial(self):
         """Release every control after Zorpa's training case or a manual skip."""
 
+        self.card_shop_open = False
         self.guided_tutorial_active = False
         self.guided_tutorial_step = None
         self.guided_tutorial_nudge = ""
@@ -58,9 +59,27 @@ class TutorialMixin:
     def get_temperature_card_index(self):
         """Return the first Temperature card in the current test hand."""
 
+        return self.get_test_card_index("TEMPERATURE")
+
+    def get_test_card_index(self, test_name):
+        """Return the first matching test card in the current hand."""
+
         for index, card in enumerate(self.player.test_hand):
-            if card.value.name == "TEMPERATURE":
+            if card.value.name == test_name:
                 return index
+        return None
+
+    def get_blood_chemistry_card_index(self):
+        """Return Zorpa's second supporting test card when it is in hand."""
+
+        return self.get_test_card_index("BLOOD CHEMISTRY")
+
+    def get_blood_chemistry_shop_rect(self):
+        """Return the Card Shop slot that sells Blood Chemistry."""
+
+        for test, rect in zip(self.card_shop_catalog, self.get_card_shop_slot_rects()):
+            if test.name == "BLOOD CHEMISTRY":
+                return rect
         return None
 
     def get_correct_diagnosis_card_index(self):
@@ -123,6 +142,28 @@ class TutorialMixin:
             return self.layout["notebook"]
         if step == "review_notebook":
             return self.notebook_layout["book"]
+        if step == "card_shop_open":
+            return self.card_shop_button
+        if step == "card_shop_select":
+            return self.get_blood_chemistry_shop_rect()
+        if step == "card_shop_buy":
+            return self.card_shop_buy_button
+        if step == "blood_select":
+            index = self.get_blood_chemistry_card_index()
+            if index is not None and index < len(self.card_rects):
+                resting = self.card_rects[index]
+                return resting.union(self.get_hovered_card_rect(resting))
+        if step == "blood_run" and self.selected_card_index is not None:
+            selected = self.get_selected_card_rect(self.selected_card_index)
+            return self.get_run_test_button(selected)
+        if step == "second_test_result":
+            if self.get_test_result_reveal_progress() >= 1.0:
+                return self.continue_button
+            return pygame.Rect(105, 105, 890, 455)
+        if step in ("second_note_transfer", "second_open_notebook"):
+            return self.layout["notebook"]
+        if step == "second_review_notebook":
+            return self.notebook_layout["book"]
         if step == "diagnosis_folder":
             return self.layout["diagnosis"]
         if step == "diagnosis_select":
@@ -149,7 +190,16 @@ class TutorialMixin:
             "note_transfer": 6,
             "open_notebook": 6,
             "review_notebook": 6,
-            "diagnosis_folder": 7,
+            "card_shop_open": 7,
+            "card_shop_select": 7,
+            "card_shop_buy": 7,
+            "blood_select": 7,
+            "blood_run": 7,
+            "second_test_result": 7,
+            "second_note_transfer": 7,
+            "second_open_notebook": 7,
+            "second_review_notebook": 7,
+            "diagnosis_folder": 8,
             "diagnosis_select": 8,
             "diagnosis_play": 8,
             "diagnosis_confirm": 8,
@@ -164,13 +214,26 @@ class TutorialMixin:
             "symptom": ("Read Zorpa's concern, then click the highlighted patient to ask a follow-up.", pygame.Rect(620, 168, 400, 104), False),
             "inspect_id": ("Inspect Zorpa's Intergalactic ID.", pygame.Rect(62, 178, 375, 92), False),
             "review_health_id": ("Normal temperature: 2,000°F. Remember this baseline.", pygame.Rect(62, 174, 410, 104), True),
-            "temperature_select": ("Shaking may be temperature-related. Select TEMPERATURE. Drawing an extra card from the deck costs $5.", pygame.Rect(650, 174, 400, 104), False),
+            "temperature_select": (
+                "Shaking may be temperature-related. Select TEMPERATURE. Random draws cost $5; Card Shop lets you choose a missing card for $10 or more.",
+                pygame.Rect(650, 174, 400, 104),
+                False,
+            ),
             "temperature_run": ("Run the selected test. Its cost is deducted immediately.", pygame.Rect(650, 174, 400, 92), False),
             "test_result": ("Read the observed result, then return to Zorpa.", pygame.Rect(120, 462, 400, 92), False),
             "note_transfer": ("The clinic is filing this result in Patient Notes...", pygame.Rect(650, 172, 400, 92), False),
             "open_notebook": ("The result is recorded. Open Patient Notes.", pygame.Rect(265, 401, 410, 92), False),
             "review_notebook": ("Temperature is one clue, so Evidence reads 1/2. Two matching clues earn full case pay.", pygame.Rect(350, 12, 400, 104), True),
-            "diagnosis_folder": ("For training, submit early and see the limited-evidence rate. Open Diagnosis.", pygame.Rect(405, 173, 410, 92), False),
+            "card_shop_open": ("One clue is not enough. Open Card Shop to request BLOOD CHEMISTRY from the live deck.", pygame.Rect(650, 174, 400, 104), False),
+            "card_shop_select": ("Choose BLOOD CHEMISTRY. The shop is useful when a needed test is missing from your hand.", pygame.Rect(38, 174, 410, 104), False),
+            "card_shop_buy": ("Buy the card. Targeted cards cost more each time, and running the test has its own fee.", pygame.Rect(38, 174, 410, 104), False),
+            "blood_select": ("Now select BLOOD CHEMISTRY for a second, independent clue.", pygame.Rect(650, 174, 400, 92), False),
+            "blood_run": ("Run Blood Chemistry and compare it with the temperature result.", pygame.Rect(650, 174, 400, 92), False),
+            "second_test_result": ("Read the blood analysis, then return to Zorpa.", pygame.Rect(120, 462, 400, 92), False),
+            "second_note_transfer": ("The second result is being filed in Patient Notes...", pygame.Rect(650, 172, 400, 92), False),
+            "second_open_notebook": ("Open Patient Notes again to confirm the evidence pair.", pygame.Rect(265, 401, 410, 92), False),
+            "second_review_notebook": ("Evidence is now 2/2. A supported correct diagnosis earns the full $50 case pay.", pygame.Rect(350, 12, 400, 104), True),
+            "diagnosis_folder": ("You have enough evidence. Open Diagnosis and compare the five case files.", pygame.Rect(405, 173, 410, 92), False),
             "diagnosis_select": (
                 "Zorpa is 1,700°F—300°F below the 2,000°F baseline. Choose the case file that best explains dangerous cooling and shivering; the other conditions need neural, blood, lung, or toxin evidence.",
                 pygame.Rect(620, 158, 430, 132),
@@ -178,7 +241,7 @@ class TutorialMixin:
             ),
             "diagnosis_play": ("Submit the selected condition as your diagnosis.", pygame.Rect(650, 173, 400, 92), False),
             "diagnosis_confirm": ("Confirm when you are ready. Incorrect diagnoses cost $25, and repeated mistakes may cause a patient to leave.", pygame.Rect(350, 38, 400, 104), False),
-            "complete": ("Correct, but only partly supported. Gather 2/2 evidence for full pay on future cases.", pygame.Rect(350, 12, 400, 104), True),
+            "complete": ("Correct and fully supported. Matching evidence protects patients—and earns full case pay.", pygame.Rect(350, 12, 400, 104), True),
         }
         return prompts.get(self.guided_tutorial_step)
 
@@ -242,6 +305,55 @@ class TutorialMixin:
         if step == "review_notebook":
             self.play_sfx("button")
             self.state = GameState.PATIENT
+            if self.get_blood_chemistry_card_index() is None:
+                self.set_guided_tutorial_step("card_shop_open")
+            else:
+                self.set_guided_tutorial_step("blood_select")
+            return
+        if step == "card_shop_open" and self.card_shop_button.collidepoint(position):
+            self.toggle_card_shop()
+            self.set_guided_tutorial_step("card_shop_select")
+            return
+        if step == "card_shop_select":
+            shop_rect = self.get_blood_chemistry_shop_rect()
+            if shop_rect is not None and shop_rect.collidepoint(position):
+                self.selected_card_shop_test = "BLOOD CHEMISTRY"
+                self.play_sfx("card_select")
+                self.set_guided_tutorial_step("card_shop_buy")
+                return
+        if step == "card_shop_buy" and self.card_shop_buy_button.collidepoint(position):
+            if self.purchase_selected_card_shop_test():
+                self.card_shop_open = False
+                self.set_guided_tutorial_step("blood_select")
+                return
+        if step == "blood_select":
+            index = self.get_blood_chemistry_card_index()
+            if index is not None and target_clicked:
+                self.selected_card_index = index
+                self.play_sfx("card_select")
+                self.set_guided_tutorial_step("blood_run")
+                return
+        if step == "blood_run" and self.selected_card_index is not None:
+            selected = self.get_selected_card_rect(self.selected_card_index)
+            if self.get_run_test_button(selected).collidepoint(position):
+                self.play_sfx("button")
+                self.run_selected_test()
+                self.set_guided_tutorial_step("second_test_result")
+                return
+        if step == "second_test_result":
+            if self.get_test_result_reveal_progress() >= 1.0 and self.continue_button.collidepoint(position):
+                self.handle_test_result_click(position)
+                self.set_guided_tutorial_step("second_note_transfer")
+                return
+            self.nudge_guided_tutorial("Wait for the analyzer to finish.")
+            return
+        if step == "second_open_notebook" and self.layout["notebook"].collidepoint(position):
+            self.open_notebook()
+            self.set_guided_tutorial_step("second_review_notebook")
+            return
+        if step == "second_review_notebook":
+            self.play_sfx("button")
+            self.state = GameState.PATIENT
             self.set_guided_tutorial_step("diagnosis_folder")
             return
         if step == "diagnosis_folder" and self.layout["diagnosis"].collidepoint(position):
@@ -294,7 +406,7 @@ class TutorialMixin:
         step = self.guided_tutorial_step
         if step == "call_patient":
             self.handle_guided_tutorial_click(self.start_button.center)
-        elif step in ("symptom", "review_health_id", "review_notebook", "complete"):
+        elif step in ("symptom", "review_health_id", "review_notebook", "second_review_notebook", "complete"):
             self.handle_guided_tutorial_click((10, 10))
         else:
             self.nudge_guided_tutorial("Use the highlighted clinic control.")
@@ -319,6 +431,15 @@ class TutorialMixin:
             and self.discard_animation is None
         ):
             self.set_guided_tutorial_step("open_notebook")
+        elif (
+            self.guided_tutorial_step == "second_note_transfer"
+            and self.state == GameState.PATIENT
+            and self.note_transfer_animation is None
+            and self.notebook_attention_started_at is None
+            and self.pending_test_discard is None
+            and self.discard_animation is None
+        ):
+            self.set_guided_tutorial_step("second_open_notebook")
 
     def open_tutorial(self):
         """Open compact reference Help without restarting forced training."""
@@ -425,7 +546,10 @@ class TutorialMixin:
             ("TEST COSTS", "Every machine use has an operating cost."),
             (
                 "CARD DRAWS",
-                f"Extra cards cost ${DRAW_COST}; your hand holds {MAX_TEST_HAND_SIZE}.",
+                (
+                    f"Random draws cost ${DRAW_COST}. Card Shop choices start at $10 "
+                    f"and rise by $5; hand max {MAX_TEST_HAND_SIZE}."
+                ),
             ),
             (
                 "DIAGNOSIS",

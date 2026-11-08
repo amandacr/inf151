@@ -42,6 +42,12 @@ from Tests.catalog import create_test_catalog
 from Test import TEST_COSTS_BY_RARITY, get_test_cost
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
+from gui_card_shop import (
+    CARD_SHOP_BASE_PRICE,
+    CARD_SHOP_PRICE_STEP,
+    CARD_SHOP_PURPOSES,
+    CardShopMixin,
+)
 from gui_cards import CardMixin
 from gui_developer import DeveloperMixin
 from gui_display import DisplayMixin
@@ -626,6 +632,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.assertIsInstance(self.game, AnimationMixin)
         self.assertIsInstance(self.game, AudioMixin)
+        self.assertIsInstance(self.game, CardShopMixin)
         self.assertIsInstance(self.game, CardMixin)
         self.assertIsInstance(self.game, DeveloperMixin)
         self.assertIsInstance(self.game, DisplayMixin)
@@ -639,6 +646,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIsInstance(self.game, TutorialMixin)
         self.assertEqual(self.game.draw_discard_animation.__module__, "gui_animations")
         self.assertEqual(self.game.draw_audio_button.__module__, "gui_audio")
+        self.assertEqual(self.game.draw_card_shop_overlay.__module__, "gui_card_shop")
         self.assertEqual(self.game.draw_test_card.__module__, "gui_cards")
         self.assertEqual(
             self.game.draw_developer_navigator.__module__,
@@ -696,6 +704,14 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertLess(self.game.intro_ufo_surface.get_width(), WINDOW_SIZE[0])
         self.assertLess(self.game.intro_ufo_surface.get_height(), WINDOW_SIZE[1])
         self.assertEqual(self.game.intro_ufo_surface.get_at((0, 0)).a, 0)
+        ufo_width, ufo_height = self.game.intro_ufo_surface.get_size()
+        for edge_point in (
+            (ufo_width // 2, 0),
+            (ufo_width // 2, ufo_height - 1),
+            (0, ufo_height // 2),
+            (ufo_width - 1, ufo_height // 2),
+        ):
+            self.assertEqual(self.game.intro_ufo_surface.get_at(edge_point).a, 0)
         self.game.state = GameState.INTRO
         self.game.finish_guided_tutorial()
         self.game.tutorial_open = False
@@ -786,7 +802,58 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_guided_tutorial_click(self.game.layout["notebook"].center)
         self.assertEqual(self.game.state, GameState.NOTEBOOK)
         self.assertEqual(self.game.guided_tutorial_step, "review_notebook")
+
+        # Force the missing-clue branch so training also teaches the targeted
+        # Card Shop rather than relying on a lucky opening hand.
+        blood_cards = [
+            card
+            for card in self.game.player.test_hand
+            if card.value.name == "BLOOD CHEMISTRY"
+        ]
+        for card in blood_cards:
+            self.game.player.test_hand.remove(card)
+        self.game.deck.return_cards(blood_cards)
+        self.game.refresh_hand_layout()
         self.game.handle_guided_tutorial_click((1090, 680))
+        self.assertEqual(self.game.guided_tutorial_step, "card_shop_open")
+        self.game.handle_guided_tutorial_click(self.game.card_shop_button.center)
+        self.assertTrue(self.game.card_shop_open)
+        self.assertEqual(self.game.guided_tutorial_step, "card_shop_select")
+        self.game.handle_guided_tutorial_click(
+            self.game.get_blood_chemistry_shop_rect().center
+        )
+        self.assertEqual(self.game.selected_card_shop_test, "BLOOD CHEMISTRY")
+        self.assertEqual(self.game.guided_tutorial_step, "card_shop_buy")
+        self.game.handle_guided_tutorial_click(self.game.card_shop_buy_button.center)
+        self.assertFalse(self.game.card_shop_open)
+        self.assertEqual(self.game.guided_tutorial_step, "blood_select")
+
+        blood_index = self.game.get_blood_chemistry_card_index()
+        self.game.handle_guided_tutorial_click(self.game.card_rects[blood_index].center)
+        self.assertEqual(self.game.guided_tutorial_step, "blood_run")
+        selected = self.game.get_selected_card_rect(self.game.selected_card_index)
+        self.game.handle_guided_tutorial_click(
+            self.game.get_run_test_button(selected).center
+        )
+        self.assertEqual(self.game.state, GameState.TEST_RESULT)
+        self.assertEqual(self.game.daily_test_count, 2)
+        self.game.test_result_started_at -= self.game.test_result_reveal_duration + 1
+        self.game.draw()
+        self.game.handle_guided_tutorial_click(self.game.continue_button.center)
+        self.assertEqual(self.game.guided_tutorial_step, "second_note_transfer")
+
+        self.game.note_transfer_animation["started_at"] -= self.game.note_transfer_animation_duration + 1
+        self.game.update()
+        self.game.notebook_attention_started_at -= self.game.notebook_attention_duration + 1
+        self.game.update()
+        self.game.discard_animation["started_at"] -= self.game.test_discard_animation_duration + 1
+        self.game.update()
+        self.game.update()
+        self.assertEqual(self.game.guided_tutorial_step, "second_open_notebook")
+        self.game.handle_guided_tutorial_click(self.game.layout["notebook"].center)
+        self.assertEqual(self.game.guided_tutorial_step, "second_review_notebook")
+        self.game.handle_guided_tutorial_click((1090, 680))
+        self.assertEqual(self.game.guided_tutorial_step, "diagnosis_folder")
         self.game.handle_guided_tutorial_click(self.game.layout["diagnosis"].center)
         prompt_text, _prompt_rect, _click_anywhere = (
             self.game.get_guided_tutorial_prompt()
@@ -819,8 +886,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_guided_tutorial_click((1090, 680))
         self.assertFalse(self.game.guided_tutorial_active)
         self.assertEqual(self.game.daily_correct_diagnoses, 1)
-        self.assertEqual(self.game.daily_evidence_cases, 0)
-        self.assertFalse(self.game.last_diagnosis_supported)
+        self.assertEqual(self.game.daily_evidence_cases, 1)
+        self.assertTrue(self.game.last_diagnosis_supported)
+        self.assertEqual(self.game.daily_card_shop_expenses, CARD_SHOP_BASE_PRICE)
 
     def test_compact_help_remains_available_after_training(self):
         """The deleted briefing should be replaced by compact reusable Help."""
@@ -905,7 +973,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.guided_tutorial_active = True
         self.game.set_guided_tutorial_step("review_notebook")
         self.game.handle_guided_tutorial_click((1090, 680))
-        self.assertEqual(self.game.guided_tutorial_step, "diagnosis_folder")
+        self.assertIn(
+            self.game.guided_tutorial_step,
+            ("blood_select", "card_shop_open"),
+        )
 
         self.game.set_guided_tutorial_step("complete")
         self.game.handle_guided_tutorial_click((1090, 680))
@@ -921,6 +992,15 @@ class GuiFlowSmokeTests(unittest.TestCase):
             "note_transfer",
             "open_notebook",
             "review_notebook",
+            "card_shop_open",
+            "card_shop_select",
+            "card_shop_buy",
+            "blood_select",
+            "blood_run",
+            "second_test_result",
+            "second_note_transfer",
+            "second_open_notebook",
+            "second_review_notebook",
             "diagnosis_folder",
             "diagnosis_select",
             "diagnosis_play",
@@ -970,6 +1050,141 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.game.notebook.get_interview(self.game.patient),
             self.game.patient.dialogue[:1],
         )
+
+    def test_card_shop_opens_as_a_modal_and_resets_for_each_patient(self):
+        """The Card Shop should block the workspace and reset its rising price."""
+
+        self.assertFalse(self.game.card_shop_open)
+        self.game.draw()
+        self.game.handle_patient_click(self.game.card_shop_button.center)
+        self.assertTrue(self.game.card_shop_open)
+        self.assertIsNone(self.game.selected_card_index)
+        self.assertEqual(self.game.get_card_shop_price(), CARD_SHOP_BASE_PRICE)
+        self.assertEqual(len(self.game.get_card_shop_slot_rects()), 8)
+
+        showing_health_id = self.game.showing_health_id
+        self.game.handle_patient_click(self.game.layout["id_card"].center)
+        self.assertEqual(self.game.showing_health_id, showing_health_id)
+        self.assertTrue(self.game.card_shop_open)
+
+        self.game.handle_patient_click(self.game.card_shop_close_button.center)
+        self.assertFalse(self.game.card_shop_open)
+
+        self.game.handle_patient_click(self.game.card_shop_button.center)
+        self.game.card_shop_patient_purchases = 2
+        self.game.reset_round()
+        self.assertFalse(self.game.card_shop_open)
+        self.assertEqual(self.game.card_shop_patient_purchases, 0)
+        self.assertEqual(self.game.get_card_shop_price(), CARD_SHOP_BASE_PRICE)
+
+    def test_card_shop_purchase_uses_live_inventory_and_rising_prices(self):
+        """Targeted cards should leave the deck, enter the hand, and cost more."""
+
+        selected = next(
+            test
+            for test in self.game.card_shop_catalog
+            if self.game.get_card_shop_inventory_count(test.name) >= 2
+        )
+        self.game.selected_card_shop_test = selected.name
+        purpose, details = self.game.get_card_shop_information()
+        self.assertEqual(purpose, CARD_SHOP_PURPOSES[selected.name])
+        self.assertIn(f"RUN TEST: ${self.game.player.get_test_cost(selected)}", details)
+        inventory_before = self.game.get_card_shop_inventory_count(selected.name)
+        hand_before = len(self.game.player.test_hand)
+        balance_before = self.game.get_live_balance()
+        pay_before = self.game.get_daily_pay_breakdown()[3]
+
+        self.assertTrue(self.game.purchase_selected_card_shop_test())
+        self.assertEqual(len(self.game.player.test_hand), hand_before + 1)
+        self.assertEqual(
+            self.game.get_card_shop_inventory_count(selected.name),
+            inventory_before - 1,
+        )
+        self.assertEqual(self.game.daily_card_shop_expenses, CARD_SHOP_BASE_PRICE)
+        self.assertEqual(self.game.daily_card_shop_purchases, 1)
+        self.assertEqual(
+            self.game.card_shop_notice,
+            f"{selected.name.title()} added to your hand.",
+        )
+        self.assertIsNotNone(self.game.card_shop_notice_started_at)
+        self.assertIn(
+            "NEXT CARD $20",
+            self.game.get_card_shop_purchase_state()[1],
+        )
+        self.assertEqual(
+            self.game.get_card_shop_price(),
+            CARD_SHOP_BASE_PRICE + CARD_SHOP_PRICE_STEP,
+        )
+        self.assertEqual(
+            self.game.get_live_balance(),
+            balance_before - CARD_SHOP_BASE_PRICE,
+        )
+        self.assertEqual(
+            self.game.get_daily_pay_breakdown()[3],
+            pay_before - CARD_SHOP_BASE_PRICE,
+        )
+
+        self.assertTrue(self.game.purchase_selected_card_shop_test())
+        self.assertEqual(
+            self.game.daily_card_shop_expenses,
+            CARD_SHOP_BASE_PRICE + CARD_SHOP_BASE_PRICE + CARD_SHOP_PRICE_STEP,
+        )
+        self.assertEqual(self.game.daily_card_shop_purchases, 2)
+        self.assertEqual(self.game.get_card_shop_price(), 20)
+
+    def test_card_shop_blocks_full_hand_sold_out_stock_and_low_funds(self):
+        """Failed targeted purchases must never consume cards or charge money."""
+
+        selected = self.game.card_shop_catalog[0]
+        self.game.selected_card_shop_test = selected.name
+        while len(self.game.player.test_hand) < MAX_TEST_HAND_SIZE:
+            self.game.player.draw(self.game.deck.draw())
+        deck_before = len(self.game.deck.contents)
+        self.assertFalse(self.game.purchase_selected_card_shop_test())
+        self.assertEqual(len(self.game.deck.contents), deck_before)
+        self.assertEqual(self.game.daily_card_shop_expenses, 0)
+        self.assertIn("Hand Full", self.game.card_shop_message)
+
+        self.game.player.test_hand.pop()
+        self.game.deck.contents = [
+            card
+            for card in self.game.deck.contents
+            if card.value.name != selected.name
+        ]
+        deck_before = len(self.game.deck.contents)
+        self.assertFalse(self.game.purchase_selected_card_shop_test())
+        self.assertEqual(len(self.game.deck.contents), deck_before)
+        self.assertEqual(self.game.daily_card_shop_expenses, 0)
+        self.assertIn("Sold Out", self.game.card_shop_message)
+
+        available = next(
+            test
+            for test in self.game.card_shop_catalog
+            if self.game.get_card_shop_inventory_count(test.name)
+        )
+        self.game.selected_card_shop_test = available.name
+        self.game.player.balance = CARD_SHOP_BASE_PRICE - 1
+        deck_before = len(self.game.deck.contents)
+        self.assertFalse(self.game.purchase_selected_card_shop_test())
+        self.assertEqual(len(self.game.deck.contents), deck_before)
+        self.assertEqual(self.game.daily_card_shop_expenses, 0)
+        self.assertIn("Need $1 More", self.game.card_shop_message)
+
+    def test_card_shop_explains_every_test_and_draw_stack_stays_in_its_tray(self):
+        """Every shop option needs guidance and every deck layer must remain clipped."""
+
+        catalog_names = {test.name for test in self.game.card_shop_catalog}
+        self.assertEqual(set(CARD_SHOP_PURPOSES), catalog_names)
+
+        tray = self.game.get_draw_deck_tray().inflate(-3, -3)
+        for remaining in (1, 5, 12, len(self.game.deck.contents)):
+            stack = self.game.get_draw_deck_stack_rects(remaining)
+            self.assertTrue(stack)
+            self.assertTrue(all(tray.contains(rect) for rect in stack))
+            self.assertTrue(tray.contains(stack[0].move(0, -4)))
+            self.assertTrue(
+                all(not rect.colliderect(self.game.card_shop_button) for rect in stack)
+            )
 
     def test_patient_id_details_fit_the_larger_readable_font(self):
         """Every current profile and medical line should fit the widened ID card."""
@@ -1069,7 +1284,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.state, GameState.DAY_COMPLETE)
         self.assertFalse(self.game.developer_navigator_open)
         self.assertEqual(self.game.daily_correct_diagnoses, 4)
-        self.assertEqual(self.game.get_daily_pay_breakdown()[3], 95)
+        self.assertEqual(self.game.get_daily_pay_breakdown()[3], 75)
         self.game.draw()
 
         pygame.event.post(
@@ -1082,7 +1297,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_events()
         self.assertEqual(self.game.state, GameState.SHOP)
         self.assertTrue(self.game.daily_payout_applied)
-        self.assertEqual(self.game.player.balance, 195)
+        self.assertEqual(self.game.player.balance, 175)
         self.game.draw()
 
         pygame.event.post(
@@ -1169,6 +1384,23 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.daily_test_count = 16
         self.game.daily_test_expenses = 220
         self.assertLess(self.game.get_daily_pay_breakdown()[3], 0)
+
+    def test_unused_hand_returns_to_deck_but_consumed_cards_stay_spent(self):
+        """Changing patients should preserve unused stock without restoring used tests."""
+
+        deck_size = len(self.game.deck.contents)
+        self.assertEqual(len(self.game.player.test_hand), STARTING_TEST_HAND_SIZE)
+
+        self.game.reset_round()
+        self.assertEqual(len(self.game.deck.contents), deck_size)
+        self.assertEqual(len(self.game.player.test_hand), STARTING_TEST_HAND_SIZE)
+
+        self.game.selected_card_index = 0
+        self.game.run_selected_test()
+        self.assertEqual(len(self.game.player.test_hand), STARTING_TEST_HAND_SIZE - 1)
+        self.game.reset_round()
+        self.assertEqual(len(self.game.deck.contents), deck_size - 1)
+        self.assertEqual(len(self.game.player.test_hand), STARTING_TEST_HAND_SIZE)
 
     def test_live_balance_animates_costs_without_double_charging_at_payday(self):
         """Tests and mistakes should lower the HUD once and remain in the recap."""
@@ -1318,21 +1550,21 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.assertEqual(self.game.player.balance, STARTING_BALANCE)
         self.assertEqual(STARTING_BALANCE, 100)
-        self.assertEqual(DIAGNOSIS_REWARD, 40)
-        self.assertEqual(LIMITED_EVIDENCE_REWARD, 25)
+        self.assertEqual(DIAGNOSIS_REWARD, 50)
+        self.assertEqual(LIMITED_EVIDENCE_REWARD, 10)
         self.assertEqual(WRONG_DIAGNOSIS_PENALTY, 25)
         self.assertEqual(CLINIC_OPERATING_FEE, 50)
 
         self.game.daily_correct_diagnoses = len(self.game.waiting_room_queue)
-        self.game.daily_test_count = 4
-        self.game.daily_test_expenses = 40
+        self.game.daily_test_count = 8
+        self.game.daily_test_expenses = 100
         self.game.daily_evidence_cases = len(self.game.waiting_room_queue)
         self.assertEqual(
             self.game.get_daily_pay_breakdown(),
-            (160, 0, PERFECT_DAY_BONUS, 95),
+            (200, 0, PERFECT_DAY_BONUS, 75),
         )
 
-        projected_balance = STARTING_BALANCE + 95
+        projected_balance = STARTING_BALANCE + 75
         two_cheapest_upgrades = sorted(
             upgrade["cost"] for upgrade in SHOP_UPGRADES
         )[:2]
@@ -1751,11 +1983,14 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_shop_click(placeholder_rect.center)
         self.assertEqual(self.game.selected_shop_upgrade, placeholder["id"])
         self.game.handle_shop_click(self.game.shop_purchase_button.center)
+        self.assertNotIn(placeholder["id"], self.game.purchased_shop_upgrades)
+
+        # The no-evidence shift correctly cannot fund an upgrade. Supply enough
+        # money only to exercise the remaining purchase/ending integration.
+        self.game.player.balance = placeholder["cost"]
+        self.game.handle_shop_click(self.game.shop_purchase_button.center)
         self.assertIn(placeholder["id"], self.game.purchased_shop_upgrades)
-        self.assertEqual(
-            self.game.player.balance,
-            paid_balance - placeholder["cost"],
-        )
+        self.assertEqual(self.game.player.balance, 0)
 
         self.game.handle_shop_click(self.game.shop_button.center)
         self.assertEqual(self.game.state, GameState.ENDING)

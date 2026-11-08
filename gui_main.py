@@ -10,6 +10,7 @@ import pygame
 from Tests.catalog import create_test_catalog
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
+from gui_card_shop import CardShopMixin
 from gui_cards import CardMixin
 from gui_developer import DeveloperMixin
 from gui_display import DisplayMixin
@@ -36,6 +37,7 @@ from Deck import Deck
 class CosmicClinicGUI(
     AnimationMixin,
     AudioMixin,
+    CardShopMixin,
     CardMixin,
     DeveloperMixin,
     DisplayMixin,
@@ -123,6 +125,7 @@ class CosmicClinicGUI(
         self.notebook_preview_duration = 220
         self.deck = Deck(seed=card_seed)
         self.deck.populate(create_test_catalog())
+        self.card_shop_catalog = tuple(create_test_catalog())
         self.deck.shuffle_cards(self.player.diagnosis_hand)
         self.deal_starting_test_hand(training_hand=True)
         self.hovered_card_index = None
@@ -159,6 +162,18 @@ class CosmicClinicGUI(
         self.advance_case_after_discard = False
         self.card_draw_notice = ""
         self.card_draw_notice_started_at = None
+        self.card_shop_open = False
+        self.card_shop_button = pygame.Rect(53, 323, 134, 27)
+        self.card_shop_panel = pygame.Rect(215, 370, 660, 205)
+        self.card_shop_close_button = pygame.Rect(839, 382, 24, 24)
+        self.card_shop_buy_button = pygame.Rect(614, 532, 239, 31)
+        self.selected_card_shop_test = None
+        self.card_shop_message = "Choose one card type from the live deck."
+        self.card_shop_notice = ""
+        self.card_shop_notice_started_at = None
+        self.card_shop_patient_purchases = 0
+        self.daily_card_shop_expenses = 0
+        self.daily_card_shop_purchases = 0
         self.daily_patients_lost = 0
         self.daily_draw_expenses = 0
         self.reception_transition_started_at = None
@@ -250,11 +265,19 @@ class CosmicClinicGUI(
         self.draw_intro_clinic(intro_ufo_layer, beam_alpha=0)
         # Keep only the visible saucer pixels. Transforming the old full-screen
         # layer created a large rectangular artifact around the departing ship
-        # on some displays.
+        # on some displays. A transparent gutter prevents smooth scaling and
+        # rotation from smearing the dome's top edge into a stray white line.
         intro_ufo_bounds = intro_ufo_layer.get_bounding_rect(min_alpha=1)
-        self.intro_ufo_surface = intro_ufo_layer.subsurface(
-            intro_ufo_bounds
-        ).copy()
+        cropped_ufo = intro_ufo_layer.subsurface(intro_ufo_bounds).copy()
+        ufo_padding = 8
+        self.intro_ufo_surface = pygame.Surface(
+            (
+                cropped_ufo.get_width() + ufo_padding * 2,
+                cropped_ufo.get_height() + ufo_padding * 2,
+            ),
+            pygame.SRCALPHA,
+        )
+        self.intro_ufo_surface.blit(cropped_ufo, (ufo_padding, ufo_padding))
         self.intro_wake_active = False
         self.setup_developer_navigator()
 
@@ -369,7 +392,9 @@ class CosmicClinicGUI(
                         self.close_tutorial()
                     continue
                 if event.key == pygame.K_ESCAPE:
-                    if self.state == GameState.PATIENT and self.diagnosis_confirmation_open:
+                    if self.state == GameState.PATIENT and self.card_shop_open:
+                        self.toggle_card_shop()
+                    elif self.state == GameState.PATIENT and self.diagnosis_confirmation_open:
                         self.play_sfx("button")
                         self.diagnosis_confirmation_open = False
                     else:
@@ -420,6 +445,9 @@ class CosmicClinicGUI(
             )
         ):
             return
+        if self.card_shop_open:
+            self.handle_card_shop_click(position)
+            return
         if self.diagnosis_confirmation_open:
             self.handle_diagnosis_confirmation_click(position)
             return
@@ -436,6 +464,9 @@ class CosmicClinicGUI(
         if self.layout["diagnosis"].collidepoint(position):
             self.play_sfx("button")
             self.switch_active_hand(not self.showing_diagnosis_hand)
+            return
+        if self.card_shop_button.collidepoint(position):
+            self.toggle_card_shop()
             return
         if self.layout["draw_deck"].collidepoint(position):
             card_drawn = self.draw_card_from_pile()
@@ -613,6 +644,8 @@ class CosmicClinicGUI(
         self.daily_wrong_diagnoses = 0
         self.daily_test_count = 0
         self.daily_test_expenses = 0
+        self.daily_card_shop_expenses = 0
+        self.daily_card_shop_purchases = 0
         self.daily_evidence_cases = 0
         self.daily_payout_applied = False
         self.money_deduction_animation = None
@@ -622,7 +655,7 @@ class CosmicClinicGUI(
         self.deck.populate(create_test_catalog())
         self.daily_patients_lost = 0
         self.daily_draw_expenses = 0
-        self.reset_round()
+        self.reset_round(recycle_unused_cards=False)
 
     def deal_starting_test_hand(self, training_hand=False):
         """Deal five cards from the live deck without replacement.
@@ -646,10 +679,12 @@ class CosmicClinicGUI(
 
         self.deck.shuffle_cards(self.player.test_hand)
 
-    def reset_round(self):
-        """Prepare a fresh patient encounter while preserving earned money."""
+    def reset_round(self, recycle_unused_cards=True):
+        """Prepare a fresh patient encounter while preserving money and unused cards."""
 
         current_balance = self.player.balance
+        if recycle_unused_cards:
+            self.deck.return_cards(self.player.test_hand)
         next_slot = min(self.patients_called, len(self.waiting_room_queue) - 1)
         self.patient = self.waiting_room_queue[next_slot]["create"]()
         self.patient_dialogue_index = 0
@@ -696,6 +731,12 @@ class CosmicClinicGUI(
         self.advance_case_after_discard = False
         self.card_draw_notice = ""
         self.card_draw_notice_started_at = None
+        self.card_shop_open = False
+        self.selected_card_shop_test = None
+        self.card_shop_message = "Choose one card type from the live deck."
+        self.card_shop_notice = ""
+        self.card_shop_notice_started_at = None
+        self.card_shop_patient_purchases = 0
         self.reception_transition_started_at = None
         self.patient_fade_started_at = None
         self.refresh_hand_layout()

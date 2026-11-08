@@ -15,6 +15,7 @@ class ExaminationMixin:
         self.draw_med_bay_background()
         self.draw_status_bar()
         self.draw_draw_deck()
+        self.draw_card_shop_button()
         self.draw_alien_patient()
         self.draw_id_card()
         self.draw_throwaway_deck()
@@ -23,6 +24,7 @@ class ExaminationMixin:
         self.draw_diagnosis_cards()
         self.draw_note_transfer_animation()
         self.draw_discard_animation()
+        self.draw_card_shop_overlay()
         if self.diagnosis_confirmation_open:
             self.draw_diagnosis_confirmation()
 
@@ -425,11 +427,39 @@ class ExaminationMixin:
         )
         self.draw_money_deduction_popup((display.right - 105, display.bottom + 19))
 
+    def get_draw_deck_tray(self):
+        """Return the clipped tray reserved for the compact draw-deck stack."""
+
+        panel = self.layout["draw_deck"]
+        return pygame.Rect(
+            panel.x + 6,
+            panel.y + 39,
+            panel.width - 12,
+            panel.height - 79,
+        )
+
+    def get_draw_deck_stack_rects(self, remaining):
+        """Return a centered stack that stays completely inside the tray."""
+
+        tray = self.get_draw_deck_tray()
+        layers = min(5, 1 + max(0, remaining) // 6)
+        layer_offset = 2
+        spread = (layers - 1) * layer_offset
+        card = pygame.Rect(0, 0, 54, 60)
+        card.topleft = (
+            tray.centerx - (card.width + spread) // 2,
+            tray.y + 22,
+        )
+        return [card.move(layer * layer_offset, layer * layer_offset) for layer in range(layers)]
+
     def draw_draw_deck(self):
         """Draw the face-down test-card stack resting in a counter tray."""
 
         panel = self.layout["draw_deck"]
-        hovered = panel.collidepoint(self.get_mouse_position())
+        hovered = (
+            panel.collidepoint(self.get_mouse_position())
+            and not self.card_shop_button.collidepoint(self.get_mouse_position())
+        )
         remaining = len(self.deck.contents)
         deck_empty = remaining == 0
         deck_low = 0 < remaining <= 5
@@ -450,7 +480,7 @@ class ExaminationMixin:
             else (88, 93, 111)
         )
 
-        tray = pygame.Rect(panel.x + 6, panel.y + 39, panel.width - 12, panel.height - 45)
+        tray = self.get_draw_deck_tray()
         pygame.draw.rect(self.screen, (5, 12, 18), tray.move(4, 5), border_radius=10)
         pygame.draw.rect(self.screen, (38, 47, 60), tray, border_radius=10)
         pygame.draw.rect(
@@ -512,27 +542,29 @@ class ExaminationMixin:
             self.screen.blit(tip, tip_rect)
 
         if deck_empty:
-            slot = pygame.Rect(0, 0, 80, 100)
-            slot.center = (tray.centerx, tray.centery - 6)
+            count = self.compact_ui_font.render("0 LEFT", True, warning_color)
+            self.screen.blit(count, count.get_rect(center=(tray.centerx, tray.y + 10)))
+            slot = pygame.Rect(0, 0, 54, 60)
+            slot.center = (tray.centerx, tray.y + 53)
             pygame.draw.rect(self.screen, (28, 36, 47), slot, border_radius=7)
             pygame.draw.rect(self.screen, warning_color, slot, width=2, border_radius=7)
             empty = self.small_font.render("EMPTY", True, warning_color)
             self.screen.blit(empty, empty.get_rect(center=slot.center))
-            count = self.compact_ui_font.render(
-                "0 LEFT",
-                True,
-                warning_color,
-            )
-            self.screen.blit(count, count.get_rect(center=(tray.centerx, tray.bottom - 9)))
             return
 
-        # Thicker stack when the deck is full, thinner as it runs down
-        layers = min(6, 1 + remaining // 6)
-        card = pygame.Rect(0, 0, 80, 100)
-        card.topleft = (tray.centerx - 40 - (layers * 3) // 2, tray.y + 8)
+        # Thicker stack when the deck is full, thinner as it runs down.
+        count = self.compact_ui_font.render(
+            f"{remaining} LEFT",
+            True,
+            low_color if deck_low else COLORS["text"],
+        )
+        self.screen.blit(count, count.get_rect(center=(tray.centerx, tray.y + 10)))
 
-        for layer in range(layers - 1, -1, -1):
-            rect = card.move(layer * 3, layer * 3)
+        stack_rects = self.get_draw_deck_stack_rects(remaining)
+        previous_clip = self.screen.get_clip()
+        self.screen.set_clip(tray.inflate(-3, -3))
+        for layer, stack_rect in reversed(list(enumerate(stack_rects))):
+            rect = stack_rect
             if layer == 0:
                 if hovered and not hand_full:
                     rect = rect.move(0, -4)
@@ -540,13 +572,8 @@ class ExaminationMixin:
             else:
                 pygame.draw.rect(self.screen, (22, 44, 50), rect, border_radius=7)
                 pygame.draw.rect(self.screen, (63, 120, 110), rect, width=2, border_radius=7)
+        self.screen.set_clip(previous_clip)
 
-        count = self.compact_ui_font.render(
-            f"{remaining} LEFT",
-            True,
-            low_color if deck_low else COLORS["text"],
-        )
-        self.screen.blit(count, count.get_rect(center=(tray.centerx, tray.bottom - 9)))
 
     def draw_card_back(self, rect, hovered=False):
         """Draw the generic face-down card back shown on top of the draw deck."""

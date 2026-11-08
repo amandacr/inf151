@@ -68,6 +68,7 @@ class ShopMixin:
             self.player.balance
             - self.daily_test_expenses
             - self.daily_draw_expenses
+            - self.daily_card_shop_expenses
             - penalties
         )
 
@@ -339,7 +340,11 @@ class ShopMixin:
         if self.daily_patients_lost:
             care_detail += f"  •  {self.daily_patients_lost} walked out"
         cards_drawn = self.daily_draw_expenses // DRAW_COST
-        diagnostic_costs = self.daily_test_expenses + self.daily_draw_expenses
+        diagnostic_costs = (
+            self.daily_test_expenses
+            + self.daily_draw_expenses
+            + self.daily_card_shop_expenses
+        )
         mistake_label = (
             "WRONG DIAGNOSIS"
             if self.daily_wrong_diagnoses == 1
@@ -354,7 +359,10 @@ class ShopMixin:
             ),
             (
                 "DIAGNOSTIC & CARD COSTS",
-                f"{self.daily_test_count} machines operated  •  {cards_drawn} cards drawn",
+                (
+                    f"{self.daily_test_count} tests  •  {cards_drawn} random draws  •  "
+                    f"{self.daily_card_shop_purchases} shop cards"
+                ),
                 f"-${diagnostic_costs}",
                 (117, 190, 255),
             ),
@@ -539,6 +547,7 @@ class ShopMixin:
             - penalties
             - self.daily_test_expenses
             - self.daily_draw_expenses
+            - self.daily_card_shop_expenses
             - CLINIC_OPERATING_FEE
             + bonus
         )
