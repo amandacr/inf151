@@ -1,16 +1,7 @@
 """Patient records used by The Cosmic Clinic GUI."""
 
-from Diagnosis import DIAGNOSES
+from Diagnosis import DIAGNOSES, DOOSKI_DIAGNOSES, FLUMP_DIAGNOSES, ROLDI_DIAGNOSES
 from Patient import Patient
-
-
-def _new_patient(factory, name, occupation, dialogue):
-    """A separate patient with a known species' established medical baseline."""
-    patient = factory()
-    patient.name = name
-    patient.profile['Occupation'] = occupation
-    patient.dialogue = dialogue
-    return patient
 
 
 def create_ember():
@@ -57,27 +48,111 @@ def create_ember():
 
 
 def create_sprig():
-    return _new_patient(create_zoogy, 'Dooski', 'Orbital Gardener', (
-        'My whole frame keeps vibrating.',
-        'It gets worse when I grip my tools.',
-        'Even resting has not stopped the buzzing.',
-    ))
+    """Dooski's mineral imbalance case, independent of Zoogy's crystal frame."""
+    return Patient(
+        'Dooski', None, None, 'fatigue, dizziness, intermittent trembling',
+        DOOSKI_DIAGNOSES['mineral_energy_imbalance'],
+        {
+            'TEMPERATURE': 'Current temperature: 84°F, within the normal Verdani range.',
+            'BLOOD CHEMISTRY': 'Two charged trace elements are present in an unusual ratio. Other nutrient levels are within the normal species range.',
+            'NEURAL SCAN': 'Motor signals briefly weaken, then recover in regular bursts. No nerve damage or self-sustaining feedback loop is detected.',
+            'TOXIN SCREEN': 'No motor-affecting spores, poisons, or foreign compounds were detected.',
+            'OXYGEN SCAN': 'Gas exchange is within the normal species range, with no respiratory impairment.',
+            'ULTRASOUND': 'Inner-ear balance crystals are correctly positioned. No unusual internal changes were detected.',
+            'X-RAY': 'No fractures or skeletal abnormalities were detected.',
+            'ALLERGY': 'Allergy screening produced no reaction.',
+        },
+        profile={
+            'Species': 'Verdani',
+            'Occupation': 'Space Station Horticulturist',
+            'Home Planet': 'Verdara',
+        },
+        medical_info={
+            'Circulation': '2 small hearts; clear conductive blood',
+            'Respiration': '2 lungs',
+            'Hearing': 'Paired inner-ear balance crystals',
+            'Normal temperature': '84°F',
+            'Medical alert': 'Sensitive to strong magnetic fields',
+        },
+        dialogue=(
+            'I get dizzy tending the greenhouse.',
+            'I shake so much I put my tools down.',
+            'Rest helps briefly, then it starts again.',
+        ),
+        diagnosis_options=tuple(DOOSKI_DIAGNOSES.values()),
+    )
 
 
 def create_luma():
-    return _new_patient(create_titus, 'Flump', 'Nebula Cartographer', (
-        'My skin burns and I cannot stop trembling.',
-        'A cleaning sprinkler sprayed my workspace.',
-        'I have never had a reaction like this before.',
-    ))
+    """Flump's breathing-sac case, introduced with the day-two patients."""
+    return Patient(
+        'Flump', None, None, 'shortness of breath, shallow breathing, fatigue',
+        FLUMP_DIAGNOSES['air_sac_compression'],
+        {
+            'OXYGEN SCAN': 'Gas exchange is below the normal species range. Both breathing sacs take in less air than expected.',
+            'ULTRASOUND': 'Both breathing sacs remain intact but cannot reach their normal expanded volume. Heart rhythm and pumping are normal.',
+            'BLOOD CHEMISTRY': 'Oxygen-carrying compounds are within the normal species range. No elevated infection markers were detected.',
+            'X-RAY': 'The main airways are clear, with no foreign objects or structural blockages.',
+            'TOXIN SCREEN': 'No sedative compounds, poisons, or foreign substances were detected.',
+            'NEURAL SCAN': 'Respiratory motor signals and muscle responses are normal.',
+            'ALLERGY': 'Allergy screening produced no reaction.',
+            'TEMPERATURE': 'Current temperature: 60°F, within the normal Veloran range.',
+        },
+        profile={
+            'Species': 'Veloran',
+            'Occupation': 'Nebula Cartographer',
+            'Home Planet': 'Velora',
+        },
+        medical_info={
+            'Circulation': '1 heart; violet oxygen-carrying blood',
+            'Respiration': '2 expandable breathing sacs',
+            'Digestion': '2 stomachs; slow metabolism',
+            'Normal temperature': '60°F',
+            'Medical alert': 'Avoid high-pressure environments',
+        },
+        dialogue=(
+            "I can't seem to take a full breath.",
+            'Even a short walk leaves me exhausted.',
+            'It feels tight inside when I breathe in.',
+        ),
+        diagnosis_options=tuple(FLUMP_DIAGNOSES.values()),
+    )
 
 
 def create_pip():
-    return _new_patient(create_conmann, 'Roldi', 'Asteroid Baker', (
-        'My stomach is painfully bloated.',
-        'It started after tasting a new recipe.',
-        'I used a generous helping of moon-cheese.',
-    ))
+    """Roldi's obstructed fermentation chamber, distinct from Conmann's case."""
+    return Patient(
+        'Roldi', None, None, 'abdominal pressure, bloating, loss of appetite',
+        ROLDI_DIAGNOSES['fermentation_chamber_blockage'],
+        {
+            'ULTRASOUND': 'One fermentation chamber is distended, with material accumulating near its outlet. No organisms or parasite-related tissue changes were detected.',
+            'X-RAY': 'A dense mass is lodged at the affected chamber\'s outlet, restricting passage.',
+            'BLOOD CHEMISTRY': 'No buildup of unprocessed dairy sugars was detected. Inflammatory markers are within the normal species range.',
+            'TOXIN SCREEN': 'No foodborne toxins or hazardous contaminants were detected.',
+            'TEMPERATURE': 'Current temperature: 55°F, within the normal Craggan range.',
+            'OXYGEN SCAN': 'Gas exchange is within the normal species range.',
+            'NEURAL SCAN': 'Neural activity is normal. Pain signals originate in the digestive chambers.',
+            'ALLERGY': 'Allergy screening produced no reaction.',
+        },
+        profile={
+            'Species': 'Craggan',
+            'Occupation': 'Space Station Baker',
+            'Home Planet': 'Auriga',
+        },
+        medical_info={
+            'Circulation': '2 hearts; amber-colored blood',
+            'Respiration': '1 broad lung',
+            'Digestion': '3 fermentation chambers',
+            'Normal temperature': '55°F',
+            'Medical alert': 'Avoid carbonated drinks',
+        },
+        dialogue=(
+            'My stomach feels packed with gravel.',
+            'Even a small meal leaves me painfully full.',
+            "The pressure keeps building. I don't want to eat.",
+        ),
+        diagnosis_options=tuple(ROLDI_DIAGNOSES.values()),
+    )
 
 
 def create_zorpa():

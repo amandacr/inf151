@@ -209,6 +209,95 @@ class SharedModelSmokeTests(unittest.TestCase):
             for test_name in test_names:
                 self.assertTrue(patient.perform_test(test_name).startswith("RESULTS: "))
 
+    def test_dooski_case_requires_complementary_clues_and_preserves_other_patients(self):
+        from PatientData import create_sprig, create_ember
+        patient = create_sprig()
+        self.assertEqual(patient.name, 'Dooski')
+        self.assertEqual(patient.profile, {
+            'Species': 'Verdani', 'Occupation': 'Space Station Horticulturist',
+            'Home Planet': 'Verdara',
+        })
+        self.assertEqual(patient.medical_info['Normal temperature'], '84°F')
+        self.assertEqual(patient.medical_info['Hearing'], 'Paired inner-ear balance crystals')
+        self.assertEqual(patient.medical_info['Medical alert'], 'Sensitive to strong magnetic fields')
+        self.assertEqual(patient.diagnosis.name, 'Mineral-Energy Imbalance')
+        self.assertEqual(len(patient.diagnosis_options), 5)
+        self.assertEqual(sum(d == patient.diagnosis for d in patient.diagnosis_options), 1)
+        self.assertEqual(set(patient.test_results), {t.name for t in create_test_catalog()})
+        pair = {'NEURAL SCAN', 'BLOOD CHEMISTRY'}
+        self.assertTrue(patient.has_supporting_evidence(pair))
+        for test_name in pair:
+            self.assertFalse(patient.has_supporting_evidence({test_name}))
+            self.assertFalse(patient.has_supporting_evidence(set(patient.test_results) - {test_name}))
+        for keyword in ('mineral', 'energy', 'imbalance'):
+            self.assertNotIn(keyword, patient.test_results['BLOOD CHEMISTRY'].lower())
+        for diagnosis in patient.diagnosis_options:
+            self.assertTrue(diagnosis.treatment)
+            if diagnosis != patient.diagnosis:
+                self.assertIsNone(diagnosis.get_rejection_reason(set()))
+                self.assertTrue(diagnosis.get_rejection_reason(diagnosis.rejection_tests))
+        self.assertIn('Arcedian', create_zoogy().diagnosis_options[-1].rejection_reason)
+        self.assertIn('Triskelid', create_ember().diagnosis_options[3].treatment)
+        self.assertIn('Verdani', patient.diagnosis_options[1].treatment)
+
+    def test_roldi_case_requires_imaging_and_preserves_conmann(self):
+        from PatientData import create_pip
+        patient = create_pip()
+        self.assertEqual(patient.name, 'Roldi')
+        self.assertEqual(patient.profile['Species'], 'Craggan')
+        self.assertEqual(patient.profile['Occupation'], 'Space Station Baker')
+        self.assertEqual(patient.medical_info['Normal temperature'], '55°F')
+        self.assertEqual(patient.medical_info['Digestion'], '3 fermentation chambers')
+        self.assertIn('55°F', patient.test_results['TEMPERATURE'])
+        self.assertEqual(patient.diagnosis.name, 'Fermentation Chamber Blockage')
+        self.assertEqual(len(patient.dialogue), 3)
+        self.assertEqual(set(patient.test_results), {t.name for t in create_test_catalog()})
+        self.assertEqual(len(patient.diagnosis_options), 5)
+        self.assertEqual(sum(d == patient.diagnosis for d in patient.diagnosis_options), 1)
+        self.assertTrue(patient.has_supporting_evidence({'ULTRASOUND', 'X-RAY'}))
+        for test_name in ('ULTRASOUND', 'X-RAY'):
+            self.assertFalse(patient.has_supporting_evidence(set(patient.test_results) - {test_name}))
+        self.assertIsNone(patient.diagnosis.rejection_reason)
+        for diagnosis in patient.diagnosis_options:
+            self.assertTrue(diagnosis.description)
+            self.assertTrue(diagnosis.treatment)
+            if diagnosis != patient.diagnosis:
+                self.assertIsNone(diagnosis.get_rejection_reason(set()))
+                self.assertTrue(diagnosis.get_rejection_reason(diagnosis.rejection_tests))
+        original = create_conmann()
+        self.assertEqual(original.diagnosis.name, 'Lactose Intolerance')
+        blockage = next(d for d in original.diagnosis_options if d.name == patient.diagnosis.name)
+        self.assertIsNot(blockage, patient.diagnosis)
+        self.assertTrue(blockage.rejection_reason)
+
+    def test_flump_case_requires_scans_and_gates_rejection_feedback(self):
+        from PatientData import create_luma
+        patient = create_luma()
+        self.assertEqual(patient.name, 'Flump')
+        self.assertEqual(patient.profile['Species'], 'Veloran')
+        self.assertEqual(patient.profile['Occupation'], 'Nebula Cartographer')
+        self.assertEqual(patient.medical_info['Normal temperature'], '60°F')
+        self.assertEqual(patient.medical_info['Digestion'], '2 stomachs; slow metabolism')
+        self.assertIn('60°F', patient.test_results['TEMPERATURE'])
+        self.assertEqual(patient.diagnosis.name, 'Air-Sac Compression')
+        self.assertEqual(len(patient.dialogue), 3)
+        self.assertEqual(set(patient.test_results), {t.name for t in create_test_catalog()})
+        self.assertEqual(len(patient.diagnosis_options), 5)
+        self.assertEqual(sum(d == patient.diagnosis for d in patient.diagnosis_options), 1)
+        pair = {'OXYGEN SCAN', 'ULTRASOUND'}
+        self.assertTrue(patient.has_supporting_evidence(pair))
+        for test_name in pair:
+            self.assertFalse(patient.has_supporting_evidence(set(patient.test_results) - {test_name}))
+        for diagnosis in patient.diagnosis_options:
+            self.assertTrue(diagnosis.description)
+            self.assertTrue(diagnosis.treatment)
+            if diagnosis != patient.diagnosis:
+                self.assertIsNone(diagnosis.get_rejection_reason(set()))
+                self.assertTrue(diagnosis.get_rejection_reason(diagnosis.rejection_tests))
+                for test_name in diagnosis.rejection_tests:
+                    self.assertIsNone(diagnosis.get_rejection_reason(diagnosis.rejection_tests - {test_name}))
+        self.assertEqual(create_titus().diagnosis.name, 'Acute Water Reaction')
+
     def test_flersch_case_and_evidence_require_both_tests(self):
         from PatientData import create_ember
         patient = create_ember()

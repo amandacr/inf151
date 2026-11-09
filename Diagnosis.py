@@ -446,3 +446,132 @@ DIAGNOSES = {
 }
 
 
+# These case-specific cards keep Dooski's findings and species precautions
+# separate from the same conditions used as distractors for other patients.
+DOOSKI_DIAGNOSES = {
+    'neural_oscillation_disorder': Diagnosis(
+        'Neural Oscillation Disorder',
+        'A repeating neurological feedback loop produces trembling and unstable movement.',
+        'Apply a Verdani-safe neural dampener and monitor resting motor signals.',
+        evidence_combinations=(('NEURAL SCAN', 'BLOOD CHEMISTRY'),),
+        rejection_reason='The Neural Scan detected no self-sustaining feedback loop or nerve damage.',
+        rejection_tests=('NEURAL SCAN',),
+    ),
+    'motor_spore_poisoning': Diagnosis(
+        'Motor-Spore Poisoning',
+        'Toxic spores interfere with motor signals, causing dizziness and trembling.',
+        'Remove spore exposure and administer a Verdani-safe spore-binding agent.',
+        evidence_combinations=(('TOXIN SCREEN', 'NEURAL SCAN'),),
+        rejection_reason='The Toxin Screen detected no motor-affecting spores, poisons, or foreign compounds.',
+        rejection_tests=('TOXIN SCREEN',),
+    ),
+    'mineral_energy_imbalance': Diagnosis(
+        'Mineral-Energy Imbalance',
+        'An imbalance in charged regulatory minerals destabilizes circulating energy, causing fatigue, dizziness, and intermittent trembling.',
+        'Administer a Verdani-safe mineral-balancing infusion and monitor the patient until readings stabilize.',
+        evidence_combinations=(('BLOOD CHEMISTRY', 'NEURAL SCAN'),),
+    ),
+    'respiratory_exchange_failure': Diagnosis(
+        'Respiratory Exchange Failure',
+        'Impaired gas exchange leaves tissues short of oxygen, causing fatigue and dizziness.',
+        'Provide Verdani-compatible respiratory support and stabilize gas exchange in both lungs.',
+        evidence_combinations=(('OXYGEN SCAN', 'ULTRASOUND'),),
+        rejection_reason='The Oxygen Scan shows normal gas exchange with no respiratory impairment.',
+        rejection_tests=('OXYGEN SCAN',),
+    ),
+    'inner_ear_crystal_displacement': Diagnosis(
+        'Inner-Ear Crystal Displacement',
+        'Displaced inner-ear balance crystals disrupt orientation, causing dizziness and unsteadiness.',
+        'Reposition the balance crystals with a guided nonmagnetic procedure and reassess balance.',
+        evidence_combinations=(('ULTRASOUND', 'NEURAL SCAN'),),
+        rejection_reason='Ultrasound shows both inner-ear balance crystals correctly positioned, with no unusual internal changes.',
+        rejection_tests=('ULTRASOUND',),
+    ),
+}
+
+
+
+# Flump's case-specific cards and evidence-gated rejection feedback.
+FLUMP_DIAGNOSES = {
+    'oxygen_carrier_deficiency': Diagnosis(
+        'Oxygen-Carrier Deficiency',
+        'Low levels of oxygen-carrying compounds in the blood leave tissues undersupplied, causing breathlessness and fatigue.',
+        'Restore oxygen-carrier levels with a Veloran-compatible infusion and monitor tissue oxygen delivery.',
+        evidence_combinations=(('BLOOD CHEMISTRY', 'OXYGEN SCAN'),),
+        rejection_reason='Blood Chemistry shows oxygen-carrying compounds within the normal species range.',
+        rejection_tests=('BLOOD CHEMISTRY',),
+    ),
+    'airway_obstruction': Diagnosis(
+        'Airway Obstruction',
+        'A blockage restricts airflow to the breathing sacs, causing shortness of breath and shallow breathing.',
+        'Locate and remove the airway blockage with a guided procedure, then monitor airflow to both breathing sacs.',
+        evidence_combinations=(('X-RAY', 'OXYGEN SCAN'),),
+        rejection_reason='X-ray shows clear main airways, with no foreign objects or structural blockages.',
+        rejection_tests=('X-RAY',),
+    ),
+    'air_sac_compression': Diagnosis(
+        'Air-Sac Compression',
+        'External pressure prevents the breathing sacs from fully expanding, reducing gas exchange and causing shallow breathing and fatigue.',
+        'Relieve pressure around the breathing sacs, provide Veloran-compatible breathing support, and monitor until both sacs expand normally.',
+        evidence_combinations=(('OXYGEN SCAN', 'ULTRASOUND'),),
+    ),
+    'sedative_toxin_exposure': Diagnosis(
+        'Sedative Toxin Exposure',
+        'A sedating compound slows normal body activity, causing sluggishness, fatigue, and shallow breathing.',
+        'Remove the exposure and administer a Veloran-safe toxin-binding agent while supporting breathing.',
+        evidence_combinations=(('TOXIN SCREEN', 'NEURAL SCAN'),),
+        rejection_reason='The Toxin Screen detected no sedative compounds, poisons, or foreign substances.',
+        rejection_tests=('TOXIN SCREEN',),
+    ),
+    'cardiac_rhythm_disorder': Diagnosis(
+        'Cardiac Rhythm Disorder',
+        'An irregular heartbeat disrupts circulation, reducing oxygen delivery and causing fatigue and shortness of breath.',
+        'Stabilize the heartbeat with a Veloran-compatible rhythm regulator and monitor circulation.',
+        evidence_combinations=(('ULTRASOUND', 'OXYGEN SCAN'),),
+        rejection_reason='Ultrasound shows normal heart rhythm and pumping.',
+        rejection_tests=('ULTRASOUND',),
+    ),
+}
+
+
+# Roldi's findings must not inherit Conmann's blockage-rejection message.
+ROLDI_DIAGNOSES = {
+    'lactose_intolerance': Diagnosis(
+        'Lactose Intolerance',
+        'The digestive chambers cannot process dairy sugars, causing bloating and discomfort after eating.',
+        'Remove dairy sugars from the diet and provide Craggan-compatible dietary support.',
+        evidence_combinations=(('BLOOD CHEMISTRY', 'ULTRASOUND'),),
+        rejection_reason='Blood Chemistry shows no buildup of unprocessed dairy sugars.',
+        rejection_tests=('BLOOD CHEMISTRY',),
+    ),
+    'foodborne_toxin_exposure': Diagnosis(
+        'Foodborne Toxin Exposure',
+        'Contaminated food introduces hazardous compounds that cause abdominal pain and loss of appetite.',
+        'Remove contaminated food and administer a Craggan-safe toxin-binding agent.',
+        evidence_combinations=(('TOXIN SCREEN', 'BLOOD CHEMISTRY'),),
+        rejection_reason='The Toxin Screen detected no foodborne toxins or hazardous contaminants.',
+        rejection_tests=('TOXIN SCREEN',),
+    ),
+    'fermentation_chamber_blockage': Diagnosis(
+        'Fermentation Chamber Blockage',
+        'A physical obstruction traps food and gas in a fermentation chamber, causing abdominal pressure, bloating, and loss of appetite.',
+        'Relieve pressure in the affected fermentation chamber and remove the obstruction with a guided, Craggan-safe procedure. Monitor until food passes normally.',
+        evidence_combinations=(('ULTRASOUND', 'X-RAY'),),
+    ),
+    'digestive_parasite_infestation': Diagnosis(
+        'Digestive Parasite Infestation',
+        'Organisms living in the digestive chambers cause swelling and interfere with normal digestion.',
+        'Administer a Craggan-safe antiparasitic treatment and monitor the affected chambers.',
+        evidence_combinations=(('ULTRASOUND', 'BLOOD CHEMISTRY'),),
+        rejection_reason='Ultrasound detected no organisms or parasite-related tissue changes.',
+        rejection_tests=('ULTRASOUND',),
+    ),
+    'fermentation_chamber_inflammation': Diagnosis(
+        'Fermentation Chamber Inflammation',
+        'Inflammation in a digestive chamber causes abdominal pain, bloating, and loss of appetite.',
+        'Provide Craggan-safe anti-inflammatory therapy and monitor digestive comfort and inflammatory markers.',
+        evidence_combinations=(('BLOOD CHEMISTRY', 'ULTRASOUND'),),
+        rejection_reason='Blood Chemistry shows inflammatory markers within the normal species range.',
+        rejection_tests=('BLOOD CHEMISTRY',),
+    ),
+}
