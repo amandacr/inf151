@@ -1248,6 +1248,11 @@ class ExaminationMixin:
             border_radius=5,
         )
 
+        asset = self.get_current_entry().get('asset')
+        if asset:
+            self.fit_patient_sprite(asset, portrait.inflate(-8, -8))
+            return
+
         head = pygame.Rect(portrait.centerx - 12, portrait.y + 11, 24, 22)
         body = pygame.Rect(portrait.centerx - 10, portrait.y + 31, 20, 23)
 

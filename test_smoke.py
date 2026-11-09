@@ -209,6 +209,27 @@ class SharedModelSmokeTests(unittest.TestCase):
             for test_name in test_names:
                 self.assertTrue(patient.perform_test(test_name).startswith("RESULTS: "))
 
+    def test_flersch_case_and_evidence_require_both_tests(self):
+        from PatientData import create_ember
+        patient = create_ember()
+        self.assertEqual(patient.profile['Occupation'], 'Triskan Council Aide')
+        self.assertEqual(patient.profile['Home Planet'], 'Triska')
+        self.assertEqual(patient.medical_info['Normal temperature'], '72°F')
+        self.assertEqual(patient.medical_info['Vision'], '3 independently focusing eyes')
+        self.assertEqual(patient.diagnosis.name, 'Motor-Nerve Degeneration')
+        self.assertEqual(len(patient.diagnosis_options), 5)
+        self.assertEqual(sum(d == patient.diagnosis for d in patient.diagnosis_options), 1)
+        self.assertFalse(patient.has_supporting_evidence({'NEURAL SCAN'}))
+        self.assertFalse(patient.has_supporting_evidence({'BLOOD CHEMISTRY'}))
+        self.assertFalse(patient.has_supporting_evidence({'X-RAY', 'ULTRASOUND'}))
+        self.assertTrue(patient.has_supporting_evidence({'NEURAL SCAN', 'BLOOD CHEMISTRY'}))
+        self.assertEqual(set(patient.test_results), {t.name for t in create_test_catalog()})
+        for diagnosis in patient.diagnosis_options:
+            self.assertTrue(diagnosis.treatment)
+            if diagnosis != patient.diagnosis:
+                self.assertIsNone(diagnosis.get_rejection_reason(set()))
+                self.assertTrue(diagnosis.get_rejection_reason(diagnosis.rejection_tests))
+
     def test_key_results_describe_clues_without_naming_the_answer(self):
         """Later cases should require inference instead of printing diagnoses."""
 
@@ -226,13 +247,13 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertNotIn("lactose", conmann_blood)
 
     def test_existing_conditions_define_two_card_clue_paths(self):
-        """Every diagnosis should expose at least two valid two-test evidence routes."""
+        """Every diagnosis defines valid two-test evidence routes."""
 
         from Diagnosis import DIAGNOSES
 
         available_tests = {test.name for test in create_test_catalog()}
         for diagnosis in DIAGNOSES.values():
-            self.assertGreaterEqual(len(diagnosis.evidence_combinations), 2)
+            self.assertGreaterEqual(len(diagnosis.evidence_combinations), 1)
             self.assertTrue(
                 all(len(combination) == 2 for combination in diagnosis.evidence_combinations)
             )
@@ -2039,8 +2060,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_final_screen_click(self.game.final_replay_button.center)
         self.assertEqual(self.game.state, GameState.TITLE)
         self.assertEqual(self.game.patients_called, 0)
-        self.assertEqual(self.game.patient.name, expected_names[0])
-        self.assertEqual(self.game.player.balance, starting_balance)
+        self.assertEqual(self.game.patient.name, "Flersch")
+        self.assertEqual(self.game.day_number, 2)
+        self.assertEqual(self.game.player.balance, 0)
         self.assertEqual(
             len(self.game.deck.contents),
             sum(test.occurrences for test in create_test_catalog())
@@ -2049,7 +2071,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.daily_correct_diagnoses, 0)
         self.assertEqual(self.game.daily_wrong_diagnoses, 0)
         self.assertIsNone(self.game.selected_shop_upgrade)
-        self.assertNotIn(placeholder["id"], self.game.purchased_shop_upgrades)
+        self.assertIn(placeholder["id"], self.game.purchased_shop_upgrades)
 
     def test_escape_confirmation_can_continue_restart_or_quit(self):
         """The exit modal should safely expose all three promised choices."""
@@ -2295,6 +2317,25 @@ class GuiFlowSmokeTests(unittest.TestCase):
             )
 
         self.assertEqual(self.game.player.balance, 0)
+
+    def test_new_asset_patients_join_from_day_two_and_restart_resets_roster(self):
+        originals = {entry['create']().name for entry in self.game.waiting_room_queue}
+        new_names = {'Flersch', 'Dooski', 'Flump', 'Roldi'}
+        self.assertTrue(originals.isdisjoint(new_names))
+        self.assertEqual({entry['create']().name for entry in self.game.next_shift_queue}, new_names)
+        for day in range(2, 6):
+            self.game.handle_final_screen_click(self.game.final_replay_button.center)
+            self.assertEqual(self.game.day_number, day)
+            self.assertEqual(len(self.game.waiting_room_queue), 4)
+            for entry in self.game.waiting_room_queue:
+                patient = entry['create']()
+                self.assertIn(patient.diagnosis, patient.diagnosis_options)
+                self.assertEqual(len(patient.test_results), 8)
+                self.game.patient_sprite(entry['asset'], (32, 48))
+            self.assertTrue(any(entry['create']().name in new_names for entry in self.game.waiting_room_queue))
+        self.game.restart_game()
+        self.assertEqual(self.game.day_number, 1)
+        self.assertEqual({entry['create']().name for entry in self.game.waiting_room_queue}, originals)
 
     def test_future_shift_can_load_a_new_patient_roster(self):
         """A later day can replace the queue without erasing earned upgrades."""

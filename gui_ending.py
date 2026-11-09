@@ -204,7 +204,7 @@ class EndingMixin:
 
         self.screen.fill(COLORS["background"])
         self.draw_game_logo((WINDOW_SIZE[0] // 2, 38), scale=0.86)
-        subtitle = self.small_font.render("DAY 2  //  RECEPTION", True, COLORS["muted"])
+        subtitle = self.small_font.render(f"DAY {self.day_number + 1}  //  RECEPTION", True, COLORS["muted"])
         self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_SIZE[0] // 2, 76)))
 
         self.draw_reception_room()
@@ -214,13 +214,14 @@ class EndingMixin:
         self.draw_reception_desk()
         self.draw_next_day_status()
 
-        has_roster = bool(self.next_shift_queue)
-        action_label = "START DAY 2" if has_roster else "REPLAY DAY 1"
+        upcoming_roster = self.next_shift_queue or self.later_shift_roster()
+        has_roster = bool(upcoming_roster)
+        action_label = f"START DAY {self.day_number + 1}" if has_roster else "REPLAY DAY 1"
         self.draw_ending_button(self.final_replay_button, action_label, False)
         self.draw_ending_button(self.final_quit_button, "QUIT GAME", True)
         hint = self.card_font.render(
             (
-                "New patient files received. Day 2 is ready to begin."
+                f"New patient files received. Day {self.day_number + 1} is ready to begin."
                 if has_roster
                 else "New patient files can be added to the Day 2 roster here."
             ),
@@ -238,10 +239,11 @@ class EndingMixin:
         display = status.inflate(-10, -10)
         pygame.draw.rect(self.screen, (5, 19, 24), display, border_radius=7)
 
-        has_roster = bool(self.next_shift_queue)
+        upcoming_roster = self.next_shift_queue or self.later_shift_roster()
+        has_roster = bool(upcoming_roster)
         status_color = COLORS["accent"] if has_roster else (255, 198, 75)
         pygame.draw.circle(self.screen, status_color, (display.x + 15, display.centery), 5)
-        day_label = self.body_font.render("DAY 2 RECEPTION", True, COLORS["text"])
+        day_label = self.body_font.render(f"DAY {self.day_number + 1} RECEPTION", True, COLORS["text"])
         roster_label = self.small_font.render(
             "PATIENT ROSTER READY" if has_roster else "NO PATIENTS SCHEDULED YET",
             True,
@@ -271,8 +273,8 @@ class EndingMixin:
         notice_body = self.small_font.render(
             (
                 (
-                    f"{len(self.next_shift_queue)} patient"
-                    f"{'s are' if len(self.next_shift_queue) != 1 else ' is'} waiting for Day 2."
+                    f"{len(upcoming_roster)} patient"
+                    f"{'s are' if len(upcoming_roster) != 1 else ' is'} waiting for Day {self.day_number + 1}."
                 )
                 if has_roster
                 else "The clinic is waiting for new patient files."
@@ -307,8 +309,8 @@ class EndingMixin:
 
         if self.final_replay_button.collidepoint(position):
             self.play_sfx("button")
-            if self.next_shift_queue:
-                next_roster = list(self.next_shift_queue)
+            if self.next_shift_queue or self.later_shift_roster():
+                next_roster = list(self.next_shift_queue or self.later_shift_roster())
                 self.next_shift_queue = []
                 self.start_next_shift(next_roster)
             else:
@@ -378,6 +380,7 @@ class EndingMixin:
 
         if not patient_queue:
             raise ValueError("A shift requires at least one patient.")
+        self.day_number += 1
         self.waiting_room_queue = list(patient_queue)
         self.ending_started_at = None
         self.exit_confirmation_open = False
@@ -399,7 +402,10 @@ class EndingMixin:
         self.ending_started_at = None
         self.exit_confirmation_open = False
         self.exit_confirmation_opened_at = None
-        self.start_next_shift(self.waiting_room_queue)
+        self.day_number = 0
+        self.next_shift_queue = []
+        self.start_next_shift(self.day_one_queue)
+        self.next_shift_queue = self.later_shift_roster()
         if restart_training:
             self.start_guided_tutorial()
 

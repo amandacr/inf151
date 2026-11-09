@@ -8,6 +8,8 @@ import random
 import pygame
 
 from Tests.catalog import create_test_catalog
+from gui_patient_assets import PatientAssetMixin
+from functools import partial
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
 from gui_card_shop import CardShopMixin
@@ -35,6 +37,7 @@ from Deck import Deck
 
 
 class CosmicClinicGUI(
+    PatientAssetMixin,
     AnimationMixin,
     AudioMixin,
     CardShopMixin,
@@ -101,9 +104,14 @@ class CosmicClinicGUI(
                 "portrait": ((240, 212, 196), (159, 70, 66), (226, 127, 91), (249, 170, 119)),
             },
         ]
-        # Future content can populate this roster without changing the ending
-        # flow. The final screen exposes a Day 2 start button automatically.
-        self.next_shift_queue = []
+        self.patient_sprite_cache = {}
+        self.day_number = 1
+        for entry, name in zip(self.waiting_room_queue, ('zorpa', 'zoogy', 'titus', 'conmann')):
+            entry['asset'] = name
+            entry['draw'] = partial(self.draw_waiting_asset, name, entry['chair_x'])
+            entry['exam'] = partial(self.draw_exam_asset, name)
+        self.day_one_queue = [dict(entry) for entry in self.waiting_room_queue]
+        self.next_shift_queue = self.later_shift_roster()
         self.patients_called = 0
         self.daily_correct_diagnoses = 0
         self.daily_wrong_diagnoses = 0

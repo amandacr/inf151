@@ -75,6 +75,46 @@ class Diagnosis:
         )
 
 DIAGNOSES = {
+    "motor_nerve_degeneration": Diagnosis(
+        "Motor-Nerve Degeneration",
+        "Progressive deterioration of the motor nerves delays and weakens "
+        "signals to the patient's three legs, causing dragging and buckling.",
+        "Begin Triskelid-safe nerve-repair therapy, support the legs during "
+        "recovery, and monitor motor-signal strength. Avoid copper-binding medications.",
+        evidence_combinations=(("NEURAL SCAN", "BLOOD CHEMISTRY"),),
+    ),
+    "third_leg_stress_fracture": Diagnosis(
+        "Third-Leg Stress Fracture",
+        "A small fracture in the third leg causes limping and instability.",
+        "Support the injured leg and apply species-compatible bone-repair resin.",
+        evidence_combinations=(("X-RAY", "ULTRASOUND"),),
+        rejection_reason="X-ray shows intact bones in all three legs, with no fracture or skeletal damage.",
+        rejection_tests=("X-RAY",),
+    ),
+    "muscle_mineral_depletion": Diagnosis(
+        "Muscle-Mineral Depletion",
+        "Insufficient muscle-supporting minerals cause weakness, cramps, and poor leg control.",
+        "Provide a balanced Triskelid mineral infusion and monitor muscle function.",
+        evidence_combinations=(("BLOOD CHEMISTRY", "NEURAL SCAN"),),
+        rejection_reason="Blood Chemistry shows normal muscle-mineral levels, ruling out mineral depletion.",
+        rejection_tests=("BLOOD CHEMISTRY",),
+    ),
+    "motor_spore_poisoning": Diagnosis(
+        "Motor-Spore Poisoning",
+        "Toxic spores interfere with motor signals and disrupt coordinated leg movement.",
+        "Remove spore exposure and administer a Triskelid-safe spore-binding agent.",
+        evidence_combinations=(("TOXIN SCREEN", "NEURAL SCAN"),),
+        rejection_reason="The Toxin Screen detected no motor-affecting spores, poisons, or foreign compounds.",
+        rejection_tests=("TOXIN SCREEN",),
+    ),
+    "circulatory_sludge_syndrome": Diagnosis(
+        "Circulatory Sludge Syndrome",
+        "Thickened blood impairs circulation and leaves the legs weak and sluggish.",
+        "Restore normal blood viscosity with a Triskelid-safe circulation infusion and monitor the central heart.",
+        evidence_combinations=(("BLOOD CHEMISTRY", "ULTRASOUND"),),
+        rejection_reason="Blood viscosity is normal, and Ultrasound shows no blockages or abnormal pooling in the legs.",
+        rejection_tests=("BLOOD CHEMISTRY", "ULTRASOUND"),
+    ),
     "hypothermia": Diagnosis(
         "Hypothermia",
         "The patient is suffering from hypothermia, a critically low body "

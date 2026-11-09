@@ -4,6 +4,82 @@ from Diagnosis import DIAGNOSES
 from Patient import Patient
 
 
+def _new_patient(factory, name, occupation, dialogue):
+    """A separate patient with a known species' established medical baseline."""
+    patient = factory()
+    patient.name = name
+    patient.profile['Occupation'] = occupation
+    patient.dialogue = dialogue
+    return patient
+
+
+def create_ember():
+    """Flersch's progressive motor-nerve case, introduced on day two."""
+    return Patient(
+        'Flersch', None, None,
+        'worsening leg coordination, delayed movement, dragging and buckling',
+        DIAGNOSES['motor_nerve_degeneration'],
+        {
+            'TEMPERATURE': 'Current temperature: 72°F, within the normal Triskelid range.',
+            'X-RAY': 'All three legs show intact bones, with no fractures or skeletal damage.',
+            'ULTRASOUND': 'Imaging shows no circulatory blockages or abnormal blood pooling in the legs.',
+            'ALLERGY': 'Allergy screening produced no reaction.',
+            'BLOOD CHEMISTRY': 'Markers of progressive nerve deterioration are elevated. Muscle-mineral levels and blood viscosity remain within the normal species baseline.',
+            'OXYGEN SCAN': 'Oxygen exchange and delivery to the leg tissues are within the normal species range.',
+            'TOXIN SCREEN': 'No motor-affecting spores, poisons, or foreign compounds were detected.',
+            'NEURAL SCAN': 'Motor pathways to all three legs show deteriorating signal strength and delayed transmission. The muscles respond normally when stimulated directly.',
+        },
+        profile={
+            'Species': 'Triskelid',
+            'Occupation': 'Triskan Council Aide',
+            'Home Planet': 'Triska',
+        },
+        medical_info={
+            'Circulation': '1 central heart; copper-based blood',
+            'Respiration': '2 lungs',
+            'Vision': '3 independently focusing eyes',
+            'Normal temperature': '72°F',
+            'Medical alert': 'Avoid copper-binding medications',
+        },
+        dialogue=(
+            'My feet keep missing the message.',
+            'One leg drags, then buckles. It barely hurts.',
+            'It has been getting worse each day.',
+        ),
+        diagnosis_options=(
+            DIAGNOSES['third_leg_stress_fracture'],
+            DIAGNOSES['muscle_mineral_depletion'],
+            DIAGNOSES['motor_nerve_degeneration'],
+            DIAGNOSES['motor_spore_poisoning'],
+            DIAGNOSES['circulatory_sludge_syndrome'],
+        ),
+    )
+
+
+def create_sprig():
+    return _new_patient(create_zoogy, 'Dooski', 'Orbital Gardener', (
+        'My whole frame keeps vibrating.',
+        'It gets worse when I grip my tools.',
+        'Even resting has not stopped the buzzing.',
+    ))
+
+
+def create_luma():
+    return _new_patient(create_titus, 'Flump', 'Nebula Cartographer', (
+        'My skin burns and I cannot stop trembling.',
+        'A cleaning sprinkler sprayed my workspace.',
+        'I have never had a reaction like this before.',
+    ))
+
+
+def create_pip():
+    return _new_patient(create_conmann, 'Roldi', 'Asteroid Baker', (
+        'My stomach is painfully bloated.',
+        'It started after tasting a new recipe.',
+        'I used a generous helping of moon-cheese.',
+    ))
+
+
 def create_zorpa():
     return Patient(
         "Zorpa Voidwalker",
