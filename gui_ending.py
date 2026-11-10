@@ -405,7 +405,7 @@ class EndingMixin:
         self.day_number = 0
         self.next_shift_queue = []
         self.start_next_shift(self.day_one_queue)
-        self.next_shift_queue = self.later_shift_roster()
+        self.next_shift_queue = [dict(entry) for entry in self.day_two_queue]
         if restart_training:
             self.start_guided_tutorial()
 

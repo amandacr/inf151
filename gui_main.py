@@ -111,7 +111,8 @@ class CosmicClinicGUI(
             entry['draw'] = partial(self.draw_waiting_asset, name, entry['chair_x'])
             entry['exam'] = partial(self.draw_exam_asset, name)
         self.day_one_queue = [dict(entry) for entry in self.waiting_room_queue]
-        self.next_shift_queue = self.later_shift_roster()
+        self.day_two_queue = [dict(entry) for entry in self.later_shift_roster()]
+        self.next_shift_queue = [dict(entry) for entry in self.day_two_queue]
         self.patients_called = 0
         self.daily_correct_diagnoses = 0
         self.daily_wrong_diagnoses = 0
@@ -237,7 +238,7 @@ class CosmicClinicGUI(
             "status_bar": pygame.Rect(30, 100, 1040, 50),
             "draw_deck": pygame.Rect(45, 180, 150, 175),
             "alien": pygame.Rect(233, 165, 230, 195),
-            "id_card": pygame.Rect(498, 180, 294, 155),
+            "id_card": pygame.Rect(483, 180, 324, 200),
             "throwaway": pygame.Rect(923, 423, 100, 125),
             "notebook": pygame.Rect(35, 395, 180, 165),
             "active_hand": pygame.Rect(225, 390, 625, 170),
@@ -256,7 +257,7 @@ class CosmicClinicGUI(
         self.compact_ui_font = pygame.font.SysFont("Arial", 12, bold=True)
         self.compact_card_title_font = pygame.font.SysFont("Arial", 11, bold=True)
         self.legible_micro_font = pygame.font.SysFont("Arial", 9, bold=True)
-        self.id_detail_font = pygame.font.SysFont("Arial", 11, bold=True)
+        self.id_detail_font = pygame.font.SysFont("Arial", 12, bold=True)
         self.notebook_preview_font = pygame.font.Font(None, 15)
         self.diagnosis_name_font = pygame.font.SysFont("Arial", 21, bold=True)
         self.diagnosis_card_font = pygame.font.SysFont("Arial", 13, bold=True)

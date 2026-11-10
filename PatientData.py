@@ -4,7 +4,7 @@ from Diagnosis import DIAGNOSES, DOOSKI_DIAGNOSES, FLUMP_DIAGNOSES, ROLDI_DIAGNO
 from Patient import Patient
 
 
-def create_ember():
+def create_flersch():
     """Flersch's progressive motor-nerve case, introduced on day two."""
     return Patient(
         'Flersch', None, None,
@@ -15,7 +15,7 @@ def create_ember():
             'X-RAY': 'All three legs show intact bones, with no fractures or skeletal damage.',
             'ULTRASOUND': 'Imaging shows no circulatory blockages or abnormal blood pooling in the legs.',
             'ALLERGY': 'Allergy screening produced no reaction.',
-            'BLOOD CHEMISTRY': 'Markers of progressive nerve deterioration are elevated. Muscle-mineral levels and blood viscosity remain within the normal species baseline.',
+            'BLOOD CHEMISTRY': 'Elevated axonal-protein fragments and irregular neural-enzyme levels were detected. Muscle-mineral levels and blood viscosity remain within the normal species baseline.',
             'OXYGEN SCAN': 'Oxygen exchange and delivery to the leg tissues are within the normal species range.',
             'TOXIN SCREEN': 'No motor-affecting spores, poisons, or foreign compounds were detected.',
             'NEURAL SCAN': 'Motor pathways to all three legs show deteriorating signal strength and delayed transmission. The muscles respond normally when stimulated directly.',
@@ -47,7 +47,7 @@ def create_ember():
     )
 
 
-def create_sprig():
+def create_dooski():
     """Dooski's mineral imbalance case, independent of Zoogy's crystal frame."""
     return Patient(
         'Dooski', None, None, 'fatigue, dizziness, intermittent trembling',
@@ -83,7 +83,7 @@ def create_sprig():
     )
 
 
-def create_luma():
+def create_flump():
     """Flump's breathing-sac case, introduced with the day-two patients."""
     return Patient(
         'Flump', None, None, 'shortness of breath, shallow breathing, fatigue',
@@ -104,11 +104,11 @@ def create_luma():
             'Home Planet': 'Velora',
         },
         medical_info={
-            'Circulation': '1 heart; violet oxygen-carrying blood',
-            'Respiration': '2 expandable breathing sacs',
+            'Circulation': '1 heart; violet oxygen blood',
+            'Respiration': '2 expandable air sacs',
             'Digestion': '2 stomachs; slow metabolism',
             'Normal temperature': '60°F',
-            'Medical alert': 'Avoid high-pressure environments',
+            'Medical alert': 'Avoid high pressure',
         },
         dialogue=(
             "I can't seem to take a full breath.",
@@ -119,7 +119,7 @@ def create_luma():
     )
 
 
-def create_pip():
+def create_roldi():
     """Roldi's obstructed fermentation chamber, distinct from Conmann's case."""
     return Patient(
         'Roldi', None, None, 'abdominal pressure, bloating, loss of appetite',

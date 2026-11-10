@@ -210,8 +210,8 @@ class SharedModelSmokeTests(unittest.TestCase):
                 self.assertTrue(patient.perform_test(test_name).startswith("RESULTS: "))
 
     def test_dooski_case_requires_complementary_clues_and_preserves_other_patients(self):
-        from PatientData import create_sprig, create_ember
-        patient = create_sprig()
+        from PatientData import create_dooski, create_flersch
+        patient = create_dooski()
         self.assertEqual(patient.name, 'Dooski')
         self.assertEqual(patient.profile, {
             'Species': 'Verdani', 'Occupation': 'Space Station Horticulturist',
@@ -237,12 +237,12 @@ class SharedModelSmokeTests(unittest.TestCase):
                 self.assertIsNone(diagnosis.get_rejection_reason(set()))
                 self.assertTrue(diagnosis.get_rejection_reason(diagnosis.rejection_tests))
         self.assertIn('Arcedian', create_zoogy().diagnosis_options[-1].rejection_reason)
-        self.assertIn('Triskelid', create_ember().diagnosis_options[3].treatment)
+        self.assertIn('Triskelid', create_flersch().diagnosis_options[3].treatment)
         self.assertIn('Verdani', patient.diagnosis_options[1].treatment)
 
     def test_roldi_case_requires_imaging_and_preserves_conmann(self):
-        from PatientData import create_pip
-        patient = create_pip()
+        from PatientData import create_roldi
+        patient = create_roldi()
         self.assertEqual(patient.name, 'Roldi')
         self.assertEqual(patient.profile['Species'], 'Craggan')
         self.assertEqual(patient.profile['Occupation'], 'Space Station Baker')
@@ -271,8 +271,8 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertTrue(blockage.rejection_reason)
 
     def test_flump_case_requires_scans_and_gates_rejection_feedback(self):
-        from PatientData import create_luma
-        patient = create_luma()
+        from PatientData import create_flump
+        patient = create_flump()
         self.assertEqual(patient.name, 'Flump')
         self.assertEqual(patient.profile['Species'], 'Veloran')
         self.assertEqual(patient.profile['Occupation'], 'Nebula Cartographer')
@@ -299,8 +299,8 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertEqual(create_titus().diagnosis.name, 'Acute Water Reaction')
 
     def test_flersch_case_and_evidence_require_both_tests(self):
-        from PatientData import create_ember
-        patient = create_ember()
+        from PatientData import create_flersch
+        patient = create_flersch()
         self.assertEqual(patient.profile['Occupation'], 'Triskan Council Aide')
         self.assertEqual(patient.profile['Home Planet'], 'Triska')
         self.assertEqual(patient.medical_info['Normal temperature'], '72°F')
@@ -312,6 +312,10 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertFalse(patient.has_supporting_evidence({'BLOOD CHEMISTRY'}))
         self.assertFalse(patient.has_supporting_evidence({'X-RAY', 'ULTRASOUND'}))
         self.assertTrue(patient.has_supporting_evidence({'NEURAL SCAN', 'BLOOD CHEMISTRY'}))
+        blood_result = patient.test_results['BLOOD CHEMISTRY'].lower()
+        self.assertNotIn('degeneration', blood_result)
+        self.assertNotIn('deterioration', blood_result)
+        self.assertIn('axonal-protein fragments', blood_result)
         self.assertEqual(set(patient.test_results), {t.name for t in create_test_catalog()})
         for diagnosis in patient.diagnosis_options:
             self.assertTrue(diagnosis.treatment)
@@ -1322,7 +1326,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             )
 
     def test_patient_id_details_fit_the_larger_readable_font(self):
-        """Every current profile and medical line should fit the widened ID card."""
+        """Wrapped ID details should stay readable and above the flip control."""
 
         panel = self.game.layout["id_card"]
         card = pygame.Rect(
@@ -1332,14 +1336,30 @@ class GuiFlowSmokeTests(unittest.TestCase):
             panel.height - 18,
         )
         available_width = card.right - 10 - (card.x + 70)
-        for entry in self.game.waiting_room_queue:
+        available_height = (card.bottom - 23) - (card.y + 43)
+        for entry in self.game.day_one_queue + self.game.day_two_queue:
             patient = entry["create"]()
-            rows = [("Name", patient.name)] + list(patient.profile.items())
-            rows.extend(patient.medical_info.items())
-            for label, value in rows:
+            for rows in (
+                [("Name", patient.name)] + list(patient.profile.items()),
+                list(patient.medical_info.items()),
+            ):
+                wrapped_lines = []
+                for label, value in rows:
+                    wrapped_lines.extend(
+                        self.game.wrap_text(
+                            f"{label}: {value}",
+                            self.game.id_detail_font,
+                            available_width,
+                        )
+                    )
+                self.assertTrue(wrapped_lines)
+                self.assertTrue(all(
+                    self.game.id_detail_font.size(line)[0] <= available_width
+                    for line in wrapped_lines
+                ))
                 self.assertLessEqual(
-                    self.game.id_detail_font.size(f"{label}: {value}")[0],
-                    available_width,
+                    len(wrapped_lines) * self.game.id_detail_font.get_linesize(),
+                    available_height,
                 )
 
     def test_gameplay_help_pauses_timers_and_works_on_ending_screens(self):
@@ -1489,6 +1509,32 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.jump_to_developer_screen(
             self.game.get_developer_scene_index("patient_2")
         )
+        self.assertEqual(len(self.game.deck.contents), 43)
+
+    def test_f10_navigator_selects_day_two_without_duplicating_checkpoints(self):
+        """Day tabs should relabel and open the four Day 2 patient checkpoints."""
+
+        self.game.toggle_developer_navigator()
+        self.assertTrue(self.game.developer_navigator_open)
+        self.game.handle_developer_click(self.game.get_developer_day_rects()[1].center)
+        self.assertEqual(self.game.developer_selected_day, 2)
+        self.assertTrue(self.game.developer_navigator_open)
+        self.assertIn(
+            "FLERSCH",
+            self.game.get_developer_checkpoint_label("patient_1", "PATIENT 1"),
+        )
+
+        self.game.handle_developer_click(self.game.get_developer_screen_rects()[2].center)
+        self.assertFalse(self.game.developer_navigator_open)
+        self.assertEqual(self.game.day_number, 2)
+        self.assertEqual(self.game.state, GameState.PATIENT)
+        self.assertEqual(self.game.patient.name, "Flersch")
+        self.assertEqual(len(self.game.player.test_hand), 5)
+        self.game.draw()
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("patient_2")
+        )
+        self.assertEqual(self.game.patient.name, "Dooski")
         self.assertEqual(len(self.game.deck.contents), 43)
 
     def test_test_cards_accumulate_end_of_day_operating_expenses(self):
@@ -2410,8 +2456,14 @@ class GuiFlowSmokeTests(unittest.TestCase):
     def test_new_asset_patients_join_from_day_two_and_restart_resets_roster(self):
         originals = {entry['create']().name for entry in self.game.waiting_room_queue}
         new_names = {'Flersch', 'Dooski', 'Flump', 'Roldi'}
+        expected_serials = {'TRI-031-FL', 'VRD-112-DS', 'VEL-064-FP', 'CRG-209-RD'}
         self.assertTrue(originals.isdisjoint(new_names))
         self.assertEqual({entry['create']().name for entry in self.game.next_shift_queue}, new_names)
+        self.assertEqual({entry['serial'] for entry in self.game.day_two_queue}, expected_serials)
+        self.assertEqual(
+            {entry['asset'] for entry in self.game.day_two_queue},
+            {'flersch', 'dooski', 'flump', 'roldi'},
+        )
         for day in range(2, 6):
             self.game.handle_final_screen_click(self.game.final_replay_button.center)
             self.assertEqual(self.game.day_number, day)
@@ -2425,6 +2477,55 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.restart_game()
         self.assertEqual(self.game.day_number, 1)
         self.assertEqual({entry['create']().name for entry in self.game.waiting_room_queue}, originals)
+
+    def test_complete_day_two_shift_reaches_recap_with_all_new_patients(self):
+        """Automatically play all four Day 2 cases to guard the full shift loop."""
+
+        self.game.start_next_shift([dict(entry) for entry in self.game.day_two_queue])
+        expected_names = ['Flersch', 'Dooski', 'Flump', 'Roldi']
+        self.assertEqual(self.game.day_number, 2)
+        self.assertEqual(
+            [entry['create']().name for entry in self.game.waiting_room_queue],
+            expected_names,
+        )
+
+        for index, expected_name in enumerate(expected_names):
+            self.assertEqual(self.game.patient.name, expected_name)
+            self.game.begin_reception_transition()
+            self.game.reception_transition_started_at = (
+                pygame.time.get_ticks() - self.game.reception_transition_duration - 1
+            )
+            self.game.update()
+            self.assertEqual(self.game.state, GameState.PATIENT)
+
+            self.game.switch_active_hand(True)
+            self.game.selected_card_index = next(
+                card_index
+                for card_index, card in enumerate(self.game.player.diagnosis_hand)
+                if card.value == self.game.patient.diagnosis
+            )
+            self.game.play_selected_diagnosis()
+            self.assertTrue(self.game.diagnosis_correct)
+            self.game.handle_outcome_click(self.game.outcome_button.center)
+
+            if index < len(expected_names) - 1:
+                self.assertEqual(self.game.state, GameState.TITLE)
+                self.game.queue_shift_started_at = (
+                    pygame.time.get_ticks() - self.game.queue_shift_duration - 1
+                )
+                self.game.update()
+
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertIsNotNone(self.game.end_day_shutdown_started_at)
+        self.game.end_day_shutdown_started_at = (
+            pygame.time.get_ticks() - self.game.end_day_shutdown_duration - 1
+        )
+        self.game.update()
+
+        self.assertEqual(self.game.state, GameState.DAY_COMPLETE)
+        self.assertEqual(self.game.daily_correct_diagnoses, 4)
+        self.assertEqual(self.game.daily_wrong_diagnoses, 0)
+        self.game.draw()
 
     def test_future_shift_can_load_a_new_patient_roster(self):
         """A later day can replace the queue without erasing earned upgrades."""

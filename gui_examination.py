@@ -1208,16 +1208,24 @@ class ExaminationMixin:
         portrait = pygame.Rect(card.x + 11, card.y + 43, 51, 63)
         self.draw_id_portrait(portrait, self.showing_health_id)
 
+        detail_x = card.x + 70
         detail_y = card.y + 43
+        available_width = card.right - 10 - detail_x
+        detail_line_height = self.id_detail_font.get_linesize()
         for label, value in details:
             detail_text = f"{label}: {value}"
-            detail_font = self.id_detail_font
-            available_width = card.right - 10 - (card.x + 70)
-            if detail_font.size(detail_text)[0] > available_width:
-                detail_font = self.legible_micro_font
-            detail = detail_font.render(detail_text, True, (72, 101, 91))
-            self.screen.blit(detail, (card.x + 70, detail_y))
-            detail_y += 15
+            for detail_line in self.wrap_text(
+                detail_text,
+                self.id_detail_font,
+                available_width,
+            ):
+                detail = self.id_detail_font.render(
+                    detail_line,
+                    True,
+                    (72, 101, 91),
+                )
+                self.screen.blit(detail, (detail_x, detail_y))
+                detail_y += detail_line_height
 
         serial = self.legible_micro_font.render(
             self.get_current_entry()["serial"],

@@ -5,7 +5,15 @@ from pathlib import Path
 
 import pygame
 
-from PatientData import create_ember, create_sprig, create_luma, create_pip
+from PatientData import create_dooski, create_flersch, create_flump, create_roldi
+
+
+DAY_TWO_PATIENTS = (
+    ("flersch", create_flersch, "TRI-031-FL"),
+    ("dooski", create_dooski, "VRD-112-DS"),
+    ("flump", create_flump, "VEL-064-FP"),
+    ("roldi", create_roldi, "CRG-209-RD"),
+)
 
 
 class PatientAssetMixin:
@@ -41,9 +49,9 @@ class PatientAssetMixin:
         """Cycle through all eight patients in four-chair shifts after day one."""
         originals = list(self.day_one_queue)
         newcomers = []
-        for index, (name, factory) in enumerate((('ember', create_ember), ('sprig', create_sprig), ('luma', create_luma), ('pip', create_pip))):
+        for index, (name, factory, serial) in enumerate(DAY_TWO_PATIENTS):
             entry = dict(originals[index])
-            entry.update(create=factory, asset=name, serial=f'NEW-{index + 1:03}',
+            entry.update(create=factory, asset=name, serial=serial,
                          draw=partial(self.draw_waiting_asset, name, entry['chair_x']),
                          exam=partial(self.draw_exam_asset, name))
             newcomers.append(entry)

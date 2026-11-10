@@ -40,6 +40,8 @@ class DeveloperMixin:
     def setup_developer_navigator(self):
         self.developer_navigator_open = False
         self.developer_button_rects = []
+        self.developer_day_button_rects = []
+        self.developer_selected_day = 1
         self.developer_scene_id = None
 
     def toggle_developer_navigator(self):
@@ -47,6 +49,7 @@ class DeveloperMixin:
 
         self.developer_navigator_open = not self.developer_navigator_open
         if self.developer_navigator_open:
+            self.developer_selected_day = 2 if self.day_number >= 2 else 1
             self.developer_scene_id = self.infer_developer_scene_id()
             self.finish_guided_tutorial()
             self.tutorial_open = False
@@ -87,10 +90,32 @@ class DeveloperMixin:
         """Return the stable two-column checkpoint-directory layout."""
 
         return [
-            pygame.Rect(92 + column * 458, 183 + row * 72, 432, 56)
+            pygame.Rect(92 + column * 458, 202 + row * 72, 432, 56)
             for row in range(5)
             for column in range(2)
         ]
+
+    def get_developer_day_rects(self):
+        """Return compact roster tabs without duplicating every checkpoint."""
+
+        return (
+            pygame.Rect(350, 158, 190, 34),
+            pygame.Rect(560, 158, 190, 34),
+        )
+
+    def get_developer_roster(self, day_number=None):
+        """Return a stable Day 1 or Day 2 roster for preview checkpoints."""
+
+        selected_day = day_number or self.developer_selected_day
+        return self.day_one_queue if selected_day == 1 else self.day_two_queue
+
+    def select_developer_day(self, day_number):
+        """Switch the patient labels shown by the compact navigator."""
+
+        if day_number not in (1, 2):
+            raise ValueError("The developer navigator only previews Day 1 or Day 2.")
+        self.developer_selected_day = day_number
+        self.play_sfx("button")
 
     def get_developer_scene_index(self, scene_id):
         """Return the directory position for a stable scene identifier."""
@@ -104,6 +129,9 @@ class DeveloperMixin:
     def handle_developer_key(self, key):
         """Navigate by number or cycle screens with the arrow keys."""
 
+        if key == pygame.K_d:
+            self.select_developer_day(2 if self.developer_selected_day == 1 else 1)
+            return
         if key in DEVELOPER_KEY_MAP:
             self.jump_to_developer_screen(
                 self.get_developer_scene_index(DEVELOPER_KEY_MAP[key])
@@ -128,6 +156,10 @@ class DeveloperMixin:
     def handle_developer_click(self, position):
         """Jump to the clicked preview destination."""
 
+        for day_number, rect in enumerate(self.get_developer_day_rects(), start=1):
+            if rect.collidepoint(position):
+                self.select_developer_day(day_number)
+                return
         for index, rect in enumerate(self.get_developer_screen_rects()):
             if rect.collidepoint(position):
                 self.jump_to_developer_screen(index)
@@ -159,7 +191,7 @@ class DeveloperMixin:
             self.intro_started_at = pygame.time.get_ticks()
             self.intro_wake_active = False
         elif scene_id == "reception":
-            self.restart_game()
+            self.prepare_developer_campaign_day()
             self.state = GameState.TITLE
         elif scene_id.startswith("patient_"):
             patient_index = int(scene_id.rsplit("_", 1)[-1]) - 1
@@ -182,14 +214,15 @@ class DeveloperMixin:
     def prepare_developer_patient_checkpoint(self, patient_index):
         """Start a fresh shift directly inside one selected patient encounter."""
 
-        if not 0 <= patient_index < len(self.waiting_room_queue):
+        selected_roster = self.get_developer_roster()
+        if not 0 <= patient_index < len(selected_roster):
             raise IndexError("Developer patient checkpoint is outside the roster.")
 
         # Rebuild the campaign and repopulate once more before selecting the
         # requested alien. This discards the temporary reception hand created
         # by restart_game, so the checkpoint always begins with one clean
         # five-card deal from a complete deck instead of draining live state.
-        self.restart_game()
+        self.prepare_developer_campaign_day()
         self.deck.populate(create_test_catalog())
         self.patients_called = patient_index
         self.reset_round(recycle_unused_cards=False)
@@ -201,7 +234,7 @@ class DeveloperMixin:
     def prepare_developer_shift_checkpoint(self):
         """Build a consistent completed-shift state for late-game checkpoints."""
 
-        self.restart_game()
+        self.prepare_developer_campaign_day()
         self.patients_called = len(self.waiting_room_queue)
         self.daily_correct_diagnoses = len(self.waiting_room_queue)
         self.daily_test_count = len(self.waiting_room_queue) * 2
@@ -209,15 +242,24 @@ class DeveloperMixin:
         self.daily_evidence_cases = len(self.waiting_room_queue)
         self.daily_payout_applied = False
 
+    def prepare_developer_campaign_day(self):
+        """Reset safely, then load the selected preview roster when needed."""
+
+        self.restart_game()
+        if self.developer_selected_day == 2:
+            self.start_next_shift([dict(entry) for entry in self.day_two_queue])
+            self.next_shift_queue = []
+
     def get_developer_checkpoint_label(self, scene_id, label):
         """Add the current roster name to patient checkpoint buttons."""
 
         if not scene_id.startswith("patient_"):
             return label
         patient_index = int(scene_id.rsplit("_", 1)[-1]) - 1
-        if not 0 <= patient_index < len(self.waiting_room_queue):
+        roster = self.get_developer_roster()
+        if not 0 <= patient_index < len(roster):
             return label
-        patient_name = self.waiting_room_queue[patient_index]["create"]().name
+        patient_name = roster[patient_index]["create"]().name
         return f"{label}  •  {patient_name.upper()}"
 
     def draw_developer_navigator(self):
@@ -227,23 +269,35 @@ class DeveloperMixin:
         dim.fill((2, 6, 12, 224))
         self.screen.blit(dim, (0, 0))
 
-        panel = pygame.Rect(65, 74, 970, 510)
+        panel = pygame.Rect(65, 52, 970, 545)
         pygame.draw.rect(self.screen, (3, 8, 13), panel.move(8, 9), border_radius=18)
         pygame.draw.rect(self.screen, (27, 29, 45), panel, border_radius=18)
         pygame.draw.rect(self.screen, (187, 137, 211), panel, width=3, border_radius=18)
 
         tag = self.card_font.render("DEVELOPER TOOL", True, (216, 159, 238))
-        self.screen.blit(tag, tag.get_rect(center=(panel.centerx, panel.y + 28)))
+        self.screen.blit(tag, tag.get_rect(center=(panel.centerx, panel.y + 24)))
         heading = self.heading_font.render("CHECKPOINT NAVIGATOR", True, COLORS["text"])
-        self.screen.blit(heading, heading.get_rect(center=(panel.centerx, panel.y + 58)))
+        self.screen.blit(heading, heading.get_rect(center=(panel.centerx, panel.y + 52)))
         hint = self.card_font.render(
-            "CLICK A CHECKPOINT OR USE ITS KEY  •  LEFT/RIGHT CYCLES  •  F10 CLOSES",
+            "CHOOSE A DAY, THEN A CHECKPOINT  •  D SWITCHES DAY  •  F10 CLOSES",
             True,
             COLORS["muted"],
         )
-        self.screen.blit(hint, hint.get_rect(center=(panel.centerx, panel.y + 88)))
+        self.screen.blit(hint, hint.get_rect(center=(panel.centerx, panel.y + 80)))
 
         mouse_position = self.get_mouse_position()
+        self.developer_day_button_rects = self.get_developer_day_rects()
+        for day_number, rect in enumerate(self.developer_day_button_rects, start=1):
+            selected = day_number == self.developer_selected_day
+            hovered = rect.collidepoint(mouse_position)
+            border = COLORS["accent"] if selected else (216, 159, 238)
+            fill = (19, 54, 49) if selected else (50, 37, 68) if hovered else (21, 27, 39)
+            pygame.draw.rect(self.screen, (3, 8, 13), rect.move(2, 3), border_radius=8)
+            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+            pygame.draw.rect(self.screen, border, rect, width=2, border_radius=8)
+            day_label = self.small_font.render(f"DAY {day_number}", True, COLORS["text"])
+            self.screen.blit(day_label, day_label.get_rect(center=rect.center))
+
         self.developer_button_rects = self.get_developer_screen_rects()
         current_index = self.get_current_developer_scene_index()
         for index, ((shortcut, scene_id, label, _target_state), rect) in enumerate(zip(
