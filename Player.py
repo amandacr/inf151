@@ -6,13 +6,13 @@ from Test import get_test_cost as get_base_test_cost
 STARTING_BALANCE = 100
 DIAGNOSIS_REWARD = 50
 LIMITED_EVIDENCE_REWARD = 10
-WRONG_DIAGNOSIS_PENALTY = 25
+WRONG_DIAGNOSIS_PENALTY = 35
 DRAW_COST = 5
 STARTING_TEST_HAND_SIZE = 5
 MAX_TEST_HAND_SIZE = 8
 PERFECT_DAY_BONUS = 25
 CLINIC_OPERATING_FEE = 50
-RETURN_PASSAGE_COST = 1000
+RETURN_PASSAGE_COST = 400
 PATIENT_WALKOUT_THRESHOLD = 2
 PATIENT_LEAVES_CHANCE = 0.25
 
@@ -42,6 +42,8 @@ class Player:
         """
         self.name = name
         self.machine_levels = {}
+        self.free_test_machines = set()
+        self.free_tests_used = set()
         self.test_discount = 0
         self.balance = STARTING_BALANCE
         self.test_hand = []
@@ -69,9 +71,16 @@ class Player:
         return self.machine_levels.get(getattr(test, "name", ""), 1)
 
     def get_test_cost(self, test):
+        if test.name in self.free_test_machines and test.name not in self.free_tests_used:
+            return 0
         base = get_base_test_cost(test)
         level = self.get_machine_level(test)
         return max(1, (base + 1) // 2 - self.test_discount) if level > 1 else max(1, base - self.test_discount)
+
+    def consume_test_use(self, test):
+        """Consume the free allowance only when a machine actually runs."""
+        if test.name in self.free_test_machines:
+            self.free_tests_used.add(test.name)
 
     def draw(self, card):
         self.test_hand.append(card)

@@ -266,7 +266,7 @@ class TutorialMixin:
                 False,
             ),
             "diagnosis_play": ("Submit the selected condition as your diagnosis.", pygame.Rect(650, 173, 400, 92), False),
-            "diagnosis_confirm": ("Confirm when you are ready. Incorrect diagnoses cost $25, and repeated mistakes may cause a patient to leave.", pygame.Rect(350, 38, 400, 104), False),
+            "diagnosis_confirm": (f"Confirm when you are ready. Incorrect diagnoses cost ${WRONG_DIAGNOSIS_PENALTY}, and repeated mistakes may cause a patient to leave.", pygame.Rect(350, 38, 400, 104), False),
             "complete": ("Correct and fully supported. Matching evidence protects patients—and earns full case pay.", pygame.Rect(350, 12, 400, 104), True),
         }
         return prompts.get(self.guided_tutorial_step)
@@ -564,7 +564,7 @@ class TutorialMixin:
             ),
             GameState.SHOP: (
                 "SUPPLY SHOP",
-                "Buy permanent test-cost upgrades. Your money and installed upgrades carry between planets.",
+                "Buy upgrades that carry between planets, or save for Return Passage after the final shift.",
             ),
             GameState.ROUTE_BRIEFING: (
                 "ROUTE BRIEFING",
@@ -575,7 +575,7 @@ class TutorialMixin:
                 (
                     "The clinic is traveling to its next destination. Click or press Enter to skip the journey."
                     if self.route.arrival_pending
-                    else "The configured route is complete. Click or press Enter to skip the final departure."
+                    else "Your ticket is paid. The UFO is taking you home." if not self.can_skip_ending() else "The configured route is complete. Click or press Enter to continue."
                 ),
             ),
             GameState.ARRIVAL: (

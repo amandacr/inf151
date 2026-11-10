@@ -139,6 +139,7 @@ class CosmicClinicGUI(
         self.hovered_card_index = None
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
+        self.recycler_used = False
         self.selected_card_index = None
         self.run_test_button = None
         self.discard_button = None
@@ -360,7 +361,7 @@ class CosmicClinicGUI(
                 elif self.state == GameState.ROUTE_BRIEFING:
                     self.play_sfx("button")
                     self.advance_route_briefing()
-                elif self.state == GameState.ENDING:
+                elif self.state == GameState.ENDING and self.can_skip_ending():
                     self.play_sfx("button")
                     self.finish_ending_sequence()
                 elif self.state == GameState.ARRIVAL:
@@ -450,7 +451,8 @@ class CosmicClinicGUI(
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE) and self.state == GameState.ROUTE_BRIEFING:
                     self.play_sfx("button")
                     self.advance_route_briefing()
-                elif event.key == pygame.K_RETURN and self.state == GameState.ENDING:
+                elif (event.key == pygame.K_RETURN and self.state == GameState.ENDING
+                      and self.can_skip_ending()):
                     self.play_sfx("button")
                     self.finish_ending_sequence()
                 elif event.key == pygame.K_RETURN and self.state == GameState.ARRIVAL:
@@ -676,6 +678,7 @@ class CosmicClinicGUI(
     def reset_day(self):
         """Refill the patient queue and draw deck while preserving earned money."""
 
+        self.player.free_tests_used.clear()
         self.patients_called = 0
         self.queue_shift_started_at = None
         self.end_day_shutdown_started_at = None
@@ -729,10 +732,14 @@ class CosmicClinicGUI(
         self.patient_dialogue_index = 0
         machine_levels = self.player.machine_levels.copy()
         test_discount = self.player.test_discount
+        free_test_machines = self.player.free_test_machines.copy()
+        free_tests_used = self.player.free_tests_used.copy()
         self.player = Player(self.player.name)
         self.player.balance = current_balance
         self.player.machine_levels = machine_levels
         self.player.test_discount = test_discount
+        self.player.free_test_machines = free_test_machines
+        self.player.free_tests_used = free_tests_used
         if self.patient.diagnosis_options:
             self.player.set_diagnosis_hand(self.patient.diagnosis_options)
         self.deck.shuffle_cards(self.player.diagnosis_hand)
@@ -745,6 +752,7 @@ class CosmicClinicGUI(
         self.notebook_preview_last_tick = pygame.time.get_ticks()
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
+        self.recycler_used = False
         self.selected_card_index = None
         self.run_test_button = None
         self.discard_button = None

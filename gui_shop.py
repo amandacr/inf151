@@ -17,33 +17,52 @@ from Player import (
 
 
 SHOP_UPGRADES = (
-    {"id": "temperature", "name": "THERMAL CALIBRATION", "category": "TEMPERATURE", "cost": 125,
+    {"id": "temperature", "name": "THERMAL CALIBRATION", "category": "TEMPERATURE", "cost": 25,
      "description": "Level 2: temperature tests cost 50% less.", "machine": "TEMPERATURE"},
-    {"id": "xray", "name": "FOCUSED X-RAY", "category": "X-RAY", "cost": 125,
+    {"id": "xray", "name": "FOCUSED X-RAY", "category": "X-RAY", "cost": 25,
      "description": "Level 2: X-ray tests cost 50% less.", "machine": "X-RAY"},
-    {"id": "ultrasound", "name": "SONIC AMPLIFIER", "category": "ULTRASOUND", "cost": 175,
+    {"id": "ultrasound", "name": "SONIC AMPLIFIER", "category": "ULTRASOUND", "cost": 35,
      "description": "Level 2: ultrasound tests cost 50% less.", "machine": "ULTRASOUND"},
-    {"id": "allergy", "name": "ALLERGEN ANALYZER", "category": "ALLERGY", "cost": 200,
+    {"id": "allergy", "name": "ALLERGEN ANALYZER", "category": "ALLERGY", "cost": 45,
      "description": "Level 2: allergy tests cost 50% less.", "machine": "ALLERGY"},
-    {"id": "blood", "name": "PLASMA SEPARATOR", "category": "BLOOD CHEMISTRY", "cost": 125,
+    {"id": "blood", "name": "PLASMA SEPARATOR", "category": "BLOOD CHEMISTRY", "cost": 25,
      "description": "Level 2: blood chemistry tests cost 50% less.", "machine": "BLOOD CHEMISTRY"},
-    {"id": "oxygen", "name": "RESPIRATORY TUNER", "category": "OXYGEN SCAN", "cost": 125,
+    {"id": "oxygen", "name": "RESPIRATORY TUNER", "category": "OXYGEN SCAN", "cost": 25,
      "description": "Level 2: oxygen scans cost 50% less.", "machine": "OXYGEN SCAN"},
-    {"id": "toxin", "name": "TOXIN SPECTROMETER", "category": "TOXIN SCREEN", "cost": 175,
+    {"id": "toxin", "name": "TOXIN SPECTROMETER", "category": "TOXIN SCREEN", "cost": 35,
      "description": "Level 2: toxin screens cost 50% less.", "machine": "TOXIN SCREEN"},
-    {"id": "neural", "name": "SYNAPSE MAPPER", "category": "NEURAL SCAN", "cost": 200,
+    {"id": "neural", "name": "SYNAPSE MAPPER", "category": "NEURAL SCAN", "cost": 45,
      "description": "Level 2: neural scans cost 50% less.", "machine": "NEURAL SCAN"},
-    {"id": "power", "name": "EFFICIENT POWER CORE", "category": "ALL MACHINES", "cost": 150,
+    {"id": "power", "name": "EFFICIENT POWER CORE", "category": "ALL MACHINES", "cost": 40,
      "description": "Every test costs $2 less. Stacks with calibrations.", "discount": 2},
-    {"id": "smart_cards", "name": "SMART TEST CARDS", "category": "CARD UPGRADE", "cost": 100,
+    {"id": "smart_cards", "name": "SMART TEST CARDS", "category": "CARD UPGRADE", "cost": 25,
      "description": "Every test costs $1 less. Stacks with upgrades.", "discount": 1},
     {"id": "return_passage", "name": "RETURN PASSAGE", "category": "EARTH TRANSIT", "cost": RETURN_PASSAGE_COST,
-     "description": "Secure a one-way clinic transport authorization back to Earth.", "passage": True},
+     "description": "Take the UFO home after the final shift. Ends the campaign.", "passage": True},
+
+    {"id": "recycler", "name": "CARD RECYCLER", "category": "CARD MANAGEMENT", "cost": 50,
+     "description": "Once per patient, swap a test card for a random one free."},
 )
+
+# Existing calibrations are the Efficiency path; free-use offers share their price.
+_MACHINE_UPGRADES = tuple(item for item in SHOP_UPGRADES if "machine" in item)
+for _item in _MACHINE_UPGRADES:
+    _item["path"] = "efficiency"
+    _item["description"] = "Efficiency: tests cost 50% less. Choose one path."
+SHOP_UPGRADES += tuple(
+    {"id": item["id"] + "_free", "name": "SHIFT ALLOWANCE",
+     "category": item["machine"], "machine": item["machine"],
+     "cost": item["cost"], "path": "free_use", "art_id": item["id"],
+     "description": "First test free each shift; then normal cost. Choose one path."}
+    for item in _MACHINE_UPGRADES
+)
+
+SHOP_SHELVES = tuple(item for item in SHOP_UPGRADES if item.get("path") != "free_use")
 
 SHOP_COLUMNS = 3
 SHOP_VISIBLE_ROWS = 2
 SHOP_PRODUCT_COLORS = {
+    "recycler": (105, 230, 180),
     "temperature": (242, 160, 83),
     "xray": (103, 176, 244),
     "ultrasound": (105, 201, 222),
@@ -57,12 +76,26 @@ SHOP_PRODUCT_COLORS = {
     "return_passage": (255, 198, 75),
 }
 
+for _item in SHOP_UPGRADES:
+    if "art_id" in _item:
+        SHOP_PRODUCT_COLORS[_item["id"]] = SHOP_PRODUCT_COLORS[_item["art_id"]]
+
 
 class ShopMixin:
     def has_return_passage(self):
         """Return whether the campaign has purchased transport back to Earth."""
 
         return "return_passage" in self.purchased_shop_upgrades
+
+    def is_shop_day_locked(self, upgrade):
+        return bool(upgrade.get("passage") and self.route.next_destination is not None)
+
+    def is_shop_path_locked(self, upgrade):
+        if "machine" not in upgrade:
+            return False
+        machine = upgrade["machine"]
+        return (self.player.machine_levels.get(machine, 1) > 1
+                or machine in self.player.free_test_machines)
 
     def get_live_balance(self):
         """Return the balance players see after costs accrued this shift.
@@ -175,7 +208,7 @@ class ShopMixin:
         )
         self.screen.blit(title, (109, 129))
         hint = self.card_font.render(
-            "UPGRADES  //  SELECT EQUIPMENT TO INSPECT",
+            "PERMANENT UPGRADES  //  ONE PATH PER MACHINE",
             True,
             COLORS["muted"],
         )
@@ -219,10 +252,12 @@ class ShopMixin:
         self.draw_shop_scroll_controls()
         selected = self.get_selected_shop_upgrade()
         owned = selected and selected["id"] in self.purchased_shop_upgrades
-        can_buy = selected and not owned and self.player.balance >= selected["cost"]
+        path_locked = selected and not owned and self.is_shop_path_locked(selected)
+        day_locked = selected and self.is_shop_day_locked(selected)
+        can_buy = selected and not owned and not path_locked and not day_locked and self.player.balance >= selected["cost"]
         label = "SELECT AN UPGRADE"
         if selected:
-            label = "INSTALLED" if owned else (f"BUY & INSTALL  ${selected['cost']}" if can_buy else f"NEED ${selected['cost'] - self.player.balance} MORE")
+            label = "UNLOCKS AT FINAL STOP" if day_locked else "OTHER PATH CHOSEN" if path_locked else "INSTALLED" if owned else (f"BUY & INSTALL  ${selected['cost']}" if can_buy else f"NEED ${selected['cost'] - self.player.balance} MORE")
         mouse_position = self.get_mouse_position()
         for rect, text, enabled, accent in (
             (self.shop_purchase_button, label, can_buy, (112, 255, 181)),
@@ -609,7 +644,7 @@ class ShopMixin:
     def get_shop_total_rows(self):
         """Return the number of catalog rows required by all current products."""
 
-        return (len(SHOP_UPGRADES) + SHOP_COLUMNS - 1) // SHOP_COLUMNS
+        return (len(SHOP_SHELVES) + SHOP_COLUMNS - 1) // SHOP_COLUMNS
 
     def get_shop_max_scroll_row(self):
         """Return the last valid first-row position in the Shop viewport."""
@@ -621,7 +656,7 @@ class ShopMixin:
 
         first_index = self.shop_scroll_row * SHOP_COLUMNS
         visible_count = SHOP_COLUMNS * SHOP_VISIBLE_ROWS
-        return SHOP_UPGRADES[first_index:first_index + visible_count]
+        return SHOP_SHELVES[first_index:first_index + visible_count]
 
     def scroll_shop(self, row_delta):
         """Move the Shop viewport by complete product rows."""
@@ -695,11 +730,11 @@ class ShopMixin:
 
         first_item = self.shop_scroll_row * SHOP_COLUMNS + 1
         last_item = min(
-            len(SHOP_UPGRADES),
+            len(SHOP_SHELVES),
             first_item + SHOP_COLUMNS * SHOP_VISIBLE_ROWS - 1,
         )
         count = self.card_font.render(
-            f"{first_item}-{last_item} OF {len(SHOP_UPGRADES)}",
+            f"{first_item}-{last_item} OF {len(SHOP_SHELVES)}",
             True,
             COLORS["muted"],
         )
@@ -716,6 +751,12 @@ class ShopMixin:
             self.get_shop_upgrade_rects(),
         ):
             if rect.collidepoint(position):
+                if "machine" in upgrade:
+                    for path, button in zip(("efficiency", "free_use"), self.get_machine_path_buttons(rect)):
+                        if button.collidepoint(position):
+                            self.selected_shop_upgrade = upgrade["id"] + ("_free" if path == "free_use" else "")
+                            self.handle_shop_upgrade_click(self.shop_purchase_button.center)
+                            return
                 self.play_sfx("button")
                 self.selected_shop_upgrade = upgrade["id"]
                 self.shop_message = f"{upgrade['name']} " + ("is installed." if upgrade["id"] in self.purchased_shop_upgrades else "selected. Buy to install immediately.")
@@ -728,23 +769,88 @@ class ShopMixin:
             self.shop_message = "Select an upgrade first."
         elif upgrade["id"] in self.purchased_shop_upgrades:
             self.shop_message = f"{upgrade['name']} is already installed."
+        elif self.is_shop_day_locked(upgrade):
+            self.shop_message = "Complete the route to purchase return passage."
+        elif self.is_shop_path_locked(upgrade):
+            self.shop_message = "This machine already has a permanent path. Choose another machine."
         elif self.player.balance < upgrade["cost"]:
             self.shop_message = f"Not enough money for {upgrade['name']} — need ${upgrade['cost']}."
         else:
             self.player.pay(upgrade["cost"])
-            if upgrade.get("passage"):
-                self.shop_message = "Return passage secured. Earth transit is now authorized!"
+            if upgrade.get("path") == "free_use":
+                self.player.free_test_machines.add(upgrade["machine"])
             elif "machine" in upgrade:
                 self.player.machine_levels[upgrade["machine"]] = 2
-            else:
+            elif "discount" in upgrade:
                 self.player.test_discount += upgrade["discount"]
             self.purchased_shop_upgrades.add(upgrade["id"])
-            if not upgrade.get("passage"):
-                self.shop_message = f"Installed {upgrade['name']}. Test costs updated!"
+            if upgrade.get("passage"):
+                self.begin_homecoming_sequence()
+                return
+            self.shop_message = ("Recycler installed! Select a test card to recycle once per patient."
+                                 if upgrade["id"] == "recycler" else
+                                 f"Installed {upgrade['name']}. Test costs updated!")
+
+    def get_machine_path_buttons(self, shelf):
+        """Return the clickable columns below the shared machine header."""
+        return (
+            pygame.Rect(shelf.left + 2, shelf.top + 47, shelf.width // 2 - 2, shelf.height - 49),
+            pygame.Rect(shelf.centerx + 1, shelf.top + 47, shelf.width // 2 - 3, shelf.height - 49),
+        )
+
+    def draw_machine_shop_shelf(self, upgrade, shelf):
+        """Draw a shared header and two side-by-side purchase options."""
+        color = SHOP_PRODUCT_COLORS[upgrade["id"]]
+        pygame.draw.rect(self.screen, (3, 8, 13), shelf.move(3, 4), border_radius=11)
+        pygame.draw.rect(self.screen, (18, 27, 40), shelf, border_radius=11)
+        title = self.small_font.render(upgrade["machine"], True, color)
+        self.screen.blit(title, (shelf.x + 12, shelf.y + 7))
+        hint = self.card_font.render("CHOOSE ONE PERMANENT PATH", True, COLORS["muted"])
+        self.screen.blit(hint, (shelf.x + 12, shelf.y + 26))
+        self.draw_shop_purchase_icon(upgrade, (shelf.right - 24, shelf.y + 23))
+
+        options = (
+            ("", "EFFICIENCY", ("Half-price tests", "on every use")),
+            ("_free", "SHIFT ALLOWANCE", ("First test free", "each shift")),
+        )
+        mouse = self.get_mouse_position()
+        for (suffix, label, details), rect in zip(options, self.get_machine_path_buttons(shelf)):
+            owned = upgrade["id"] + suffix in self.purchased_shop_upgrades
+            locked = not owned and self.is_shop_path_locked(upgrade)
+            affordable = self.player.balance >= upgrade["cost"]
+            enabled = not owned and not locked and affordable
+            hovered = enabled and rect.collidepoint(mouse)
+            fill = (41, 67, 68) if hovered else (23, 41, 43) if owned else (14, 21, 32)
+            pygame.draw.rect(self.screen, fill, rect, border_radius=7)
+
+            label_color = COLORS["accent"] if owned else color if enabled else COLORS["muted"]
+            title = self.card_font.render(label, True, label_color)
+            self.screen.blit(title, title.get_rect(midtop=(rect.centerx, rect.top + 10)))
+            for index, detail in enumerate(details):
+                line = self.card_font.render(detail, True, COLORS["muted"])
+                self.screen.blit(line, line.get_rect(midtop=(rect.centerx, rect.top + 29 + 14 * index)))
+
+            footer = pygame.Rect(rect.x + 8, rect.bottom - 30, rect.width - 16, 24)
+            pygame.draw.rect(self.screen, (7, 15, 24), footer, border_radius=5)
+            if enabled or owned:
+                pygame.draw.rect(self.screen, label_color, footer, width=1, border_radius=5)
+            status = "INSTALLED" if owned else "LOCKED" if locked else f"${upgrade['cost']}"
+            font = self.card_font if owned or locked else self.small_font
+            price = font.render(status, True, label_color)
+            self.screen.blit(price, price.get_rect(center=footer.center))
+
+        pygame.draw.line(self.screen, color, (shelf.left + 2, shelf.top + 46),
+                         (shelf.right - 3, shelf.top + 46))
+        pygame.draw.line(self.screen, color, (shelf.centerx, shelf.top + 46),
+                         (shelf.centerx, shelf.bottom - 2))
+        pygame.draw.rect(self.screen, color, shelf, width=2, border_radius=11)
 
     def draw_shop_shelf(self, upgrade, shelf):
         """Draw one illuminated shelf with a unique product illustration."""
 
+        if "machine" in upgrade:
+            self.draw_machine_shop_shelf(upgrade, shelf)
+            return
         selected = upgrade["id"] == self.selected_shop_upgrade
         owned = upgrade["id"] in self.purchased_shop_upgrades
         hovered = shelf.collidepoint(self.get_mouse_position())
@@ -805,7 +911,7 @@ class ShopMixin:
         text_width = display.right - text_x - 10
         category_text = upgrade["category"]
         if owned and "machine" in upgrade:
-            category_text += "  //  LV.2"
+            category_text += " / " + ("FREE" if upgrade.get("path") == "free_use" else "LV.2")
         category = self.card_font.render(category_text, True, product_color)
         self.screen.blit(category, (text_x, display.y + 12))
 
@@ -841,6 +947,12 @@ class ShopMixin:
         if owned:
             status_text = "INSTALLED"
             status_color = COLORS["accent"]
+        elif self.is_shop_day_locked(upgrade):
+            status_text = "FINAL STOP ONLY"
+            status_color = COLORS["muted"]
+        elif self.is_shop_path_locked(upgrade):
+            status_text = "OTHER PATH CHOSEN"
+            status_color = COLORS["muted"]
         elif affordable:
             status_text = "SELECT" if not selected else "READY TO INSTALL"
             status_color = COLORS["text"]
@@ -874,7 +986,7 @@ class ShopMixin:
         color = SHOP_PRODUCT_COLORS[upgrade["id"]]
         pygame.draw.circle(self.screen, (9, 17, 27), center, 14)
         pygame.draw.circle(self.screen, color, center, 14, width=2)
-        item_id = upgrade["id"]
+        item_id = upgrade.get("art_id", upgrade["id"])
         if item_id == "temperature":
             pygame.draw.line(self.screen, color, (center[0], center[1] - 7), (center[0], center[1] + 4), width=3)
             pygame.draw.circle(self.screen, color, (center[0], center[1] + 7), 4)
@@ -936,7 +1048,7 @@ class ShopMixin:
                 (grid_x, frame.bottom - 6),
             )
 
-        item_id = upgrade["id"]
+        item_id = upgrade.get("art_id", upgrade["id"])
         if item_id == "temperature":
             pygame.draw.rect(
                 self.screen,

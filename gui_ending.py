@@ -29,10 +29,11 @@ class EndingMixin:
     """Supply the closing sequence and safe exit controls to the main GUI."""
 
     def begin_ending_sequence(self):
-        """Leave the Shop and begin the skippable clinic departure animation."""
+        """Leave the Shop and begin the clinic departure animation."""
 
         self.record_current_route_performance()
         self.exit_confirmation_open = False
+        self.ending_duration = 4200
         self.ending_started_at = pygame.time.get_ticks()
         self.state = GameState.ENDING
 
@@ -123,7 +124,7 @@ class EndingMixin:
         pygame.draw.rect(self.screen, accent, prompt_panel, width=2, border_radius=10)
         self.screen.blit(prompt, prompt.get_rect(center=prompt_panel.center))
 
-    def record_current_route_performance(self):
+    def record_current_route_performance(self, *, advance=True):
         """Preserve this shift's results before daily counters are reset."""
 
         performance = ShiftPerformance(
@@ -138,7 +139,20 @@ class EndingMixin:
             net_pay=self.get_daily_pay_breakdown()[3],
             ending_balance=self.player.balance,
         )
+        if not advance:
+            return self.route.record_current_shift(performance)
         return self.route.complete_current_shift(performance)
+
+    def begin_homecoming_sequence(self):
+        """Record the shift and start the final flight without advancing the route."""
+        self.record_current_route_performance(advance=False)
+        self.exit_confirmation_open = False
+        self.ending_duration = 14000
+        self.ending_started_at = pygame.time.get_ticks()
+        self.state = GameState.ENDING
+
+    def can_skip_ending(self):
+        return not self.has_return_passage()
 
     def finish_ending_sequence(self):
         """Finish departure at an arrival screen or the completed-route report."""
@@ -458,6 +472,9 @@ class EndingMixin:
     def draw_final_departure_screen(self):
         """Draw the farewell-style departure after the final configured stop."""
 
+        if self.has_return_passage():
+            self.draw_homecoming_ending()
+            return
         elapsed = (
             0
             if self.ending_started_at is None
@@ -488,6 +505,90 @@ class EndingMixin:
         self.screen.blit(clinic, clinic.get_rect(center=center))
 
         self.draw_cinematic_skip_prompt()
+
+    def draw_homecoming_ending(self, finished=False):
+        """Fly toward a living planet, then settle outside a weathered home."""
+        progress = 1.0 if finished else self.get_ending_progress()
+        elapsed = 0 if self.ending_started_at is None else pygame.time.get_ticks() - self.ending_started_at
+        if progress < 0.32:
+            self.draw_space_background(elapsed)
+            planet = pygame.Surface((440, 440), pygame.SRCALPHA)
+            pygame.draw.circle(planet, (65, 132, 169), (220, 220), 207)
+            for points in (((165, 40), (264, 64), (293, 127), (244, 155), (256, 206), (190, 228), (149, 157), (99, 125)),
+                           ((300, 246), (379, 227), (411, 289), (370, 359), (289, 386), (258, 325)),
+                           ((57, 255), (118, 237), (164, 288), (120, 346), (72, 331))):
+                pygame.draw.polygon(planet, (94, 151, 112), points)
+            for rect in ((100, 93, 182, 18), (220, 190, 160, 14), (66, 330, 159, 12)):
+                pygame.draw.ellipse(planet, (208, 220, 208, 170), rect)
+            pygame.draw.circle(planet, (156, 193, 198), (220, 220), 210, width=4)
+            self.screen.blit(planet, (570, 100))
+            t = progress / 0.32
+            self.draw_approaching_ufo((round(120 + 520 * t), round(250 + 30 * t)), 0.28 - 0.17 * t, elapsed)
+            label = self.small_font.render("One last flight.", True, (208, 216, 225))
+            self.screen.blit(label, label.get_rect(center=(550, 600)))
+            return
+
+        # Dusk on the home planet. Broad, quiet shapes match the clinic artwork.
+        self.screen.fill((39, 47, 67))
+        pygame.draw.rect(self.screen, (78, 77, 86), (0, 240, 1100, 200))
+        pygame.draw.circle(self.screen, (194, 190, 164), (949, 125), 32)
+        for x, y in ((97, 88), (245, 132), (480, 63), (772, 79), (1030, 199)):
+            pygame.draw.circle(self.screen, (168, 176, 188), (x, y), 1)
+        for x, y, w in ((0, 337, 150), (140, 315, 125), (930, 325, 180)):
+            pygame.draw.rect(self.screen, (49, 58, 64), (x, y, w, 128))
+            pygame.draw.polygon(self.screen, (37, 46, 54), ((x - 10, y), (x + w // 2, y - 65), (x + w + 10, y)))
+        pygame.draw.rect(self.screen, (54, 64, 57), (0, 429, 1100, 221))
+        pygame.draw.ellipse(self.screen, (44, 53, 49), (480, 482, 535, 90))
+        # The house: sagging roof, peeling boards, boarded window and dim porch.
+        house = pygame.Rect(602, 303, 331, 203)
+        pygame.draw.rect(self.screen, (110, 107, 94), house)
+        for y in range(316, 506, 17):
+            pygame.draw.line(self.screen, (79, 83, 77), (602, y), (933, y + 2), 2)
+        for x, y in ((620, 347), (886, 467), (788, 408), (652, 486), (906, 326)):
+            pygame.draw.polygon(self.screen, (151, 145, 121), ((x, y), (x + 19, y - 3), (x + 12, y + 10), (x + 3, y + 6)))
+        pygame.draw.polygon(self.screen, (49, 53, 57), ((570, 312), (674, 229), (765, 242), (827, 232), (960, 319)))
+        pygame.draw.lines(self.screen, (94, 93, 83), False, ((570, 312), (674, 229), (765, 242), (827, 232), (960, 319)), 5)
+        pygame.draw.rect(self.screen, (91, 87, 80), (860, 231, 25, 47))
+        pygame.draw.rect(self.screen, (35, 45, 48), (625, 350, 66, 68))
+        pygame.draw.rect(self.screen, (66, 71, 66), (625, 350, 66, 68), 5)
+        pygame.draw.line(self.screen, (127, 113, 86), (621, 363), (696, 392), 10)
+        pygame.draw.line(self.screen, (96, 88, 70), (622, 408), (695, 380), 9)
+        pygame.draw.rect(self.screen, (52, 58, 54), (830, 351, 67, 67))
+        pygame.draw.line(self.screen, (99, 102, 83), (863, 352), (863, 416), 3)
+        pygame.draw.line(self.screen, (99, 102, 83), (831, 385), (896, 385), 3)
+        pygame.draw.rect(self.screen, (69, 67, 59), (732, 374, 55, 128))
+        pygame.draw.circle(self.screen, (156, 144, 105), (775, 443), 3)
+        pygame.draw.rect(self.screen, (87, 87, 74), (718, 501, 87, 10))
+        pygame.draw.rect(self.screen, (75, 79, 67), (709, 511, 105, 9))
+        glow = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        pygame.draw.circle(glow, (229, 190, 111, 12), (806, 372), 47)
+        pygame.draw.circle(glow, (229, 190, 111, 20), (806, 372), 24)
+        self.screen.blit(glow, (0, 0))
+        pygame.draw.rect(self.screen, (173, 151, 100), (802, 365, 8, 13), border_radius=2)
+        # Overgrowth, a cracked walk, and a fence whose boards lean unevenly.
+        pygame.draw.polygon(self.screen, (87, 89, 77), ((725, 521), (799, 521), (850, 650), (668, 650)))
+        pygame.draw.lines(self.screen, (51, 60, 53), False, ((758, 535), (748, 556), (773, 573), (754, 600)), 3)
+        for i in range(55):
+            x = 559 + (i * 73) % 448
+            y = 503 + (i * 29) % 87
+            if 712 < x < 820:
+                continue
+            pygame.draw.lines(self.screen, (72 + i % 3 * 6, 88, 62), False,
+                              ((x - 6, y - 11), (x, y + 3), (x + 5, y - 16)), 2)
+        for x in range(880, 1090, 24):
+            tilt = (x % 7) - 3
+            pygame.draw.line(self.screen, (105, 101, 83), (x, 552), (x + tilt * 3, 508 + x % 11), 7)
+        pygame.draw.lines(self.screen, (94, 92, 78), False, ((875, 527), (971, 538), (1090, 529)), 5)
+        # The UFO eases to a stop in front of the house, then holds in silence.
+        t = min(1.0, max(0.0, (progress - 0.32) / 0.43))
+        eased = 1 - (1 - t) ** 3
+        x = round(-190 + 570 * eased)
+        y = round(140 + 302 * eased)
+        pygame.draw.ellipse(self.screen, (39, 49, 45), (x - 130, 521, 260, 29))
+        self.draw_approaching_ufo((x, y), 0.32, elapsed if t < 1 else 0)
+        if progress > 0.82 and not finished:
+            label = self.small_font.render("Home.", True, (220, 211, 186))
+            self.screen.blit(label, label.get_rect(center=(550, 605)))
 
     def draw_clinic_window_farewell(self, surface, elapsed):
         """Draw tiny colorful patients waving from the departing clinic dome."""
@@ -866,6 +967,15 @@ class EndingMixin:
     def draw_final_screen(self):
         """Draw an empty clinic after every configured route stop is complete."""
 
+        if self.has_return_passage():
+            self.draw_homecoming_ending(finished=True)
+            for text, y, font in (("HOME, AT LAST.", 63, self.heading_font),
+                                  (f"You made it home after {self.day_number} shifts.", 96, self.small_font)):
+                label = font.render(text, True, (230, 220, 191))
+                self.screen.blit(label, label.get_rect(center=(550, y)))
+            self.draw_ending_button(self.final_replay_button, "PLAY AGAIN", False)
+            self.draw_ending_button(self.final_quit_button, "QUIT GAME", True)
+            return
         self.screen.fill(COLORS["background"])
         self.draw_game_logo((WINDOW_SIZE[0] // 2, 38), scale=0.86)
         subtitle = self.small_font.render(
@@ -882,14 +992,9 @@ class EndingMixin:
         self.draw_reception_desk(force_empty=True)
         self.draw_next_day_status()
 
-        replay_label = "REPLAY ROUTE" if self.has_return_passage() else "RESTART ROUTE"
-        self.draw_ending_button(self.final_replay_button, replay_label, False)
+        self.draw_ending_button(self.final_replay_button, "RESTART ROUTE", False)
         self.draw_ending_button(self.final_quit_button, "QUIT GAME", True)
-        hint_text = (
-            "Earth transit is authorized. Future story content can now complete the journey home."
-            if self.has_return_passage()
-            else "Completed destinations will remain available when the route expands."
-        )
+        hint_text = "The route is complete. Return Passage was not purchased."
         hint = self.card_font.render(
             hint_text,
             True,
@@ -930,23 +1035,13 @@ class EndingMixin:
         pygame.draw.rect(self.screen, (4, 12, 20), notice.move(5, 6), border_radius=13)
         pygame.draw.rect(self.screen, (19, 31, 45), notice, border_radius=13)
         pygame.draw.rect(self.screen, status_color, notice, width=2, border_radius=13)
-        heading_text = (
-            "RETURN PASSAGE SECURED"
-            if self.has_return_passage()
-            else ROUTE_COMPLETE_HEADING
-        )
-        message_text = (
-            "Earth transit authorization has been added to the clinic route."
-            if self.has_return_passage()
-            else ROUTE_COMPLETE_MESSAGE
-        )
         notice_heading = self.heading_font.render(
-            heading_text,
+            ROUTE_COMPLETE_HEADING,
             True,
             status_color,
         )
         notice_body = self.compact_ui_font.render(
-            message_text,
+            ROUTE_COMPLETE_MESSAGE,
             True,
             COLORS["text"],
         )
@@ -1103,6 +1198,8 @@ class EndingMixin:
         self.intro_dialogue_started_at = None
         self.player.balance = STARTING_BALANCE
         self.player.machine_levels.clear()
+        self.player.free_test_machines.clear()
+        self.player.free_tests_used.clear()
         self.player.test_discount = 0
         self.purchased_shop_upgrades.clear()
         self.route_briefing_seen = False

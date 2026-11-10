@@ -685,6 +685,134 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.patients_called = 1
         self.game.state = GameState.PATIENT
 
+    def test_departure_requires_final_stop_and_full_price_then_ends_campaign(self):
+        g = self.game
+        g.state = GameState.SHOP
+        g.player.balance = 500
+        g.selected_shop_upgrade = "return_passage"
+        g.handle_shop_upgrade_click(g.shop_purchase_button.center)
+        self.assertEqual(g.player.balance, 500)
+        self.assertNotIn("return_passage", g.purchased_shop_upgrades)
+        g.route.select_day(2)
+        g.player.balance = 399
+        g.handle_shop_upgrade_click(g.shop_purchase_button.center)
+        self.assertEqual(g.player.balance, 399)
+        g.player.balance = 400
+        g.handle_shop_upgrade_click(g.shop_purchase_button.center)
+        self.assertEqual(g.player.balance, 0)
+        self.assertIn("return_passage", g.purchased_shop_upgrades)
+        self.assertEqual(g.state, GameState.ENDING)
+        pygame.event.post(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, button=1, pos=(100, 100),
+        ))
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        g.handle_events()
+        self.assertEqual(g.state, GameState.ENDING)
+        for progress in (0, 0.2, 0.4, 0.6, 0.8, 0.99):
+            g.ending_started_at = pygame.time.get_ticks() - round(progress * g.ending_duration)
+            g.draw_ending_screen()
+        g.ending_started_at = pygame.time.get_ticks() - g.ending_duration
+        g.update_ending_sequence()
+        g.draw_final_screen()
+        self.assertEqual(g.state, GameState.FINAL)
+        g.handle_final_screen_click(g.final_replay_button.center)
+        self.assertEqual(g.day_number, 1)
+        self.assertNotIn("return_passage", g.purchased_shop_upgrades)
+
+    def test_machine_shelf_has_both_purchase_paths_and_blocks_second_choice(self):
+        g = self.game
+        g.player.balance = 100
+        g.state = GameState.SHOP
+        visible = g.get_visible_shop_upgrades()
+        self.assertTrue(all(item.get("path") != "free_use" for item in visible))
+        buttons = g.get_machine_path_buttons(g.get_shop_upgrade_rects()[0])
+        g.handle_shop_click(buttons[1].center)
+        self.assertIn("temperature_free", g.purchased_shop_upgrades)
+        self.assertEqual(g.player.balance, 75)
+        g.handle_shop_click(buttons[0].center)
+        self.assertEqual(g.player.balance, 75)
+        self.assertNotIn("temperature", g.purchased_shop_upgrades)
+        g.draw_shop_screen()
+        g.handle_shop_click(g.get_machine_path_buttons(g.get_shop_upgrade_rects()[1])[0].center)
+        self.assertIn("xray", g.purchased_shop_upgrades)
+        self.assertEqual(g.player.balance, 50)
+
+    def test_free_machine_allowance_persists_between_patients_and_resets_per_shift(self):
+        g = self.game
+        g.player.balance = 1000
+        g.selected_shop_upgrade = "temperature_free"
+        g.handle_shop_upgrade_click(g.shop_purchase_button.center)
+        self.assertIn("TEMPERATURE", g.player.free_test_machines)
+        test = TemperatureTest()
+        self.assertEqual(g.player.get_test_cost(test), 0)
+        self.assertEqual(g.player.get_test_cost(test), 0)  # previews don't consume it
+        g.player.consume_test_use(test)
+        self.assertEqual(g.player.get_test_cost(test), 10)
+        g.reset_round()
+        self.assertEqual(g.player.get_test_cost(test), 10)
+        balance = g.player.balance
+        g.selected_shop_upgrade = "temperature"
+        g.handle_shop_upgrade_click(g.shop_purchase_button.center)
+        self.assertEqual(g.player.balance, balance)
+        self.assertNotIn("temperature", g.purchased_shop_upgrades)
+        g.reset_day()
+        self.assertEqual(g.player.get_test_cost(test), 0)
+
+    def test_efficiency_blocks_free_path_and_running_consumes_only_matching_allowance(self):
+        g = self.game
+        g.player.balance = 1000
+        g.selected_shop_upgrade = "temperature"
+        g.handle_shop_upgrade_click(g.shop_purchase_button.center)
+        balance = g.player.balance
+        g.selected_shop_upgrade = "temperature_free"
+        g.handle_shop_upgrade_click(g.shop_purchase_button.center)
+        self.assertEqual(g.player.balance, balance)
+        self.assertEqual(g.player.get_test_cost(TemperatureTest()), 5)
+        card = g.player.test_hand[0]
+        g.player.free_test_machines.add(card.value.name)
+        g.player.free_test_machines.add("UNRELATED")
+        g.selected_card_index = 0
+        expenses = g.daily_test_expenses
+        g.run_selected_test()
+        self.assertEqual(g.last_test_cost, 0)
+        self.assertEqual(g.daily_test_expenses, expenses)
+        self.assertIn(card.value.name, g.player.free_tests_used)
+        self.assertNotIn("UNRELATED", g.player.free_tests_used)
+
+    def test_recycler_exchanges_once_free_and_recharges_next_patient(self):
+        game = self.game
+        game.purchased_shop_upgrades.add("recycler")
+        game.selected_card_index = 0
+        old = game.player.test_hand[0]
+        replacement = game.deck.contents[-1]
+        balance = game.player.balance
+        expenses = game.daily_draw_expenses
+        hand_size = len(game.player.test_hand)
+        self.assertTrue(game.recycle_selected_test())
+        self.assertIs(game.player.test_hand[0], replacement)
+        self.assertIn(old, game.discard_pile)
+        self.assertEqual(len(game.player.test_hand), hand_size)
+        self.assertEqual(game.player.balance, balance)
+        self.assertEqual(game.daily_draw_expenses, expenses)
+        game.selected_card_index = 0
+        self.assertFalse(game.recycle_selected_test())
+        game.reset_round()
+        self.assertFalse(game.recycler_used)
+        self.assertIn("recycler", game.purchased_shop_upgrades)
+        game.selected_card_index = 0
+        self.assertTrue(game.recycle_selected_test())
+
+    def test_recycler_requires_purchase_and_preserves_use_when_empty(self):
+        game = self.game
+        game.selected_card_index = 0
+        self.assertFalse(game.recycle_selected_test())
+        game.purchased_shop_upgrades.add("recycler")
+        game.deck.contents.clear()
+        before = list(game.player.test_hand)
+        self.assertFalse(game.recycle_selected_test())
+        self.assertFalse(game.recycler_used)
+        self.assertEqual(game.player.test_hand, before)
+
     def test_patient_specific_diagnosis_hand_switches_with_the_case(self):
         """Each completed patient set should replace the legacy case files."""
 
@@ -1886,14 +2014,14 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.daily_draw_expenses, expenses_before_discard + DRAW_COST)
         self.assertEqual(len(self.game.deck.contents), deck_before_discard - 1)
 
-    def test_rebalanced_economy_allows_one_efficient_shift_upgrade(self):
-        """An efficient first shift should fund one upgrade, not a shopping spree."""
+    def test_rebalanced_economy_allows_early_investment(self):
+        """An efficient shift can fund several investments at the new prices."""
 
         self.assertEqual(self.game.player.balance, STARTING_BALANCE)
         self.assertEqual(STARTING_BALANCE, 100)
         self.assertEqual(DIAGNOSIS_REWARD, 50)
         self.assertEqual(LIMITED_EVIDENCE_REWARD, 10)
-        self.assertEqual(WRONG_DIAGNOSIS_PENALTY, 25)
+        self.assertEqual(WRONG_DIAGNOSIS_PENALTY, 35)
         self.assertEqual(CLINIC_OPERATING_FEE, 50)
 
         self.game.daily_correct_diagnoses = len(self.game.waiting_room_queue)
@@ -1910,10 +2038,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
             upgrade["cost"] for upgrade in SHOP_UPGRADES
         )[:2]
         self.assertLessEqual(two_cheapest_upgrades[0], projected_balance)
-        self.assertGreater(sum(two_cheapest_upgrades), projected_balance)
+        self.assertLessEqual(sum(two_cheapest_upgrades), projected_balance)
 
     def test_perfect_bonus_requires_test_evidence_for_every_case(self):
-        """Guessing every answer should not fund two first-shift upgrades."""
+        """Unsupported answers lose money and cannot earn the perfect bonus."""
 
         patient_count = len(self.game.waiting_room_queue)
         self.game.daily_correct_diagnoses = patient_count
@@ -1934,10 +2062,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         projected_balance = (
             STARTING_BALANCE + self.game.get_daily_pay_breakdown()[3]
         )
-        two_cheapest_upgrades = sorted(
-            upgrade["cost"] for upgrade in SHOP_UPGRADES
-        )[:2]
-        self.assertGreater(sum(two_cheapest_upgrades), projected_balance)
+        self.assertLess(projected_balance, STARTING_BALANCE)
 
     def test_audio_controls_balance_music_and_cover_core_interactions(self):
         """The slice should expose every requested effect and a working global mute."""
@@ -2330,11 +2455,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
         ]
         self.game.handle_shop_click(placeholder_rect.center)
         self.assertEqual(self.game.selected_shop_upgrade, placeholder["id"])
+        self.game.player.balance = placeholder["cost"] - 1
         self.game.handle_shop_click(self.game.shop_purchase_button.center)
         self.assertNotIn(placeholder["id"], self.game.purchased_shop_upgrades)
 
-        # The no-evidence shift correctly cannot fund an upgrade. Supply enough
-        # money only to exercise the remaining purchase/ending integration.
+        # Supply the exact purchase price to exercise buying and the ending.
         self.game.player.balance = placeholder["cost"]
         self.game.handle_shop_click(self.game.shop_purchase_button.center)
         self.assertIn(placeholder["id"], self.game.purchased_shop_upgrades)
@@ -2923,6 +3048,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             if upgrade["id"] == "return_passage"
         )
         self.assertEqual(passage["cost"], RETURN_PASSAGE_COST)
+        self.game.route.select_day(2)
         self.game.state = GameState.SHOP
         self.game.player.balance = RETURN_PASSAGE_COST
         passage_index = SHOP_UPGRADES.index(passage)
@@ -2939,7 +3065,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.assertTrue(self.game.has_return_passage())
         self.assertEqual(self.game.player.balance, 0)
-        self.assertIn("Earth transit", self.game.shop_message)
+        self.assertEqual(self.game.state, GameState.ENDING)
         self.game.draw()
 
     def test_workspace_tools_use_the_swapped_non_overlapping_layout(self):

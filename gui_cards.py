@@ -110,6 +110,10 @@ class CardMixin:
                     self.open_diagnosis_confirmation()
                     return
             else:
+                if ("recycler" in self.purchased_shop_upgrades
+                        and self.get_recycler_button(selected_rect).collidepoint(position)):
+                    self.recycle_selected_test()
+                    return
                 if self.get_run_test_button(selected_rect).collidepoint(position):
                     self.play_sfx("button")
                     self.run_selected_test()
@@ -144,6 +148,7 @@ class CardMixin:
         card = self.player.test_hand[self.selected_card_index]
         self.last_test_name = card.value.name
         self.last_test_cost = self.player.get_test_cost(card.value)
+        self.player.consume_test_use(card.value)
         self.start_live_money_deduction(self.last_test_cost, "TEST COST")
         self.daily_test_count += 1
         self.daily_test_expenses += self.last_test_cost
@@ -159,6 +164,33 @@ class CardMixin:
         self.state = GameState.TEST_RESULT
         self.notebook.add_test(self.patient, self.last_test_name, self.last_test_result)
         self.play_sfx("scan")
+
+
+    def get_recycler_button(self, rect):
+        return pygame.Rect(rect.x + 16, rect.bottom - 70, rect.width - 32, 26)
+
+    def recycle_selected_test(self):
+        """Exchange one card per patient without charging or returning waste."""
+        if ("recycler" not in self.purchased_shop_upgrades or self.recycler_used
+                or self.showing_diagnosis_hand or self.selected_card_index is None
+                or self.discard_animation is not None):
+            return False
+        index = self.selected_card_index
+        if not 0 <= index < len(self.player.test_hand):
+            return False
+        replacement = self.deck.draw()
+        if replacement is None:
+            self.set_card_draw_notice("RECYCLER: DECK EMPTY  •  NOT USED")
+            return False
+        old_card = self.player.test_hand[index]
+        self.player.test_hand[index] = replacement
+        self.discard_pile.append(old_card)
+        self.recycler_used = True
+        self.selected_card_index = None
+        self.refresh_hand_layout()
+        self.play_sfx("card_select")
+        self.set_card_draw_notice("RECYCLED FREE  •  RECHARGES NEXT PATIENT")
+        return True
 
 
     def discard_selected_test(self):
@@ -986,7 +1018,9 @@ class CardMixin:
         )
 
         description_y = card_rect.y + 67
-        action_top = self.get_run_test_button(card_rect).y
+        action_top = (self.get_recycler_button(card_rect).y
+                      if "recycler" in self.purchased_shop_upgrades
+                      else self.get_run_test_button(card_rect).y)
         description_box = pygame.Rect(
             card_rect.x + 80,
             description_y,
@@ -1009,6 +1043,16 @@ class CardMixin:
             COLORS["background"],
         )
         self.screen.blit(run_text, run_text.get_rect(center=self.run_test_button.center))
+
+        if "recycler" in self.purchased_shop_upgrades:
+            recycler_rect = self.get_recycler_button(card_rect)
+            available = not self.recycler_used and bool(self.deck.contents)
+            pygame.draw.rect(self.screen, (105, 230, 180) if available else (150, 155, 150),
+                             recycler_rect, border_radius=5)
+            label = ("RECYCLE FREE (1/1)" if available else
+                     "RECYCLE USED (0/1)" if self.recycler_used else "RECYCLER: DECK EMPTY")
+            text = self.card_font.render(label, True, COLORS["background"])
+            self.screen.blit(text, text.get_rect(center=recycler_rect.center))
 
         self.discard_button = self.get_discard_button(card_rect)
         pygame.draw.rect(
