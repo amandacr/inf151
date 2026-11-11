@@ -4,6 +4,7 @@ import math
 
 import pygame
 
+from gui_card_shop import CARD_SHOP_BASE_PRICE, CARD_SHOP_PRICE_STEP
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
 from Player import (
@@ -13,6 +14,7 @@ from Player import (
     MAX_TEST_HAND_SIZE,
     WRONG_DIAGNOSIS_PENALTY,
 )
+from Test import TEST_COSTS_BY_RARITY
 
 
 class TutorialMixin:
@@ -28,8 +30,9 @@ class TutorialMixin:
         self.guided_tutorial_nudge = ""
         self.guided_tutorial_nudge_started_at = None
         self.guided_tutorial_step_started_at = pygame.time.get_ticks()
+        self.help_attention_started_at = None
 
-    def finish_guided_tutorial(self):
+    def finish_guided_tutorial(self, show_help_reminder=False):
         """Release every control after Zorpa's training case or a manual skip."""
 
         self.card_shop_open = False
@@ -38,7 +41,11 @@ class TutorialMixin:
         self.guided_tutorial_nudge = ""
         self.guided_tutorial_nudge_started_at = None
         self.guided_tutorial_step_started_at = None
-        if not self.help_attention_seen and self.help_attention_started_at is None:
+        if (
+            show_help_reminder
+            and not self.help_attention_seen
+            and self.help_attention_started_at is None
+        ):
             self.help_attention_started_at = pygame.time.get_ticks()
 
     def set_guided_tutorial_step(self, step):
@@ -258,7 +265,7 @@ class TutorialMixin:
 
         if self.tutorial_skip_button.collidepoint(position):
             self.play_sfx("button")
-            self.finish_guided_tutorial()
+            self.finish_guided_tutorial(show_help_reminder=True)
             return
 
         step = self.guided_tutorial_step
@@ -400,7 +407,7 @@ class TutorialMixin:
             return
         if step == "complete":
             self.play_sfx("button")
-            self.finish_guided_tutorial()
+            self.finish_guided_tutorial(show_help_reminder=True)
             return
 
         if step not in ("patient_arrival", "note_transfer", "second_note_transfer"):
@@ -462,6 +469,13 @@ class TutorialMixin:
         self.tutorial_open = True
         self.help_attention_seen = True
         self.help_attention_started_at = None
+
+    def dismiss_help_attention(self):
+        """Dismiss the one-time post-training reminder without blocking input."""
+
+        if self.help_attention_started_at is not None:
+            self.help_attention_started_at = None
+            self.help_attention_seen = True
 
     def close_tutorial(self):
         """Close Help and compensate any animations for the paused duration."""
@@ -537,7 +551,7 @@ class TutorialMixin:
             ),
             GameState.SHOP: (
                 "SUPPLY SHOP",
-                "Select an upgrade to inspect its effect. Purchase it only when the clinic can afford it.",
+                "Buy permanent test-cost upgrades that remain installed during future clinic days.",
             ),
             GameState.ENDING: (
                 "SHIFT DEPARTURE",
@@ -545,7 +559,7 @@ class TutorialMixin:
             ),
             GameState.FINAL: (
                 "SHIFT SUMMARY",
-                "Review the final report, then replay the shift or quit the game.",
+                "Review the final report, then continue to the next patient roster or quit the game.",
             ),
         }.get(
             self.state,
@@ -553,28 +567,60 @@ class TutorialMixin:
         )
 
     def get_help_rules(self):
-        """Return the permanent economy and control reminders shown in Help."""
+        """Return the permanent gameplay and economy reminders shown in Help."""
 
         return (
-            ("TEST COSTS", "Every machine use has an operating cost."),
             (
-                "CARD DRAWS",
+                "TEST COSTS",
                 (
-                    f"Random draws cost ${DRAW_COST}. Card Shop choices start at $10 "
-                    f"and rise by $5; hand max {MAX_TEST_HAND_SIZE}."
+                    f"Common ${TEST_COSTS_BY_RARITY['Common']}  •  "
+                    f"Uncommon ${TEST_COSTS_BY_RARITY['Uncommon']}  •  "
+                    f"Rare ${TEST_COSTS_BY_RARITY['Rare']} per use."
                 ),
             ),
             (
-                "DIAGNOSIS",
+                "CARD SHOP",
                 (
-                    f"Correct: ${LIMITED_EVIDENCE_REWARD} limited / "
-                    f"${DIAGNOSIS_REWARD} supported. Wrong: -${WRONG_DIAGNOSIS_PENALTY}."
+                    f"Choose a test from the live deck. Starts at ${CARD_SHOP_BASE_PRICE}; "
+                    f"+${CARD_SHOP_PRICE_STEP} after each purchase."
                 ),
             ),
-            ("CONFIDENCE", "Repeated mistakes may cause the patient to leave."),
+            (
+                "CARD HAND",
+                (
+                    f"Random draws cost ${DRAW_COST}; max {MAX_TEST_HAND_SIZE}. "
+                    "Used/discarded cards leave; unused cards return."
+                ),
+            ),
+            (
+                "SUPPLY SHOP",
+                "Permanent machine and clinic discounts carry into future days.",
+            ),
             ("EVIDENCE", "Patient Notes tracks progress toward a hidden two-card clue path."),
-            ("CONTROLS", "H Help  •  M Sound  •  F11 Fullscreen  •  Esc Menu"),
+            (
+                "DIAGNOSIS PAY",
+                (
+                    f"Correct: ${LIMITED_EVIDENCE_REWARD} limited evidence / "
+                    f"${DIAGNOSIS_REWARD} full evidence."
+                ),
+            ),
+            (
+                "MISTAKES",
+                (
+                    f"Wrong: -${WRONG_DIAGNOSIS_PENALTY} and discard that diagnosis. "
+                    "Repeated errors may lose the patient."
+                ),
+            ),
+            (
+                "SHIFT FLOW",
+                "Treat 4 patients, review net pay, visit Supply Shop, then begin the next roster.",
+            ),
         )
+
+    def get_help_controls(self):
+        """Return player-facing shortcuts; developer controls stay hidden."""
+
+        return "H Help  •  M Sound  •  F11 Fullscreen  •  Esc Menu"
 
     def draw_help_button(self):
         """Draw the purple top-right Help control."""
@@ -584,13 +630,24 @@ class TutorialMixin:
         now = pygame.time.get_ticks()
         pulse_active = self.help_attention_started_at is not None
         if pulse_active and now - self.help_attention_started_at >= self.help_attention_duration:
-            self.help_attention_started_at = None
-            self.help_attention_seen = True
+            self.dismiss_help_attention()
             pulse_active = False
         pulse = (math.sin(now / 180) + 1) / 2 if pulse_active else 0
-        draw_rect = rect.inflate(4, 2) if hovered else rect
-        border = (206, 158, 233) if hovered else (155, 116, 190)
-        fill = (50, 37, 68) if hovered else (27, 29, 45)
+        draw_rect = (
+            rect.inflate(round(4 + pulse * 6), round(2 + pulse * 3))
+            if pulse_active
+            else rect.inflate(4, 2)
+            if hovered
+            else rect
+        )
+        border = (
+            (232, 183, 251)
+            if pulse_active
+            else (206, 158, 233)
+            if hovered
+            else (155, 116, 190)
+        )
+        fill = (66, 43, 84) if pulse_active else (50, 37, 68) if hovered else (27, 29, 45)
         if pulse_active:
             halo = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
             halo_rect = draw_rect.inflate(round(12 + pulse * 8), round(8 + pulse * 6))
@@ -614,6 +671,50 @@ class TutorialMixin:
             label,
             label.get_rect(midleft=(draw_rect.x + 32, draw_rect.centery)),
         )
+        if pulse_active:
+            self.draw_help_attention_tooltip(rect, pulse)
+
+    def draw_help_attention_tooltip(self, help_rect, pulse):
+        """Explain the pulsing Help button after training without blocking play."""
+
+        tooltip = pygame.Rect(help_rect.right - 304, help_rect.bottom + 10, 304, 56)
+        glow = pygame.Surface(tooltip.inflate(8, 8).size, pygame.SRCALPHA)
+        pygame.draw.rect(
+            glow,
+            (206, 158, 233, round(30 + pulse * 35)),
+            glow.get_rect(),
+            border_radius=11,
+        )
+        self.screen.blit(glow, tooltip.inflate(8, 8).topleft)
+        pygame.draw.polygon(
+            self.screen,
+            (50, 37, 68),
+            (
+                (help_rect.centerx - 7, tooltip.y),
+                (help_rect.centerx + 7, tooltip.y),
+                (help_rect.centerx, tooltip.y - 8),
+            ),
+        )
+        pygame.draw.rect(self.screen, (50, 37, 68), tooltip, border_radius=9)
+        pygame.draw.rect(
+            self.screen,
+            (216, 159, 238),
+            tooltip,
+            width=2,
+            border_radius=9,
+        )
+        heading = self.tutorial_label_font.render(
+            "NEED A REFRESHER?",
+            True,
+            (232, 211, 242),
+        )
+        detail = self.card_font.render(
+            "Open Help anytime or press H.",
+            True,
+            COLORS["text"],
+        )
+        self.screen.blit(heading, (tooltip.x + 14, tooltip.y + 9))
+        self.screen.blit(detail, (tooltip.x + 14, tooltip.y + 31))
 
     def draw_tutorial_overlay(self):
         """Draw compact reference Help, replacing the old full-screen briefing."""
@@ -621,7 +722,7 @@ class TutorialMixin:
         dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
         dim.fill((2, 6, 12, 218))
         self.screen.blit(dim, (0, 0))
-        panel = pygame.Rect(170, 68, 760, 512)
+        panel = pygame.Rect(150, 28, 800, 584)
         pygame.draw.rect(self.screen, (3, 8, 13), panel.move(8, 9), border_radius=16)
         pygame.draw.rect(self.screen, (23, 29, 42), panel, border_radius=16)
         pygame.draw.rect(self.screen, (187, 137, 211), panel, width=3, border_radius=16)
@@ -635,7 +736,7 @@ class TutorialMixin:
         self.screen.blit(subtitle, subtitle.get_rect(center=(panel.centerx, panel.y + 58)))
 
         context_name, context_detail = self.get_help_context()
-        context = pygame.Rect(panel.x + 30, panel.y + 78, panel.width - 60, 84)
+        context = pygame.Rect(panel.x + 28, panel.y + 76, panel.width - 56, 82)
         pygame.draw.rect(self.screen, (25, 49, 55), context, border_radius=10)
         pygame.draw.rect(self.screen, COLORS["accent"], context, width=2, border_radius=10)
         current_label = self.tutorial_label_font.render(
@@ -672,16 +773,16 @@ class TutorialMixin:
             True,
             (216, 159, 238),
         )
-        self.screen.blit(rules_heading, (panel.x + 31, panel.y + 178))
+        self.screen.blit(rules_heading, (panel.x + 29, panel.y + 174))
         rules = self.get_help_rules()
         for index, (heading, detail) in enumerate(rules):
             column = index % 2
             row_index = index // 2
             rule = pygame.Rect(
-                panel.x + 30 + column * 355,
-                panel.y + 198 + row_index * 70,
-                340,
-                58,
+                panel.x + 28 + column * 382,
+                panel.y + 194 + row_index * 68,
+                370,
+                62,
             )
             pygame.draw.rect(self.screen, (35, 42, 55), rule, border_radius=8)
             pygame.draw.rect(self.screen, (92, 72, 111), rule, width=1, border_radius=8)
@@ -691,7 +792,7 @@ class TutorialMixin:
                 (216, 159, 238),
             )
             self.screen.blit(heading_label, (rule.x + 14, rule.y + 8))
-            detail_box = pygame.Rect(rule.x + 14, rule.y + 27, rule.width - 28, 26)
+            detail_box = pygame.Rect(rule.x + 14, rule.y + 27, rule.width - 28, 31)
             self.draw_wrapped_text(
                 detail,
                 self.card_font,
@@ -699,6 +800,27 @@ class TutorialMixin:
                 detail_box,
                 line_spacing=1,
             )
+        controls = pygame.Rect(panel.x + 28, panel.y + 472, panel.width - 56, 34)
+        pygame.draw.rect(self.screen, (14, 22, 34), controls, border_radius=8)
+        pygame.draw.rect(self.screen, (92, 72, 111), controls, width=1, border_radius=8)
+        controls_label = self.tutorial_label_font.render(
+            "CONTROLS",
+            True,
+            (216, 159, 238),
+        )
+        controls_text = self.card_font.render(
+            self.get_help_controls(),
+            True,
+            COLORS["text"],
+        )
+        self.screen.blit(
+            controls_label,
+            controls_label.get_rect(midleft=(controls.x + 14, controls.centery)),
+        )
+        self.screen.blit(
+            controls_text,
+            controls_text.get_rect(midright=(controls.right - 14, controls.centery)),
+        )
         self.tutorial_begin_button = pygame.Rect(panel.centerx - 145, panel.bottom - 55, 290, 38)
         hovered = self.tutorial_begin_button.collidepoint(self.get_mouse_position())
         color = COLORS["accent"] if hovered else (151, 101, 180)

@@ -220,7 +220,7 @@ class CosmicClinicGUI(
         self.tutorial_opened_at = None
         self.help_attention_started_at = None
         self.help_attention_seen = False
-        self.help_attention_duration = 3200
+        self.help_attention_duration = 5000
         self.guided_tutorial_active = False
         self.guided_tutorial_step = None
         self.guided_tutorial_step_started_at = None
@@ -315,6 +315,11 @@ class CosmicClinicGUI(
                 self.resize_display(event.size)
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 position = self.window_to_game_position(event.pos)
+                if (
+                    self.help_attention_started_at is not None
+                    and not self.guided_tutorial_active
+                ):
+                    self.dismiss_help_attention()
                 if self.developer_navigator_open:
                     self.handle_developer_click(position)
                 elif self.exit_confirmation_open:

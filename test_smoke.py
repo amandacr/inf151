@@ -1011,6 +1011,21 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.daily_evidence_cases, 1)
         self.assertTrue(self.game.last_diagnosis_supported)
         self.assertEqual(self.game.daily_card_shop_expenses, CARD_SHOP_BASE_PRICE)
+        self.assertIsNotNone(self.game.help_attention_started_at)
+        self.assertFalse(self.game.help_attention_seen)
+        self.game.draw()
+        pygame.event.post(
+            pygame.event.Event(
+                pygame.MOUSEBUTTONDOWN,
+                {
+                    "button": 1,
+                    "pos": self.game.game_to_window_position((10, 10)),
+                },
+            )
+        )
+        self.game.handle_events()
+        self.assertIsNone(self.game.help_attention_started_at)
+        self.assertTrue(self.game.help_attention_seen)
 
     def test_compact_help_remains_available_after_training(self):
         """The deleted briefing should be replaced by compact reusable Help."""
@@ -1051,7 +1066,13 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIn(f"${DRAW_COST}", help_copy)
         self.assertIn(str(MAX_TEST_HAND_SIZE), help_copy)
         self.assertIn(f"${WRONG_DIAGNOSIS_PENALTY}", help_copy)
-        self.assertIn("H Help", help_copy)
+        self.assertIn("CARD SHOP", help_copy)
+        self.assertIn("SUPPLY SHOP", help_copy)
+        self.assertIn("unused cards return", help_copy)
+        self.assertIn("future days", help_copy)
+        self.assertIn("next roster", help_copy)
+        self.assertIn("H Help", self.game.get_help_controls())
+        self.assertNotIn("F10", self.game.get_help_controls())
 
         self.assertFalse(self.game.tutorial_open)
         pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_h))
