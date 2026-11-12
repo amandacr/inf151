@@ -1123,6 +1123,7 @@ class ExaminationMixin:
         """Draw either side of the patient's laminated license in a clipped holder."""
 
         panel = self.layout["id_card"]
+        card, portrait, detail_area = self.get_id_card_layout()
         pygame.draw.rect(
             self.screen,
             (5, 12, 18),
@@ -1143,7 +1144,6 @@ class ExaminationMixin:
             else COLORS["panel_border"]
         )
 
-        card = pygame.Rect(panel.x + 8, panel.y + 10, panel.width - 16, panel.height - 18)
         pygame.draw.rect(self.screen, COLORS["card"], card, border_radius=9)
         pygame.draw.rect(
             self.screen,
@@ -1195,22 +1195,21 @@ class ExaminationMixin:
             next_side = "CLICK TO VIEW HEALTH ID"
 
         title = self.body_font.render(title_text, True, COLORS["card_text"])
-        self.screen.blit(title, title.get_rect(center=(card.centerx, card.y + 19)))
+        self.screen.blit(title, title.get_rect(center=(card.centerx, card.y + 17)))
 
         pygame.draw.line(
             self.screen,
             (145, 169, 151),
-            (card.x + 10, card.y + 34),
-            (card.right - 10, card.y + 34),
+            (card.x + 10, card.y + 31),
+            (card.right - 10, card.y + 31),
             width=1,
         )
 
-        portrait = pygame.Rect(card.x + 11, card.y + 43, 51, 63)
         self.draw_id_portrait(portrait, self.showing_health_id)
 
-        detail_x = card.x + 70
-        detail_y = card.y + 43
-        available_width = card.right - 10 - detail_x
+        detail_x = detail_area.x
+        detail_y = detail_area.y
+        available_width = detail_area.width
         detail_line_height = self.id_detail_font.get_linesize()
         for label, value in details:
             detail_text = f"{label}: {value}"
@@ -1241,6 +1240,26 @@ class ExaminationMixin:
         )
 
 
+    def get_id_card_layout(self):
+        """Return the compact ID geometry shared by drawing and fit tests."""
+
+        panel = self.layout["id_card"]
+        card = pygame.Rect(
+            panel.x + 8,
+            panel.y + 8,
+            panel.width - 16,
+            panel.height - 14,
+        )
+        portrait = pygame.Rect(card.x + 10, card.y + 38, 48, 60)
+        detail_area = pygame.Rect(
+            card.x + 64,
+            card.y + 38,
+            card.width - 74,
+            card.height - 58,
+        )
+        return card, portrait, detail_area
+
+
     def draw_id_portrait(self, portrait, medical_side):
         """Draw a miniature version of Zorpa on either side of the ID."""
 
@@ -1256,9 +1275,17 @@ class ExaminationMixin:
             border_radius=5,
         )
 
-        asset = self.get_current_entry().get('asset')
+        entry = self.get_current_entry()
+        asset = entry.get("asset")
         if asset:
-            self.fit_patient_sprite(asset, portrait.inflate(-8, -8))
+            self.fit_patient_sprite(
+                asset,
+                portrait.inflate(-8, -8),
+                render_style=entry.get("render_style", "smooth"),
+                presentation_scale=0.92,
+                anchor="center",
+                outline_width=1,
+            )
             return
 
         head = pygame.Rect(portrait.centerx - 12, portrait.y + 11, 24, 22)

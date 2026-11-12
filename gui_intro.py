@@ -92,7 +92,10 @@ class IntroMixin:
             self.draw_intro_tractor_beam(beam_strength)
             self.draw_intro_floating_debris(elapsed, beam_progress)
 
-        approach = self._intro_smooth((elapsed - 1700) / 3300)
+        # Let the location timestamp finish before the ship enters. Keeping
+        # these beats separate prevents the growing transformed UFO surface
+        # from passing through the timestamp area on some displays.
+        approach = self._intro_smooth((elapsed - 3600) / 1900)
         if approach > 0:
             departure = self._intro_smooth((elapsed - 7900) / 1250)
             if departure > 0:
@@ -118,30 +121,23 @@ class IntroMixin:
 
         location_progress = self._intro_clamp(elapsed / 650)
         location_fade = 1.0 - self._intro_clamp((elapsed - 2900) / 650)
-        location_alpha = round(255 * location_progress * location_fade)
-        if location_alpha > 0:
+        location_visibility = location_progress * location_fade
+        if location_visibility > 0:
+            sky_color = (4, 9, 25)
+            target_color = (218, 230, 244)
+            location_color = tuple(
+                round(
+                    sky_channel
+                    + (target_channel - sky_channel) * location_visibility
+                )
+                for sky_channel, target_channel in zip(sky_color, target_color)
+            )
             location = self.heading_font.render(
                 "EARTH  —  11:47 PM",
                 True,
-                (218, 230, 244),
+                location_color,
             )
-            location.set_alpha(location_alpha)
             location_rect = location.get_rect(center=(550, 72))
-            # Mask stars behind the location card. A bright star previously
-            # showed through the letter spacing and looked like a stray white
-            # line or a broken "EARTH" label during the opening movie.
-            location_backing = pygame.Surface(
-                location_rect.inflate(30, 14).size,
-                pygame.SRCALPHA,
-            )
-            pygame.draw.rect(
-                location_backing,
-                (3, 8, 18, location_alpha),
-                location_backing.get_rect(),
-                border_radius=8,
-            )
-            backing_rect = location_backing.get_rect(center=location_rect.center)
-            self.screen.blit(location_backing, backing_rect)
             self.screen.blit(location, location_rect)
 
         # The abduction flashes white before the ship snaps away into the distance.
@@ -168,6 +164,11 @@ class IntroMixin:
 
         for star_index, (star_x, star_y, star_size) in enumerate(self.intro_stars):
             if star_y > 360:
+                continue
+            # Leave a clean patch of sky for the fading location timestamp.
+            # Avoiding stars here removes the need for a visible backing box
+            # while still preventing a star from breaking up the lettering.
+            if 390 <= star_x <= 710 and 42 <= star_y <= 102:
                 continue
             twinkle = (elapsed // 210 + star_index) % 6 == 0
             star_color = (231, 240, 255) if twinkle else (124, 153, 190)

@@ -12,6 +12,7 @@ from Player import (
     DRAW_COST,
     LIMITED_EVIDENCE_REWARD,
     MAX_TEST_HAND_SIZE,
+    RETURN_PASSAGE_COST,
     WRONG_DIAGNOSIS_PENALTY,
 )
 from Test import TEST_COSTS_BY_RARITY
@@ -20,8 +21,17 @@ from Test import TEST_COSTS_BY_RARITY
 class TutorialMixin:
     """Guide the player through Zorpa using the real clinic controls."""
 
+    def is_training_destination(self):
+        """Return whether the active route stop owns the guided first case."""
+
+        return self.current_destination.key == self.destinations[0].key
+
     def start_guided_tutorial(self):
-        """Begin the first-shift walkthrough at the reception call button."""
+        """Begin training only at the route's first destination."""
+
+        if not self.is_training_destination():
+            self.finish_guided_tutorial()
+            return False
 
         self.tutorial_open = False
         self.tutorial_opened_at = None
@@ -31,6 +41,7 @@ class TutorialMixin:
         self.guided_tutorial_nudge_started_at = None
         self.guided_tutorial_step_started_at = pygame.time.get_ticks()
         self.help_attention_started_at = None
+        return True
 
     def finish_guided_tutorial(self, show_help_reminder=False):
         """Release every control after Zorpa's training case or a manual skip."""
@@ -505,7 +516,9 @@ class TutorialMixin:
             GameState.OUTCOME: "RETURN TO CASE RESULT",
             GameState.DAY_COMPLETE: "RETURN TO SHIFT RECAP",
             GameState.SHOP: "RETURN TO SHOP",
+            GameState.ROUTE_BRIEFING: "RETURN TO ROUTE BRIEFING",
             GameState.ENDING: "CONTINUE ENDING",
+            GameState.ARRIVAL: "RETURN TO ARRIVAL",
             GameState.FINAL: "RETURN TO SUMMARY",
         }.get(self.state, "CLOSE HELP")
 
@@ -551,15 +564,27 @@ class TutorialMixin:
             ),
             GameState.SHOP: (
                 "SUPPLY SHOP",
-                "Buy permanent test-cost upgrades that remain installed during future clinic days.",
+                "Buy permanent test-cost upgrades. Your money and installed upgrades carry between planets.",
+            ),
+            GameState.ROUTE_BRIEFING: (
+                "ROUTE BRIEFING",
+                "The clinic visits a new destination after every shift. Earn credits while traveling toward passage home.",
             ),
             GameState.ENDING: (
-                "SHIFT DEPARTURE",
-                "The clinic is closing for the shift. Click or press Enter if you want to skip the departure.",
+                "DESTINATION TRAVEL" if self.route.arrival_pending else "FINAL DEPARTURE",
+                (
+                    "The clinic is traveling to its next destination. Click or press Enter to skip the journey."
+                    if self.route.arrival_pending
+                    else "The configured route is complete. Click or press Enter to skip the final departure."
+                ),
+            ),
+            GameState.ARRIVAL: (
+                "PLANET ARRIVAL",
+                "Review the next destination and patient roster, then begin the new clinic shift.",
             ),
             GameState.FINAL: (
-                "SHIFT SUMMARY",
-                "Review the final report, then continue to the next patient roster or quit the game.",
+                "ROUTE COMPLETE",
+                "The configured route is complete. Restart it or quit while the next destination is prepared.",
             ),
         }.get(
             self.state,
@@ -593,8 +618,11 @@ class TutorialMixin:
                 ),
             ),
             (
-                "SUPPLY SHOP",
-                "Permanent machine and clinic discounts carry into future days.",
+                "CARRYOVER",
+                (
+                    "Money and permanent upgrades carry between planets. "
+                    f"Save ${RETURN_PASSAGE_COST} for passage home."
+                ),
             ),
             ("EVIDENCE", "Patient Notes tracks progress toward a hidden two-card clue path."),
             (
@@ -612,8 +640,8 @@ class TutorialMixin:
                 ),
             ),
             (
-                "SHIFT FLOW",
-                "Treat 4 patients, review net pay, visit Supply Shop, then begin the next roster.",
+                "PLANET ROUTE",
+                "Each shift visits a new destination with different aliens and conditions.",
             ),
         )
 
@@ -914,7 +942,11 @@ class TutorialMixin:
         pygame.draw.polygon(self.screen, (2, 7, 12), tuple((x + 4, y + 5) for x, y in points))
         pygame.draw.polygon(self.screen, (11, 29, 36), points)
         pygame.draw.lines(self.screen, accent, True, points, width=2)
-        step_label = self.tutorial_label_font.render(f"TRAINING CASE  •  STEP {self.get_guided_tutorial_step_number()} OF 9", True, accent)
+        step_label = self.tutorial_label_font.render(
+            f"TRAINING ORBIT CASE  •  STEP {self.get_guided_tutorial_step_number()} OF 9",
+            True,
+            accent,
+        )
         self.screen.blit(step_label, (panel.x + 16, panel.y + 10))
         message_box = pygame.Rect(
             panel.x + 16,

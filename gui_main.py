@@ -9,7 +9,6 @@ import pygame
 
 from Tests.catalog import create_test_catalog
 from gui_patient_assets import PatientAssetMixin
-from functools import partial
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
 from gui_card_shop import CardShopMixin
@@ -30,8 +29,9 @@ from gui_theme import (
     FPS,
     WINDOW_SIZE,
 )
-from PatientData import create_zorpa, create_zoogy, create_titus, create_conmann
+from PlanetData import DESTINATIONS
 from Player import Player, STARTING_TEST_HAND_SIZE
+from RouteController import RouteController
 from Notebook import Notebook
 from Deck import Deck
 
@@ -53,6 +53,32 @@ class CosmicClinicGUI(
     ShopMixin,
     TutorialMixin,
 ):
+
+    @property
+    def day_number(self):
+        """Expose the route day to existing screen code without duplicating state."""
+
+        return self.route.current_day
+
+    @property
+    def current_destination(self):
+        """Expose the active route destination to screens and tests."""
+
+        return self.route.current_destination
+
+    @property
+    def destinations(self):
+        """Expose the configured route without letting the GUI own it."""
+
+        return self.route.destinations
+
+    def get_location_subtitle(self):
+        """Return the persistent day and destination label used by clinic screens."""
+
+        return (
+            f"DAY {self.day_number}  •  "
+            f"{self.current_destination.planet_name.upper()}"
+        )
 
     def __init__(self, card_seed=None):
         """Set up Pygame, shared game data, layout rectangles, and fonts."""
@@ -78,41 +104,11 @@ class CosmicClinicGUI(
             for _ in range(70)
         ]
 
-        self.waiting_room_queue = [
-            {
-                "chair_x": 782, "draw": self.draw_waiting_zorpa, "create": create_zorpa,
-                "exam": None,
-                "serial": "BLP-004-ZV",
-                "portrait": ((218, 199, 235), (91, 59, 125), (126, 75, 174), (190, 143, 229)),
-            },
-            {
-                "chair_x": 640, "draw": self.draw_waiting_zoogy, "create": create_zoogy,
-                "exam": self.draw_exam_zoogy,
-                "serial": "GRN-017-ZG",
-                "portrait": ((205, 228, 208), (49, 111, 82), (84, 151, 108), (151, 211, 155)),
-            },
-            {
-                "chair_x": 498, "draw": self.draw_waiting_titus, "create": create_titus,
-                "exam": self.draw_exam_titus,
-                "serial": "BLU-203-TT",
-                "portrait": ((200, 222, 236), (38, 83, 119), (64, 125, 166), (118, 190, 220)),
-            },
-            {
-                "chair_x": 356, "draw": self.draw_waiting_conmann, "create": create_conmann,
-                "exam": self.draw_exam_conmann,
-                "serial": "ORG-088-CM",
-                "portrait": ((240, 212, 196), (159, 70, 66), (226, 127, 91), (249, 170, 119)),
-            },
-        ]
         self.patient_sprite_cache = {}
-        self.day_number = 1
-        for entry, name in zip(self.waiting_room_queue, ('zorpa', 'zoogy', 'titus', 'conmann')):
-            entry['asset'] = name
-            entry['draw'] = partial(self.draw_waiting_asset, name, entry['chair_x'])
-            entry['exam'] = partial(self.draw_exam_asset, name)
-        self.day_one_queue = [dict(entry) for entry in self.waiting_room_queue]
-        self.day_two_queue = [dict(entry) for entry in self.later_shift_roster()]
-        self.next_shift_queue = [dict(entry) for entry in self.day_two_queue]
+        self.route = RouteController(DESTINATIONS)
+        self.waiting_room_queue = self.roster_for_destination(
+            self.route.current_destination
+        )
         self.patients_called = 0
         self.daily_correct_diagnoses = 0
         self.daily_wrong_diagnoses = 0
@@ -207,8 +203,13 @@ class CosmicClinicGUI(
         self.purchased_shop_upgrades = set()
         self.shop_scroll_row = 0
         self.shop_message = "Select an upgrade to inspect it."
+        self.route_briefing_seen = False
+        self.route_briefing_index = 0
         self.ending_started_at = None
         self.ending_duration = 4200
+        self.arrival_started_at = None
+        self.arrival_animation_duration = 2400
+        self.arrival_begin_button = pygame.Rect(370, 570, 360, 48)
         self.exit_confirmation_open = False
         self.exit_confirmation_opened_at = None
         self.exit_continue_button = pygame.Rect(365, 300, 370, 46)
@@ -238,7 +239,9 @@ class CosmicClinicGUI(
             "status_bar": pygame.Rect(30, 100, 1040, 50),
             "draw_deck": pygame.Rect(45, 180, 150, 175),
             "alien": pygame.Rect(233, 165, 230, 195),
-            "id_card": pygame.Rect(483, 180, 324, 200),
+            # Keep the ID fully inside the panoramic examination window.
+            # Its previous 200px height crossed the lower window frame.
+            "id_card": pygame.Rect(493, 170, 304, 188),
             "throwaway": pygame.Rect(923, 423, 100, 125),
             "notebook": pygame.Rect(35, 395, 180, 165),
             "active_hand": pygame.Rect(225, 390, 625, 170),
@@ -354,9 +357,14 @@ class CosmicClinicGUI(
                     self.handle_shop_click(position)
                 elif self.state == GameState.DAY_COMPLETE:
                     self.handle_day_complete_click(position)
+                elif self.state == GameState.ROUTE_BRIEFING:
+                    self.play_sfx("button")
+                    self.advance_route_briefing()
                 elif self.state == GameState.ENDING:
                     self.play_sfx("button")
                     self.finish_ending_sequence()
+                elif self.state == GameState.ARRIVAL:
+                    self.handle_arrival_click(position)
                 elif self.state == GameState.FINAL:
                     self.handle_final_screen_click(position)
             elif event.type == pygame.MOUSEWHEEL:
@@ -376,7 +384,10 @@ class CosmicClinicGUI(
                     continue
                 if self.developer_navigator_open:
                     if event.key == pygame.K_ESCAPE:
-                        self.toggle_developer_navigator()
+                        if self.developer_navigator_level == "screens":
+                            self.return_to_developer_destinations()
+                        else:
+                            self.toggle_developer_navigator()
                     else:
                         self.handle_developer_key(event.key)
                     continue
@@ -436,9 +447,14 @@ class CosmicClinicGUI(
                     self.handle_shop_click(self.shop_button.center)
                 elif event.key == pygame.K_RETURN and self.state == GameState.DAY_COMPLETE:
                     self.handle_day_complete_click(self.day_complete_button.center)
+                elif event.key in (pygame.K_RETURN, pygame.K_SPACE) and self.state == GameState.ROUTE_BRIEFING:
+                    self.play_sfx("button")
+                    self.advance_route_briefing()
                 elif event.key == pygame.K_RETURN and self.state == GameState.ENDING:
                     self.play_sfx("button")
                     self.finish_ending_sequence()
+                elif event.key == pygame.K_RETURN and self.state == GameState.ARRIVAL:
+                    self.handle_arrival_click(self.arrival_begin_button.center)
                 elif event.key == pygame.K_LEFT and self.state == GameState.NOTEBOOK:
                     self.flip_notebook(-1)
                 elif event.key == pygame.K_RIGHT and self.state == GameState.NOTEBOOK:
@@ -555,6 +571,9 @@ class CosmicClinicGUI(
             self.update_ending_sequence()
             return
 
+        if self.state == GameState.ARRIVAL:
+            return
+
         if self.state == GameState.FINAL:
             return
 
@@ -630,7 +649,10 @@ class CosmicClinicGUI(
             return
         if self.shop_button.collidepoint(position):
             self.play_sfx("button")
-            self.begin_ending_sequence()
+            if self.should_show_route_briefing():
+                self.start_route_briefing()
+            else:
+                self.begin_ending_sequence()
             return
         self.handle_shop_upgrade_click(position)
 
@@ -781,6 +803,30 @@ class CosmicClinicGUI(
                 self.draw_developer_navigator()
             return
 
+        if self.state == GameState.ROUTE_BRIEFING:
+            self.draw_route_briefing_screen()
+            self.draw_help_button()
+            self.draw_audio_button()
+            if self.tutorial_open:
+                self.draw_tutorial_overlay()
+            if self.exit_confirmation_open:
+                self.draw_exit_confirmation()
+            if self.developer_navigator_open:
+                self.draw_developer_navigator()
+            return
+
+        if self.state == GameState.ARRIVAL:
+            self.draw_planet_arrival_screen()
+            self.draw_help_button()
+            self.draw_audio_button()
+            if self.tutorial_open:
+                self.draw_tutorial_overlay()
+            if self.exit_confirmation_open:
+                self.draw_exit_confirmation()
+            if self.developer_navigator_open:
+                self.draw_developer_navigator()
+            return
+
         if self.state == GameState.FINAL:
             self.draw_final_screen()
             self.draw_help_button()
@@ -796,11 +842,7 @@ class CosmicClinicGUI(
         self.screen.fill(COLORS["background"])
         self.draw_game_logo((WINDOW_SIZE[0] // 2, 38), scale=0.86)
 
-        subtitle_text = (
-            "RECEPTION"
-            if self.state == GameState.TITLE
-            else "INTERGALACTIC MEDICAL SERVICE"
-        )
+        subtitle_text = self.get_location_subtitle()
         subtitle = self.small_font.render(subtitle_text, True, COLORS["muted"])
         self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_SIZE[0] // 2, 76)))
 

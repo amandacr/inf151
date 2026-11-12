@@ -9,6 +9,11 @@ from gui_theme import COLORS, WINDOW_SIZE
 
 
 class ReceptionMixin:
+    def get_reception_theme(self):
+        """Return the visual theme for the route's current destination."""
+
+        return self.current_destination.theme
+
     def finish_intro(self):
         """Skip or finish the cinematic and begin the abduction conversation."""
 
@@ -335,26 +340,33 @@ class ReceptionMixin:
     def draw_reception_room(self):
         """Draw the reception walls, flooring, and structural framing."""
 
+        theme = self.get_reception_theme()
         room = pygame.Rect(18, 90, WINDOW_SIZE[0] - 36, 490)
-        pygame.draw.rect(self.screen, (48, 59, 79), room, border_radius=15)
-        pygame.draw.rect(self.screen, (112, 129, 145), room, width=3, border_radius=15)
+        pygame.draw.rect(self.screen, theme.room_color, room, border_radius=15)
+        pygame.draw.rect(
+            self.screen,
+            theme.structure_color,
+            room,
+            width=3,
+            border_radius=15,
+        )
 
         upper_wall = pygame.Rect(room.x + 3, room.y + 3, room.width - 6, 320)
-        pygame.draw.rect(self.screen, (55, 68, 91), upper_wall, border_radius=12)
+        pygame.draw.rect(self.screen, theme.wall_color, upper_wall, border_radius=12)
         for panel_x in (365, 742):
             pygame.draw.line(
                 self.screen,
-                (92, 108, 128),
+                theme.structure_color,
                 (panel_x, 155),
                 (panel_x, 408),
                 width=2,
             )
 
         floor = pygame.Rect(room.x + 3, 405, room.width - 6, 172)
-        pygame.draw.rect(self.screen, (68, 64, 87), floor)
+        pygame.draw.rect(self.screen, theme.floor_color, floor)
         pygame.draw.line(
             self.screen,
-            (155, 137, 171),
+            theme.floor_trim_color,
             (floor.x, floor.y),
             (floor.right, floor.y),
             width=3,
@@ -362,7 +374,7 @@ class ReceptionMixin:
         for floor_x in range(70, WINDOW_SIZE[0], 145):
             pygame.draw.line(
                 self.screen,
-                (80, 75, 102),
+                tuple(max(0, component - 10) for component in theme.floor_color),
                 (floor_x, floor.y + 5),
                 (floor_x - 45, floor.bottom),
                 width=1,
@@ -372,9 +384,11 @@ class ReceptionMixin:
     def draw_reception_status(self):
         """Draw reception, waiting status, shift, and money on a clinic monitor."""
 
+        theme = self.get_reception_theme()
         panel = pygame.Rect(30, 100, 1040, 49)
-        pygame.draw.rect(self.screen, (54, 78, 78), panel, border_radius=10)
-        pygame.draw.rect(self.screen, COLORS["panel_border"], panel, width=2, border_radius=10)
+        panel_color = tuple((a + b) // 2 for a, b in zip(theme.wall_color, theme.space_color))
+        pygame.draw.rect(self.screen, panel_color, panel, border_radius=10)
+        pygame.draw.rect(self.screen, theme.sign_color, panel, width=2, border_radius=10)
         display = panel.inflate(-10, -10)
         pygame.draw.rect(self.screen, (5, 19, 24), display, border_radius=7)
 
@@ -383,7 +397,7 @@ class ReceptionMixin:
         waiting_color = (
             (117, 190, 255)
             if queue_moving
-            else COLORS["accent"] if progress > 0 else (255, 198, 75)
+            else theme.sign_color if progress > 0 else (255, 198, 75)
         )
         pulse = 2 if (pygame.time.get_ticks() // 450) % 2 == 0 else 0
         pygame.draw.circle(
@@ -407,7 +421,7 @@ class ReceptionMixin:
         right = self.body_font.render(
             "MONEY: $" + str(self.get_displayed_balance()),
             True,
-            COLORS["accent"],
+            theme.sign_color,
         )
         self.screen.blit(left, left.get_rect(midleft=(display.x + 29, display.centery)))
         self.screen.blit(middle, middle.get_rect(center=display.center))
@@ -417,6 +431,10 @@ class ReceptionMixin:
 
     def draw_waiting_room_windows(self):
         """Draw the panoramic space windows across the waiting-room wall."""
+
+        if self.get_reception_theme().scene == "triska_orbit":
+            self.draw_triska_waiting_room_windows()
+            return
 
         window = pygame.Rect(37, 164, 792, 239)
         pygame.draw.rect(self.screen, (17, 31, 62), window, border_radius=13)
@@ -576,18 +594,142 @@ class ReceptionMixin:
         self.screen.blit(poster_line, poster_line.get_rect(center=(poster.centerx, poster.y + 40)))
         self.screen.blit(poster_line_two, poster_line_two.get_rect(center=(poster.centerx, poster.y + 55)))
 
+    def draw_triska_waiting_room_windows(self):
+        """Draw Triska's amber desert world and its paired moons."""
+
+        theme = self.get_reception_theme()
+        window = pygame.Rect(37, 164, 792, 239)
+        pygame.draw.rect(self.screen, theme.space_color, window, border_radius=13)
+        previous_clip = self.screen.get_clip()
+        self.screen.set_clip(window)
+
+        # Violet orbital haze keeps the desert view connected to outer space.
+        haze = pygame.Surface(window.size, pygame.SRCALPHA)
+        pygame.draw.ellipse(haze, (*theme.secondary_color, 19), pygame.Rect(40, 8, 390, 112))
+        pygame.draw.ellipse(haze, (*theme.accent_color, 15), pygame.Rect(382, 54, 370, 125))
+        self.screen.blit(haze, window.topleft)
+
+        elapsed = pygame.time.get_ticks()
+        stars = (
+            (54, 187, 1), (82, 232, 1), (111, 199, 2), (144, 286, 1),
+            (176, 213, 1), (206, 253, 1), (252, 186, 1), (292, 229, 2),
+            (328, 202, 1), (366, 274, 1), (409, 186, 1), (447, 238, 1),
+            (486, 207, 2), (529, 265, 1), (565, 191, 1), (604, 225, 1),
+            (647, 181, 1), (682, 248, 2), (720, 207, 1), (758, 277, 1),
+            (800, 194, 1),
+        )
+        for index, (x, y, radius) in enumerate(stars):
+            bright = (elapsed // 320 + index * 2) % 11 == 0
+            color = (255, 228, 185) if bright else (190, 183, 208)
+            pygame.draw.circle(self.screen, color, (x, y), radius + int(bright))
+
+        # Triska and its atmosphere fill the lower half of the panoramic view.
+        atmosphere = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        pygame.draw.ellipse(
+            atmosphere,
+            (*theme.accent_color, 34),
+            pygame.Rect(112, 258, 690, 280),
+        )
+        self.screen.blit(atmosphere, (0, 0))
+        pygame.draw.ellipse(self.screen, (143, 72, 58), pygame.Rect(126, 286, 665, 260))
+        pygame.draw.ellipse(self.screen, (190, 102, 64), pygame.Rect(126, 297, 665, 228))
+        pygame.draw.ellipse(self.screen, (219, 137, 75), pygame.Rect(126, 318, 665, 190))
+        pygame.draw.arc(
+            self.screen,
+            (247, 183, 102),
+            pygame.Rect(126, 297, 665, 228),
+            math.pi,
+            math.pi * 2,
+            width=2,
+        )
+        # Distant ridges and tiny settlement lights create depth on the surface.
+        pygame.draw.polygon(
+            self.screen,
+            (121, 62, 65),
+            ((126, 356), (220, 311), (300, 350), (384, 303), (474, 350),
+             (574, 316), (666, 351), (791, 322), (791, 403), (126, 403)),
+        )
+        pygame.draw.polygon(
+            self.screen,
+            (157, 79, 62),
+            ((126, 375), (258, 338), (354, 377), (458, 335), (551, 373),
+             (663, 343), (791, 377), (791, 403), (126, 403)),
+        )
+        for light_x in (276, 286, 526, 538, 548, 705):
+            pygame.draw.circle(self.screen, (255, 209, 121), (light_x, 367), 1)
+
+        # The paired moons are Triska's most recognizable landmark.
+        pygame.draw.circle(self.screen, (104, 189, 216), (606, 220), 28)
+        pygame.draw.circle(self.screen, (164, 225, 225), (597, 211), 10)
+        pygame.draw.circle(self.screen, (72, 126, 171), (620, 228), 7)
+        pygame.draw.circle(self.screen, (218, 173, 201), (672, 250), 16)
+        pygame.draw.circle(self.screen, (244, 206, 214), (667, 245), 5)
+
+        # Small station traffic follows a repeating orbital lane.
+        shuttle_x = 275 + round((elapsed / 38) % 310)
+        shuttle_y = 243 - round((shuttle_x - 275) * 0.055)
+        pygame.draw.line(
+            self.screen,
+            (118, 189, 215),
+            (shuttle_x - 19, shuttle_y + 2),
+            (shuttle_x - 5, shuttle_y),
+            width=2,
+        )
+        pygame.draw.polygon(
+            self.screen,
+            (238, 202, 165),
+            ((shuttle_x - 5, shuttle_y - 4), (shuttle_x + 8, shuttle_y),
+             (shuttle_x - 5, shuttle_y + 4)),
+        )
+
+        # Slow dust motes suggest the station is skimming Triska's upper atmosphere.
+        for index in range(13):
+            dust_x = window.x + ((index * 73 + elapsed // 34) % (window.width - 18))
+            dust_y = window.y + 86 + ((index * 37) % 118)
+            dust_color = (235, 168, 103) if index % 3 else (172, 132, 159)
+            pygame.draw.circle(self.screen, dust_color, (dust_x, dust_y), 1)
+
+        for divider_x in (235, 433, 631):
+            pygame.draw.line(
+                self.screen,
+                theme.structure_color,
+                (divider_x, window.y + 4),
+                (divider_x, window.bottom - 4),
+                width=3,
+            )
+        pygame.draw.rect(
+            self.screen,
+            theme.structure_color,
+            window,
+            width=4,
+            border_radius=13,
+        )
+        self.screen.set_clip(previous_clip)
+
+        plaque = pygame.Rect(58, 184, 137, 73)
+        pygame.draw.rect(self.screen, (55, 39, 61), plaque, border_radius=7)
+        pygame.draw.rect(self.screen, theme.sign_color, plaque, width=2, border_radius=7)
+        title = self.pile_font.render("TRISKA STATION", True, (255, 227, 198))
+        route = self.pile_font.render("TRI-SYSTEM ROUTE", True, theme.sign_color)
+        weather = self.pile_font.render("DUST TIDE: CALM", True, theme.secondary_color)
+        self.screen.blit(title, title.get_rect(center=(plaque.centerx, plaque.y + 17)))
+        self.screen.blit(route, route.get_rect(center=(plaque.centerx, plaque.y + 40)))
+        self.screen.blit(weather, weather.get_rect(center=(plaque.centerx, plaque.y + 55)))
+
 
     def draw_waiting_room_door(self):
         """Draw the side examination door opening as the next patient approaches."""
 
+        theme = self.get_reception_theme()
         frame = pygame.Rect(850, 163, 211, 398)
-        pygame.draw.rect(self.screen, (35, 44, 59), frame, border_radius=15)
-        pygame.draw.rect(self.screen, (117, 134, 148), frame, width=4, border_radius=15)
+        frame_fill = tuple(max(0, component - 24) for component in theme.wall_color)
+        pygame.draw.rect(self.screen, frame_fill, frame, border_radius=15)
+        pygame.draw.rect(self.screen, theme.structure_color, frame, width=4, border_radius=15)
         plaque = pygame.Rect(871, 173, 169, 31)
         pygame.draw.rect(self.screen, (23, 32, 46), plaque, border_radius=6)
 
         progress = self.get_reception_transition_progress()
-        light_color = COLORS["accent"] if progress > 0 else (255, 198, 75)
+        light_color = theme.sign_color if progress > 0 else (255, 198, 75)
         plaque_text = "EXAM BAY 01"
         plaque_label = self.small_font.render(plaque_text, True, light_color)
         self.screen.blit(plaque_label, plaque_label.get_rect(center=plaque.center))
@@ -613,11 +755,12 @@ class ReceptionMixin:
             doorway.height,
         )
         for panel in (left_panel, right_panel):
-            pygame.draw.rect(self.screen, (80, 108, 122), panel)
-            pygame.draw.rect(self.screen, (139, 170, 176), panel, width=2)
+            panel_color = tuple((a + b) // 2 for a, b in zip(theme.wall_color, theme.structure_color))
+            pygame.draw.rect(self.screen, panel_color, panel)
+            pygame.draw.rect(self.screen, theme.structure_color, panel, width=2)
             pygame.draw.line(
                 self.screen,
-                (164, 191, 190),
+                theme.floor_trim_color,
                 (panel.x + 9, panel.y + 18),
                 (panel.x + 9, panel.bottom - 18),
                 width=2,
@@ -634,55 +777,72 @@ class ReceptionMixin:
     def draw_waiting_room_chairs(self):
         """Draw a row of futuristic chairs for the waiting patients."""
 
+        theme = self.get_reception_theme()
+        chair_shadow = tuple(max(0, component - 24) for component in theme.chair_color)
+        seat_color = tuple(
+            min(255, component + 8) for component in theme.chair_color
+        )
         for chair_center_x in (356, 498, 640, 782):
             back = pygame.Rect(chair_center_x - 48, 331, 96, 91)
             seat = pygame.Rect(chair_center_x - 52, 404, 104, 30)
             pygame.draw.ellipse(
                 self.screen,
-                (39, 38, 56),
+                chair_shadow,
                 pygame.Rect(chair_center_x - 58, 457, 116, 18),
             )
-            pygame.draw.rect(self.screen, (50, 48, 73), back, border_radius=18)
-            pygame.draw.rect(self.screen, (119, 91, 132), back, width=3, border_radius=18)
+            pygame.draw.rect(self.screen, chair_shadow, back, border_radius=18)
+            pygame.draw.rect(
+                self.screen,
+                theme.chair_accent_color,
+                back,
+                width=3,
+                border_radius=18,
+            )
             inner_back = back.inflate(-14, -14)
-            pygame.draw.rect(self.screen, (59, 56, 84), inner_back, border_radius=14)
+            pygame.draw.rect(self.screen, theme.chair_color, inner_back, border_radius=14)
             pygame.draw.arc(
                 self.screen,
-                (139, 105, 150),
+                theme.chair_accent_color,
                 inner_back.inflate(-9, -7),
                 math.pi,
                 math.pi * 2,
                 width=2,
             )
-            pygame.draw.rect(self.screen, (69, 63, 91), seat, border_radius=10)
-            pygame.draw.rect(self.screen, (145, 113, 149), seat, width=2, border_radius=10)
+            pygame.draw.rect(self.screen, seat_color, seat, border_radius=10)
+            pygame.draw.rect(
+                self.screen,
+                theme.chair_accent_color,
+                seat,
+                width=2,
+                border_radius=10,
+            )
             pygame.draw.line(
                 self.screen,
-                (94, 77, 111),
+                theme.chair_accent_color,
                 (seat.x + 12, seat.centery),
                 (seat.right - 12, seat.centery),
                 width=1,
             )
             for arm_x in (seat.x - 5, seat.right - 5):
                 arm = pygame.Rect(arm_x, seat.y - 11, 10, 24)
-                pygame.draw.rect(self.screen, (56, 57, 78), arm, border_radius=5)
+                pygame.draw.rect(self.screen, chair_shadow, arm, border_radius=5)
                 pygame.draw.rect(
                     self.screen,
-                    (122, 116, 139),
+                    theme.structure_color,
                     arm,
                     width=1,
                     border_radius=5,
                 )
             pygame.draw.line(
                 self.screen,
-                (91, 96, 116),
+                theme.structure_color,
                 (chair_center_x - 33, seat.bottom),
                 (chair_center_x - 39, 470),
                 width=6,
             )
             pygame.draw.line(
                 self.screen,
-                (91, 96, 116),
+                theme.structure_color,
                 (chair_center_x + 33, seat.bottom),
                 (chair_center_x + 39, 470),
                 width=6,
@@ -930,30 +1090,33 @@ class ReceptionMixin:
                 width=1,
             )
 
-    def draw_reception_desk(self):
+    def draw_reception_desk(self, force_empty=False):
         """Draw the small reception desk, queue display, and decorative plant."""
 
+        theme = self.get_reception_theme()
         desk = pygame.Rect(35, 450, 280, 108)
-        pygame.draw.rect(self.screen, (55, 56, 78), desk, border_radius=9)
-        pygame.draw.rect(self.screen, (112, 107, 133), desk, width=2, border_radius=9)
+        desk_color = tuple(max(0, component - 4) for component in theme.floor_color)
+        pygame.draw.rect(self.screen, desk_color, desk, border_radius=9)
+        pygame.draw.rect(self.screen, theme.structure_color, desk, width=2, border_radius=9)
         pygame.draw.rect(
             self.screen,
-            (144, 129, 157),
+            theme.floor_trim_color,
             pygame.Rect(desk.x - 4, desk.y, desk.width + 8, 13),
             border_radius=5,
         )
         queue = pygame.Rect(61, 464, 238, 31)
         pygame.draw.rect(self.screen, (12, 27, 34), queue, border_radius=5)
         pygame.draw.rect(self.screen, (91, 132, 132), queue, width=1, border_radius=5)
-        if self.queue_shift_started_at is not None:
-            queue_text = f"{self.patients_waiting()} WAITING • MOVING UP"
-        elif self.get_reception_transition_progress() > 0:
+        waiting = 0 if force_empty else self.patients_waiting()
+        if not force_empty and self.queue_shift_started_at is not None:
+            queue_text = f"{waiting} WAITING • MOVING UP"
+        elif not force_empty and self.get_reception_transition_progress() > 0:
             queue_text = "CALLING PATIENT..."
-        elif self.patients_waiting() == 0:
+        elif waiting == 0:
             queue_text = "NO PATIENTS WAITING"
         else:
-            queue_text = f"PATIENTS WAITING: {self.patients_waiting()}"
-        queue_label = self.card_font.render(queue_text, True, COLORS["accent"])
+            queue_text = f"PATIENTS WAITING: {waiting}"
+        queue_label = self.card_font.render(queue_text, True, theme.sign_color)
         self.screen.blit(queue_label, queue_label.get_rect(center=queue.center))
 
         # A tiny service bell adds a friendly reception-desk detail.
@@ -969,13 +1132,17 @@ class ReceptionMixin:
         pygame.draw.polygon(self.screen, (142, 167, 176), bell_points)
         pygame.draw.lines(self.screen, (211, 231, 228), False, bell_points[1:5], width=2)
         pygame.draw.line(self.screen, (74, 94, 106), (211, 447), (238, 447), width=2)
-        pygame.draw.circle(self.screen, COLORS["accent"], (224, 431), 3)
+        pygame.draw.circle(self.screen, theme.sign_color, (224, 431), 3)
         pygame.draw.rect(
             self.screen,
             (91, 110, 121),
             pygame.Rect(208, 447, 33, 5),
             border_radius=2,
         )
+
+        if theme.decor_style == "triska_crystals":
+            self.draw_triska_desk_crystals()
+            return
 
         pygame.draw.ellipse(self.screen, (38, 35, 55), pygame.Rect(244, 447, 52, 10))
         stem_color = (73, 145, 113)
@@ -1016,6 +1183,36 @@ class ReceptionMixin:
             math.pi,
             width=2,
         )
+
+    def draw_triska_desk_crystals(self):
+        """Draw a small local-mineral display on the Triska reception desk."""
+
+        elapsed = pygame.time.get_ticks()
+        pygame.draw.ellipse(self.screen, (42, 31, 47), pygame.Rect(244, 447, 53, 10))
+        base = pygame.Rect(247, 436, 47, 18)
+        pygame.draw.rect(self.screen, (73, 54, 67), base, border_radius=5)
+        pygame.draw.rect(self.screen, (212, 139, 90), base, width=2, border_radius=5)
+        crystal_data = (
+            ((253, 438), (260, 405), (267, 438), (240, 179, 106)),
+            ((262, 438), (273, 394), (280, 438), (121, 202, 220)),
+            ((274, 438), (285, 409), (291, 438), (225, 137, 179)),
+        )
+        glow = pygame.Surface((70, 66), pygame.SRCALPHA)
+        pulse = 18 + round(8 * (1 + math.sin(elapsed / 420)) / 2)
+        pygame.draw.circle(glow, (242, 169, 93, pulse), (34, 31), 29)
+        self.screen.blit(glow, (238, 386))
+        for left, peak, right, color in crystal_data:
+            pygame.draw.polygon(self.screen, tuple(max(0, c - 42) for c in color), (left, peak, right))
+            inset_left = (left[0] + 3, left[1] - 2)
+            inset_right = (right[0] - 3, right[1] - 2)
+            pygame.draw.polygon(self.screen, color, (inset_left, peak, inset_right))
+            pygame.draw.line(
+                self.screen,
+                tuple(min(255, c + 35) for c in color),
+                peak,
+                inset_right,
+                width=1,
+            )
 
     def patients_waiting(self):
         """Return how many patients are still in the waiting room."""

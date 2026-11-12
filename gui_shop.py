@@ -1,5 +1,7 @@
 """Intergalactic supply-shop screen for The Cosmic Clinic."""
 
+import math
+
 import pygame
 
 from gui_theme import COLORS
@@ -9,6 +11,7 @@ from Player import (
     DRAW_COST,
     LIMITED_EVIDENCE_REWARD,
     PERFECT_DAY_BONUS,
+    RETURN_PASSAGE_COST,
     WRONG_DIAGNOSIS_PENALTY,
 )
 
@@ -34,6 +37,8 @@ SHOP_UPGRADES = (
      "description": "Every test costs $2 less. Stacks with calibrations.", "discount": 2},
     {"id": "smart_cards", "name": "SMART TEST CARDS", "category": "CARD UPGRADE", "cost": 100,
      "description": "Every test costs $1 less. Stacks with upgrades.", "discount": 1},
+    {"id": "return_passage", "name": "RETURN PASSAGE", "category": "EARTH TRANSIT", "cost": RETURN_PASSAGE_COST,
+     "description": "Secure a one-way clinic transport authorization back to Earth.", "passage": True},
 )
 
 SHOP_COLUMNS = 3
@@ -49,10 +54,16 @@ SHOP_PRODUCT_COLORS = {
     "neural": (195, 132, 245),
     "power": (112, 255, 181),
     "smart_cards": (190, 143, 229),
+    "return_passage": (255, 198, 75),
 }
 
 
 class ShopMixin:
+    def has_return_passage(self):
+        """Return whether the campaign has purchased transport back to Earth."""
+
+        return "return_passage" in self.purchased_shop_upgrades
+
     def get_live_balance(self):
         """Return the balance players see after costs accrued this shift.
 
@@ -164,11 +175,13 @@ class ShopMixin:
         )
         self.screen.blit(title, (109, 129))
         hint = self.card_font.render(
-            "PERMANENT CLINIC UPGRADES  //  SELECT EQUIPMENT TO INSPECT",
+            "UPGRADES  //  SELECT EQUIPMENT TO INSPECT",
             True,
             COLORS["muted"],
         )
         self.screen.blit(hint, (110, 158))
+
+        self.draw_return_passage_progress()
 
         balance_badge = pygame.Rect(814, 132, 176, 38)
         pygame.draw.rect(self.screen, (50, 37, 68), balance_badge, border_radius=19)
@@ -213,7 +226,7 @@ class ShopMixin:
         mouse_position = self.get_mouse_position()
         for rect, text, enabled, accent in (
             (self.shop_purchase_button, label, can_buy, (112, 255, 181)),
-            (self.shop_button, "FINISH SHIFT", True, (206, 158, 233)),
+            (self.shop_button, "DEPART PLANET", True, (206, 158, 233)),
         ):
             hovered = rect.collidepoint(mouse_position)
             border = accent if enabled else (71, 83, 91)
@@ -240,6 +253,28 @@ class ShopMixin:
             self.screen.blit(rendered, rendered.get_rect(center=label_center))
         message = self.card_font.render(self.shop_message, True, COLORS["text"])
         self.screen.blit(message, message.get_rect(center=(550, 588)))
+
+    def draw_return_passage_progress(self):
+        """Keep the campaign's Earth-ticket goal visible in every Supply Shop."""
+
+        badge = pygame.Rect(548, 136, 250, 37)
+        secured = self.has_return_passage()
+        accent = (112, 255, 181) if secured else SHOP_PRODUCT_COLORS["return_passage"]
+        pygame.draw.rect(self.screen, (21, 27, 41), badge, border_radius=8)
+        pygame.draw.rect(self.screen, accent, badge, width=1, border_radius=8)
+        label_text = (
+            "RETURN PASSAGE SECURED"
+            if secured
+            else f"RETURN PASSAGE  ${self.player.balance} / ${RETURN_PASSAGE_COST}"
+        )
+        label = self.compact_ui_font.render(label_text, True, accent)
+        self.screen.blit(label, label.get_rect(center=(badge.centerx, badge.y + 12)))
+        track = pygame.Rect(badge.x + 10, badge.bottom - 10, badge.width - 20, 5)
+        pygame.draw.rect(self.screen, (7, 12, 22), track, border_radius=3)
+        progress = 1.0 if secured else min(1.0, max(0.0, self.player.balance / RETURN_PASSAGE_COST))
+        if progress > 0:
+            fill = pygame.Rect(track.x, track.y, max(2, round(track.width * progress)), track.height)
+            pygame.draw.rect(self.screen, accent, fill, border_radius=3)
 
     def draw_day_complete_screen(self):
         """Draw the end-of-day recap as a polished clinic payroll terminal."""
@@ -668,7 +703,9 @@ class ShopMixin:
             True,
             COLORS["muted"],
         )
-        self.screen.blit(count, count.get_rect(midright=(796, 162)))
+        # Keep the page count between the header copy and the return-passage
+        # meter. The former right-aligned position sat on top of the meter.
+        self.screen.blit(count, count.get_rect(midright=(530, 162)))
 
     def get_selected_shop_upgrade(self):
         return next((item for item in SHOP_UPGRADES if item["id"] == self.selected_shop_upgrade), None)
@@ -695,12 +732,15 @@ class ShopMixin:
             self.shop_message = f"Not enough money for {upgrade['name']} — need ${upgrade['cost']}."
         else:
             self.player.pay(upgrade["cost"])
-            if "machine" in upgrade:
+            if upgrade.get("passage"):
+                self.shop_message = "Return passage secured. Earth transit is now authorized!"
+            elif "machine" in upgrade:
                 self.player.machine_levels[upgrade["machine"]] = 2
             else:
                 self.player.test_discount += upgrade["discount"]
             self.purchased_shop_upgrades.add(upgrade["id"])
-            self.shop_message = f"Installed {upgrade['name']}. Test costs updated!"
+            if not upgrade.get("passage"):
+                self.shop_message = f"Installed {upgrade['name']}. Test costs updated!"
 
     def draw_shop_shelf(self, upgrade, shelf):
         """Draw one illuminated shelf with a unique product illustration."""
@@ -856,6 +896,18 @@ class ShopMixin:
             )
         elif item_id == "power":
             pygame.draw.polygon(self.screen, color, ((center[0] + 2, center[1] - 10), (center[0] - 6, center[1] + 1), (center[0], center[1] + 1), (center[0] - 2, center[1] + 10), (center[0] + 7, center[1] - 2), (center[0] + 1, center[1] - 2)))
+        elif item_id == "return_passage":
+            ticket = pygame.Rect(center[0] - 9, center[1] - 6, 18, 12)
+            pygame.draw.rect(self.screen, color, ticket, width=2, border_radius=2)
+            pygame.draw.circle(self.screen, color, (ticket.x, ticket.centery), 2)
+            pygame.draw.circle(self.screen, color, (ticket.right, ticket.centery), 2)
+            pygame.draw.line(
+                self.screen,
+                color,
+                (center[0], ticket.y + 2),
+                (center[0], ticket.bottom - 2),
+                width=1,
+            )
         else:
             pygame.draw.rect(self.screen, color, pygame.Rect(center[0] - 7, center[1] - 8, 12, 15), width=2, border_radius=2)
             pygame.draw.line(self.screen, color, (center[0] - 3, center[1] - 4), (center[0] + 8, center[1] - 4), width=2)
@@ -1016,6 +1068,30 @@ class ShopMixin:
                 (cx + 3, cy - 6),
             )
             pygame.draw.polygon(self.screen, (222, 255, 234), bolt)
+        elif item_id == "return_passage":
+            ticket = pygame.Rect(cx - 34, cy - 21, 68, 42)
+            pygame.draw.rect(self.screen, (45, 35, 31), ticket, border_radius=7)
+            pygame.draw.rect(self.screen, color, ticket, width=3, border_radius=7)
+            pygame.draw.circle(self.screen, (5, 12, 20), (ticket.x, ticket.centery), 7)
+            pygame.draw.circle(self.screen, (5, 12, 20), (ticket.right, ticket.centery), 7)
+            pygame.draw.line(
+                self.screen,
+                color,
+                (cx + 9, ticket.y + 5),
+                (cx + 9, ticket.bottom - 5),
+                width=2,
+            )
+            pygame.draw.circle(self.screen, (117, 190, 255), (cx - 10, cy - 3), 7)
+            pygame.draw.arc(
+                self.screen,
+                (117, 190, 255),
+                pygame.Rect(cx - 21, cy - 8, 22, 17),
+                0,
+                math.pi * 2,
+                width=2,
+            )
+            earth = self.legible_micro_font.render("EARTH", True, color)
+            self.screen.blit(earth, earth.get_rect(center=(cx - 10, cy + 14)))
         else:
             card_colors = ((93, 72, 119), (49, 86, 105), (72, 122, 158))
             for index, offset in enumerate((-10, 0, 10)):

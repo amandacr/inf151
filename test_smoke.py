@@ -2,6 +2,7 @@
 
 import os
 import unittest
+from dataclasses import replace
 from unittest.mock import patch
 
 
@@ -17,6 +18,7 @@ from Deck import Deck
 from Diagnosis import DIAGNOSES
 from Notebook import Notebook
 from PatientData import create_conmann, create_titus, create_zoogy, create_zorpa
+from PlanetData import DESTINATIONS, get_destination, validate_destinations
 from Player import (
     CLINIC_OPERATING_FEE,
     DIAGNOSIS_REWARD,
@@ -25,6 +27,7 @@ from Player import (
     MAX_TEST_HAND_SIZE,
     PATIENT_WALKOUT_THRESHOLD,
     PERFECT_DAY_BONUS,
+    RETURN_PASSAGE_COST,
     STARTING_BALANCE,
     STARTING_TEST_HAND_SIZE,
     WRONG_DIAGNOSIS_PENALTY,
@@ -51,7 +54,12 @@ from gui_card_shop import (
 from gui_cards import CardMixin
 from gui_developer import DeveloperMixin
 from gui_display import DisplayMixin
-from gui_ending import EndingMixin
+from gui_ending import (
+    ROUTE_BRIEFING_DIALOGUE,
+    ROUTE_COMPLETE_HEADING,
+    ROUTE_COMPLETE_MESSAGE,
+    EndingMixin,
+)
 from gui_examination import ExaminationMixin
 from gui_intro import IntroMixin
 from gui_main import CosmicClinicGUI, GameState
@@ -61,6 +69,7 @@ from gui_results import ResultsMixin
 from gui_shop import SHOP_UPGRADES, ShopMixin
 from gui_theme import TEST_SUBTITLES, WINDOW_SIZE
 from gui_tutorial import TutorialMixin
+from RouteController import RouteController, ShiftPerformance
 
 
 class SharedModelSmokeTests(unittest.TestCase):
@@ -79,6 +88,61 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertEqual(result, "Current temperature: 1700°F")
         self.assertEqual(patient.medical_info["Normal temperature"], "2,000°F")
         self.assertEqual(notebook.get_entries(patient), {"TEMPERATURE": result})
+
+    def test_route_controller_tracks_destinations_and_campaign_performance(self):
+        """Route state should advance, aggregate shifts, and reset cleanly."""
+
+        route = RouteController()
+        self.assertEqual(route.current_destination, get_destination(1))
+        self.assertEqual(route.next_destination, get_destination(2))
+        self.assertEqual(route.current_patient_roster, get_destination(1).patient_roster)
+        self.assertEqual(route.completed_destinations, ())
+
+        day_one = ShiftPerformance(
+            destination_key="training_orbit",
+            day_number=1,
+            patients_seen=4,
+            correct_diagnoses=3,
+            supported_diagnoses=2,
+            wrong_diagnoses=1,
+            patients_lost=0,
+            tests_run=7,
+            net_pay=35,
+            ending_balance=135,
+        )
+        self.assertTrue(route.record_current_shift(day_one))
+        self.assertFalse(route.record_current_shift(day_one))
+        self.assertEqual(route.completed_destinations, (get_destination(1),))
+        self.assertEqual(route.overall_performance["shifts_completed"], 1)
+        self.assertEqual(route.overall_performance["correct_diagnoses"], 3)
+
+        self.assertEqual(route.complete_current_shift(day_one), get_destination(2))
+        self.assertTrue(route.arrival_pending)
+        self.assertEqual(route.begin_current_shift(), get_destination(2))
+        self.assertFalse(route.arrival_pending)
+        self.assertIsNone(route.next_destination)
+        self.assertFalse(route.route_is_complete)
+        self.assertIsNone(route.complete_current_shift(
+            ShiftPerformance(
+                destination_key="triska_station",
+                day_number=2,
+                patients_seen=4,
+                correct_diagnoses=4,
+                supported_diagnoses=4,
+                wrong_diagnoses=0,
+                patients_lost=0,
+                tests_run=8,
+                net_pay=75,
+                ending_balance=210,
+            )
+        ))
+        self.assertTrue(route.route_is_complete)
+        self.assertEqual(route.overall_performance["patients_seen"], 8)
+        self.assertEqual(route.overall_performance["net_pay"], 110)
+
+        self.assertEqual(route.reset(), get_destination(1))
+        self.assertEqual(route.completed_destinations, ())
+        self.assertEqual(route.shift_history, ())
 
     def test_patient_records_and_interviews_keep_new_allergies_discoverable(self):
         """Health IDs should build alien context without revealing Titus's answer."""
@@ -1067,10 +1131,12 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIn(str(MAX_TEST_HAND_SIZE), help_copy)
         self.assertIn(f"${WRONG_DIAGNOSIS_PENALTY}", help_copy)
         self.assertIn("CARD SHOP", help_copy)
-        self.assertIn("SUPPLY SHOP", help_copy)
+        self.assertIn("CARRYOVER", help_copy)
+        self.assertIn("PLANET ROUTE", help_copy)
         self.assertIn("unused cards return", help_copy)
-        self.assertIn("future days", help_copy)
-        self.assertIn("next roster", help_copy)
+        self.assertIn("carry between planets", help_copy)
+        self.assertIn("new destination", help_copy)
+        self.assertIn("different aliens and conditions", help_copy)
         self.assertIn("H Help", self.game.get_help_controls())
         self.assertNotIn("F10", self.game.get_help_controls())
 
@@ -1082,6 +1148,28 @@ class GuiFlowSmokeTests(unittest.TestCase):
         pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_h))
         self.game.handle_events()
         self.assertFalse(self.game.tutorial_open)
+
+    def test_guided_tutorial_cannot_restart_after_leaving_training_orbit(self):
+        """Later planets should retain Help without replaying Zorpa's training."""
+
+        self.game.start_guided_tutorial()
+        self.assertTrue(self.game.guided_tutorial_active)
+        self.game.finish_guided_tutorial()
+        self.game.begin_ending_sequence()
+        self.game.finish_ending_sequence()
+        self.game.handle_arrival_click(self.game.arrival_begin_button.center)
+
+        self.assertEqual(self.game.day_number, 2)
+        self.assertEqual(self.game.current_destination, get_destination(2))
+        self.assertFalse(self.game.guided_tutorial_active)
+        self.assertFalse(self.game.start_guided_tutorial())
+        self.assertFalse(self.game.guided_tutorial_active)
+
+        self.game.open_tutorial()
+        self.assertTrue(self.game.tutorial_open)
+        self.assertIn("carry between planets", " ".join(
+            detail for _heading, detail in self.game.get_help_rules()
+        ))
 
     def test_tutorial_spotlights_have_clickable_hitboxes_and_wrapped_text(self):
         """Highlighted reading targets and lifted card edges should never feel inert."""
@@ -1349,16 +1437,15 @@ class GuiFlowSmokeTests(unittest.TestCase):
     def test_patient_id_details_fit_the_larger_readable_font(self):
         """Wrapped ID details should stay readable and above the flip control."""
 
-        panel = self.game.layout["id_card"]
-        card = pygame.Rect(
-            panel.x + 8,
-            panel.y + 10,
-            panel.width - 16,
-            panel.height - 18,
-        )
-        available_width = card.right - 10 - (card.x + 70)
-        available_height = (card.bottom - 23) - (card.y + 43)
-        for entry in self.game.day_one_queue + self.game.day_two_queue:
+        _card, _portrait, detail_area = self.game.get_id_card_layout()
+        available_width = detail_area.width
+        available_height = detail_area.height
+        all_destination_entries = [
+            entry
+            for destination in DESTINATIONS
+            for entry in self.game.roster_for_destination(destination)
+        ]
+        for entry in all_destination_entries:
             patient = entry["create"]()
             for rows in (
                 [("Name", patient.name)] + list(patient.profile.items()),
@@ -1451,10 +1538,20 @@ class GuiFlowSmokeTests(unittest.TestCase):
         )
         self.game.handle_events()
         self.assertTrue(self.game.developer_navigator_open)
+        self.assertEqual(self.game.developer_navigator_level, "destinations")
+        self.assertEqual(
+            len(self.game.get_developer_day_rects()),
+            len(self.game.destinations),
+        )
         self.game.draw()
 
         pygame.event.post(
-            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_r})
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_1})
+        )
+        self.game.handle_events()
+        self.assertEqual(self.game.developer_navigator_level, "screens")
+        pygame.event.post(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_c})
         )
         self.game.handle_events()
         self.assertEqual(self.game.state, GameState.DAY_COMPLETE)
@@ -1465,6 +1562,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         pygame.event.post(
             pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_F10})
+        )
+        self.game.handle_events()
+        pygame.event.post(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_1})
         )
         self.game.handle_events()
         pygame.event.post(
@@ -1485,6 +1586,27 @@ class GuiFlowSmokeTests(unittest.TestCase):
         )
         self.game.handle_events()
         self.assertFalse(self.game.developer_navigator_open)
+
+        self.game.developer_selected_day = 2
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("arrival")
+        )
+        self.assertEqual(self.game.state, GameState.ARRIVAL)
+        self.assertEqual(self.game.current_destination, get_destination(2))
+        self.assertTrue(self.game.route.arrival_pending)
+        self.assertEqual(
+            self.game.route.completed_destinations,
+            (get_destination(1),),
+        )
+        self.game.draw()
+
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("final")
+        )
+        self.assertEqual(self.game.state, GameState.FINAL)
+        self.assertEqual(self.game.current_destination, get_destination(2))
+        self.assertTrue(self.game.route.route_is_complete)
+        self.game.draw()
 
     def test_f10_jump_closes_the_opening_dialogue(self):
         """A preview jump must not carry the abduction dialogue onto another screen."""
@@ -1533,13 +1655,30 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(len(self.game.deck.contents), 43)
 
     def test_f10_navigator_selects_day_two_without_duplicating_checkpoints(self):
-        """Day tabs should relabel and open the four Day 2 patient checkpoints."""
+        """Destination selection should open only Day 2's valid checkpoints."""
 
         self.game.toggle_developer_navigator()
         self.assertTrue(self.game.developer_navigator_open)
+        self.assertEqual(self.game.developer_navigator_level, "destinations")
         self.game.handle_developer_click(self.game.get_developer_day_rects()[1].center)
         self.assertEqual(self.game.developer_selected_day, 2)
+        self.assertEqual(self.game.developer_navigator_level, "screens")
         self.assertTrue(self.game.developer_navigator_open)
+        self.assertEqual(
+            [entry[1] for entry in self.game.get_developer_screen_entries()],
+            [
+                "arrival",
+                "reception",
+                "patient_1",
+                "patient_2",
+                "patient_3",
+                "patient_4",
+                "recap",
+                "shop",
+                "ending",
+                "final",
+            ],
+        )
         self.assertIn(
             "FLERSCH",
             self.game.get_developer_checkpoint_label("patient_1", "PATIENT 1"),
@@ -2202,18 +2341,22 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.player.balance, 0)
 
         self.game.handle_shop_click(self.game.shop_button.center)
+        self.assertEqual(self.game.state, GameState.ROUTE_BRIEFING)
+        self.assertEqual(len(ROUTE_BRIEFING_DIALOGUE), 3)
+        for _ in ROUTE_BRIEFING_DIALOGUE:
+            self.game.advance_route_briefing()
         self.assertEqual(self.game.state, GameState.ENDING)
         self.game.draw()
         self.game.ending_started_at = (
             pygame.time.get_ticks() - self.game.ending_duration - 1
         )
         self.game.update()
-        self.assertEqual(self.game.state, GameState.FINAL)
+        self.assertEqual(self.game.state, GameState.ARRIVAL)
         self.game.draw()
         self.assertEqual(self.game.daily_correct_diagnoses, len(expected_names))
         self.assertIn(placeholder["id"], self.game.purchased_shop_upgrades)
 
-        self.game.handle_final_screen_click(self.game.final_replay_button.center)
+        self.game.handle_arrival_click(self.game.arrival_begin_button.center)
         self.assertEqual(self.game.state, GameState.TITLE)
         self.assertEqual(self.game.patients_called, 0)
         self.assertEqual(self.game.patient.name, "Flersch")
@@ -2266,9 +2409,19 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.open_exit_confirmation()
         self.game.handle_exit_confirmation_click(self.game.exit_reception_button.center)
         self.assertEqual(self.game.state, GameState.TITLE)
-        self.assertEqual(self.game.player.balance, STARTING_BALANCE)
+        self.assertEqual(self.game.player.balance, 725)
         self.assertEqual(self.game.daily_correct_diagnoses, 0)
-        self.assertFalse(self.game.purchased_shop_upgrades)
+        self.assertIn(
+            SHOP_UPGRADES[0]["id"],
+            self.game.purchased_shop_upgrades,
+        )
+        self.assertEqual(self.game.current_destination, get_destination(2))
+        self.assertEqual(
+            self.game.route.completed_destinations,
+            (get_destination(1),),
+        )
+        self.assertEqual(len(self.game.route.shift_history), 1)
+        self.assertFalse(self.game.route.arrival_pending)
 
         self.game.open_exit_confirmation()
         self.game.handle_exit_confirmation_click(self.game.exit_quit_button.center)
@@ -2474,27 +2627,117 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.assertEqual(self.game.player.balance, 0)
 
+    def test_planet_catalog_defines_valid_consecutive_campaign_days(self):
+        """Planet metadata should own both rosters without changing their order."""
+
+        self.assertTrue(validate_destinations())
+        self.assertEqual([destination.day_number for destination in DESTINATIONS], [1, 2])
+        self.assertEqual(
+            [destination.planet_name for destination in DESTINATIONS],
+            ["Cosmic Clinic Training Orbit", "Triska Orbital Station"],
+        )
+        self.assertEqual(
+            [slot.create().name for slot in get_destination(1).patient_roster],
+            [
+                "Zorpa Voidwalker",
+                "Zoogy Zinglestar",
+                "Titus McMightus",
+                "Conmann Cheester",
+            ],
+        )
+        self.assertEqual(
+            [slot.create().name for slot in get_destination(2).patient_roster],
+            ["Flersch", "Dooski", "Flump", "Roldi"],
+        )
+        for destination in DESTINATIONS:
+            self.assertEqual(len(destination.patient_roster), 4)
+            self.assertEqual(destination.alien_population, destination.patient_roster)
+            self.assertTrue(destination.theme.scene)
+            self.assertTrue(destination.theme.decor_style)
+            self.assertTrue(destination.theme.particle_style)
+            self.assertIn(destination.theme.alien_render_style, {"pixel", "smooth"})
+            self.assertTrue(destination.arrival_message)
+
+        training_theme = get_destination(1).theme
+        triska_theme = get_destination(2).theme
+        self.assertNotEqual(training_theme.wall_color, triska_theme.wall_color)
+        self.assertNotEqual(training_theme.chair_color, triska_theme.chair_color)
+        self.assertNotEqual(training_theme.sign_color, triska_theme.sign_color)
+
+        duplicate_day = replace(DESTINATIONS[1], day_number=1)
+        with self.assertRaises(ValueError):
+            validate_destinations((DESTINATIONS[0], duplicate_day))
+
+    def test_gui_rosters_are_built_from_planet_destination_data(self):
+        """Runtime chair entries should preserve the central roster metadata."""
+
+        self.assertEqual(self.game.current_destination, get_destination(1))
+        for destination in DESTINATIONS:
+            roster = self.game.roster_for_destination(destination)
+            self.assertEqual(
+                [entry["asset"] for entry in roster],
+                [slot.asset for slot in destination.patient_roster],
+            )
+            self.assertEqual(
+                [entry["serial"] for entry in roster],
+                [slot.serial for slot in destination.patient_roster],
+            )
+            self.assertEqual(
+                {entry["destination_key"] for entry in roster},
+                {destination.key},
+            )
+            self.assertEqual(
+                {entry["render_style"] for entry in roster},
+                {destination.theme.alien_render_style},
+            )
+            self.assertEqual(
+                [entry["presentation_scale"] for entry in roster],
+                [slot.presentation_scale for slot in destination.patient_roster],
+            )
+
+    def test_reception_environment_follows_the_selected_destination(self):
+        """Both configured reception themes should render through one layout."""
+
+        self.assertEqual(self.game.get_reception_theme().scene, "training_orbit")
+        self.game.draw_title_screen()
+        training_snapshot = bytes(pygame.image.tobytes(self.game.screen, "RGB"))
+
+        self.game.route.select_day(2)
+        self.game.load_current_destination()
+        self.assertEqual(self.game.get_reception_theme().scene, "triska_orbit")
+        self.game.draw_title_screen()
+        triska_snapshot = bytes(pygame.image.tobytes(self.game.screen, "RGB"))
+
+        self.assertNotEqual(training_snapshot, triska_snapshot)
+
     def test_new_asset_patients_join_from_day_two_and_restart_resets_roster(self):
         originals = {entry['create']().name for entry in self.game.waiting_room_queue}
         new_names = {'Flersch', 'Dooski', 'Flump', 'Roldi'}
         expected_serials = {'TRI-031-FL', 'VRD-112-DS', 'VEL-064-FP', 'CRG-209-RD'}
+        day_two_roster = self.game.roster_for_day(2)
         self.assertTrue(originals.isdisjoint(new_names))
-        self.assertEqual({entry['create']().name for entry in self.game.next_shift_queue}, new_names)
-        self.assertEqual({entry['serial'] for entry in self.game.day_two_queue}, expected_serials)
+        self.assertEqual({entry['create']().name for entry in day_two_roster}, new_names)
+        self.assertEqual({entry['serial'] for entry in day_two_roster}, expected_serials)
         self.assertEqual(
-            {entry['asset'] for entry in self.game.day_two_queue},
+            {entry['asset'] for entry in day_two_roster},
             {'flersch', 'dooski', 'flump', 'roldi'},
         )
-        for day in range(2, 6):
-            self.game.handle_final_screen_click(self.game.final_replay_button.center)
-            self.assertEqual(self.game.day_number, day)
-            self.assertEqual(len(self.game.waiting_room_queue), 4)
-            for entry in self.game.waiting_room_queue:
-                patient = entry['create']()
-                self.assertIn(patient.diagnosis, patient.diagnosis_options)
-                self.assertEqual(len(patient.test_results), 8)
-                self.game.patient_sprite(entry['asset'], (32, 48))
-            self.assertTrue(any(entry['create']().name in new_names for entry in self.game.waiting_room_queue))
+        self.game.begin_ending_sequence()
+        self.game.finish_ending_sequence()
+        self.assertEqual(self.game.state, GameState.ARRIVAL)
+        self.game.handle_arrival_click(self.game.arrival_begin_button.center)
+        self.assertEqual(self.game.day_number, 2)
+        self.assertEqual(len(self.game.waiting_room_queue), 4)
+        for entry in self.game.waiting_room_queue:
+            patient = entry['create']()
+            self.assertIn(patient.diagnosis, patient.diagnosis_options)
+            self.assertEqual(len(patient.test_results), 8)
+            self.game.patient_sprite(entry['asset'], (32, 48))
+        self.assertEqual(
+            {entry['create']().name for entry in self.game.waiting_room_queue},
+            new_names,
+        )
+        self.assertEqual(self.game.roster_for_day(3), [])
         self.game.restart_game()
         self.assertEqual(self.game.day_number, 1)
         self.assertEqual({entry['create']().name for entry in self.game.waiting_room_queue}, originals)
@@ -2502,7 +2745,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
     def test_complete_day_two_shift_reaches_recap_with_all_new_patients(self):
         """Automatically play all four Day 2 cases to guard the full shift loop."""
 
-        self.game.start_next_shift([dict(entry) for entry in self.game.day_two_queue])
+        self.game.begin_ending_sequence()
+        self.game.start_next_shift()
         expected_names = ['Flersch', 'Dooski', 'Flump', 'Roldi']
         self.assertEqual(self.game.day_number, 2)
         self.assertEqual(
@@ -2549,34 +2793,109 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.draw()
 
     def test_future_shift_can_load_a_new_patient_roster(self):
-        """A later day can replace the queue without erasing earned upgrades."""
+        """Route advancement should preserve progression and campaign totals."""
 
-        next_roster = [self.game.waiting_room_queue[1]]
         self.game.player.balance = 175
         self.game.player.machine_levels["TEMPERATURE"] = 2
-        self.game.start_next_shift(next_roster)
+        self.game.player.test_discount = 3
+        self.game.purchased_shop_upgrades.update({"temperature", "smart_cards"})
+        self.game.daily_correct_diagnoses = 3
+        self.game.daily_evidence_cases = 2
+        self.game.daily_wrong_diagnoses = 1
+        self.game.daily_test_count = 7
+        self.game.daily_patients_lost = 1
+        self.game.begin_ending_sequence()
+        self.assertEqual(
+            self.game.route.completed_destinations,
+            (get_destination(1),),
+        )
+        self.assertEqual(self.game.route.overall_performance["patients_seen"], 4)
+        self.assertEqual(self.game.route.overall_performance["wrong_diagnoses"], 1)
+
+        self.game.start_next_shift()
         self.assertEqual(self.game.state, GameState.TITLE)
-        self.assertEqual(self.game.waiting_room_queue, next_roster)
+        self.assertEqual(self.game.current_destination, get_destination(2))
+        self.assertEqual(
+            [entry["create"]().name for entry in self.game.waiting_room_queue],
+            [slot.create().name for slot in get_destination(2).patient_roster],
+        )
         self.assertEqual(self.game.patients_called, 0)
-        self.assertEqual(self.game.patient.name, next_roster[0]["create"]().name)
+        self.assertEqual(self.game.patient.name, "Flersch")
         self.assertEqual(self.game.player.balance, 175)
         self.assertEqual(self.game.player.machine_levels["TEMPERATURE"], 2)
+        self.assertEqual(self.game.player.test_discount, 3)
+        self.assertEqual(
+            self.game.purchased_shop_upgrades,
+            {"temperature", "smart_cards"},
+        )
+        self.assertEqual(len(self.game.route.shift_history), 1)
 
-    def test_final_reception_starts_day_two_when_a_roster_is_available(self):
-        """The empty ending should become a working Day 2 entry point."""
+    def test_planet_arrival_starts_day_two_when_a_roster_is_available(self):
+        """The arrival screen should become a working Day 2 entry point."""
 
-        next_roster = [self.game.waiting_room_queue[1]]
-        self.game.next_shift_queue = next_roster
         self.game.player.balance = 175
-        self.game.state = GameState.FINAL
+        self.game.begin_ending_sequence()
+        self.game.finish_ending_sequence()
+        self.assertEqual(self.game.state, GameState.ARRIVAL)
+        self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO ARRIVAL")
+        self.assertEqual(self.game.get_help_context()[0], "PLANET ARRIVAL")
         self.game.draw()
-        self.game.handle_final_screen_click(self.game.final_replay_button.center)
+        self.game.handle_arrival_click(self.game.arrival_begin_button.center)
 
         self.assertEqual(self.game.state, GameState.TITLE)
-        self.assertEqual(self.game.waiting_room_queue, next_roster)
-        self.assertEqual(self.game.next_shift_queue, [])
-        self.assertEqual(self.game.patient.name, "Zoogy Zinglestar")
+        self.assertEqual(self.game.current_destination, get_destination(2))
+        self.assertEqual(self.game.patient.name, "Flersch")
         self.assertEqual(self.game.player.balance, 175)
+
+    def test_end_of_day_flow_runs_recap_shop_departure_and_arrival_in_order(self):
+        """A completed shift should travel only through the configured route."""
+
+        self.game.state = GameState.DAY_COMPLETE
+        self.game.handle_day_complete_click(self.game.day_complete_button.center)
+        self.assertEqual(self.game.state, GameState.SHOP)
+
+        self.game.handle_shop_click(self.game.shop_button.center)
+        self.assertEqual(self.game.state, GameState.ROUTE_BRIEFING)
+        for _ in ROUTE_BRIEFING_DIALOGUE:
+            self.game.advance_route_briefing()
+        self.assertEqual(self.game.state, GameState.ENDING)
+        self.assertTrue(self.game.route.arrival_pending)
+
+        self.game.finish_ending_sequence()
+        self.assertEqual(self.game.state, GameState.ARRIVAL)
+        self.assertEqual(self.game.current_destination, get_destination(2))
+
+        self.game.handle_arrival_click(self.game.arrival_begin_button.center)
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertEqual(self.game.day_number, 2)
+        self.assertEqual(self.game.patient.name, "Flersch")
+
+    def test_final_destination_finishes_without_a_nonexistent_arrival(self):
+        """Completing Day 2 should show Route Complete rather than another stop."""
+
+        self.game.begin_ending_sequence()
+        self.game.finish_ending_sequence()
+        self.game.handle_arrival_click(self.game.arrival_begin_button.center)
+        self.assertEqual(self.game.current_destination, get_destination(2))
+
+        self.game.begin_ending_sequence()
+        self.game.finish_ending_sequence()
+        self.assertEqual(self.game.state, GameState.FINAL)
+        self.assertTrue(self.game.route.route_is_complete)
+        self.assertFalse(self.game.route.arrival_pending)
+        self.assertIsNone(self.game.route.next_destination)
+        self.assertEqual(self.game.day_number, 2)
+        self.assertEqual(ROUTE_COMPLETE_HEADING, "CURRENT ROUTE COMPLETE")
+        self.assertEqual(
+            ROUTE_COMPLETE_MESSAGE,
+            "The next clinic destination is being prepared.",
+        )
+        self.game.draw()
+
+        self.game.handle_final_screen_click(self.game.final_replay_button.center)
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertEqual(self.game.day_number, 1)
+        self.assertEqual(self.game.patient.name, "Zorpa Voidwalker")
 
     def test_shop_blocks_an_unaffordable_upgrade_purchase(self):
         """A selected upgrade should not charge or unlock when money is too low."""
@@ -2594,6 +2913,34 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.player.balance, starting_balance)
         self.assertNotIn(upgrade["id"], self.game.purchased_shop_upgrades)
         self.assertIn("Not enough money", self.game.shop_message)
+
+    def test_return_passage_is_a_real_persistent_shop_purchase(self):
+        """The Earth-ticket objective should show progress and be purchasable."""
+
+        passage = next(
+            upgrade
+            for upgrade in SHOP_UPGRADES
+            if upgrade["id"] == "return_passage"
+        )
+        self.assertEqual(passage["cost"], RETURN_PASSAGE_COST)
+        self.game.state = GameState.SHOP
+        self.game.player.balance = RETURN_PASSAGE_COST
+        passage_index = SHOP_UPGRADES.index(passage)
+        self.game.shop_scroll_row = min(
+            passage_index // 3,
+            self.game.get_shop_max_scroll_row(),
+        )
+        visible_index = self.game.get_visible_shop_upgrades().index(passage)
+
+        self.game.handle_shop_click(
+            self.game.get_shop_upgrade_rects()[visible_index].center
+        )
+        self.game.handle_shop_click(self.game.shop_purchase_button.center)
+
+        self.assertTrue(self.game.has_return_passage())
+        self.assertEqual(self.game.player.balance, 0)
+        self.assertIn("Earth transit", self.game.shop_message)
+        self.game.draw()
 
     def test_workspace_tools_use_the_swapped_non_overlapping_layout(self):
         """Diagnosis should sit above med-waste while the larger notebook clears the hand."""

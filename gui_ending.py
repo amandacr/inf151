@@ -7,6 +7,22 @@ import pygame
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
 from Player import STARTING_BALANCE
+from RouteController import ShiftPerformance
+
+
+ROUTE_COMPLETE_HEADING = "CURRENT ROUTE COMPLETE"
+ROUTE_COMPLETE_MESSAGE = "The next clinic destination is being prepared."
+ROUTE_BRIEFING_DIALOGUE = (
+    (
+        "CLINIC SYSTEM",
+        "Training shift complete. The Cosmic Clinic travels to a new destination after every shift.",
+    ),
+    ("YOU", "And when do I get to go home?"),
+    (
+        "CLINIC SYSTEM",
+        "Earn enough credits to purchase return passage to Earth.",
+    ),
+)
 
 
 class EndingMixin:
@@ -15,15 +31,124 @@ class EndingMixin:
     def begin_ending_sequence(self):
         """Leave the Shop and begin the skippable clinic departure animation."""
 
+        self.record_current_route_performance()
         self.exit_confirmation_open = False
         self.ending_started_at = pygame.time.get_ticks()
         self.state = GameState.ENDING
 
+    def should_show_route_briefing(self):
+        """Return whether the first completed shift still needs its route lesson."""
+
+        return (
+            not self.route_briefing_seen
+            and self.current_destination is self.destinations[0]
+            and self.route.next_destination is not None
+        )
+
+    def start_route_briefing(self):
+        """Open the one-time explanation of the clinic's traveling route."""
+
+        self.route_briefing_index = 0
+        self.state = GameState.ROUTE_BRIEFING
+
+    def advance_route_briefing(self):
+        """Advance the short route conversation, then depart for the next stop."""
+
+        if self.route_briefing_index < len(ROUTE_BRIEFING_DIALOGUE) - 1:
+            self.route_briefing_index += 1
+            return
+        self.route_briefing_seen = True
+        self.begin_ending_sequence()
+
+    def draw_route_briefing_screen(self):
+        """Draw the Supply Shop behind a compact post-training conversation."""
+
+        self.screen.fill(COLORS["background"])
+        self.draw_game_logo((WINDOW_SIZE[0] // 2, 38), scale=0.86)
+        subtitle = self.small_font.render(
+            "TRAINING ROUTE BRIEFING",
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_SIZE[0] // 2, 76)))
+        self.draw_shop_screen()
+
+        dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        dim.fill((2, 6, 12, 190))
+        self.screen.blit(dim, (0, 0))
+
+        speaker, line = ROUTE_BRIEFING_DIALOGUE[self.route_briefing_index]
+        system_speaking = speaker == "CLINIC SYSTEM"
+        accent = (100, 238, 193) if system_speaking else (136, 190, 255)
+        panel = pygame.Rect(145, 215, 810, 205)
+        pygame.draw.rect(self.screen, (1, 5, 10), panel.move(8, 9), border_radius=18)
+        pygame.draw.rect(self.screen, (9, 22, 31), panel, border_radius=18)
+        pygame.draw.rect(self.screen, accent, panel, width=3, border_radius=18)
+
+        badge = pygame.Rect(panel.x + 26, panel.y + 20, 190, 34)
+        badge_fill = (15, 57, 54) if system_speaking else (23, 43, 71)
+        pygame.draw.rect(self.screen, badge_fill, badge, border_radius=7)
+        pygame.draw.rect(self.screen, accent, badge, width=1, border_radius=7)
+        speaker_label = self.dialogue_speaker_font.render(speaker, True, accent)
+        self.screen.blit(speaker_label, speaker_label.get_rect(center=badge.center))
+
+        line_box = pygame.Rect(panel.x + 28, panel.y + 74, panel.width - 56, 70)
+        self.draw_wrapped_text(
+            line,
+            self.dialogue_body_font,
+            COLORS["text"],
+            line_box,
+            line_spacing=4,
+        )
+
+        for dot_index in range(len(ROUTE_BRIEFING_DIALOGUE)):
+            dot_color = accent if dot_index <= self.route_briefing_index else (55, 76, 84)
+            pygame.draw.circle(
+                self.screen,
+                dot_color,
+                (panel.x + 32 + dot_index * 18, panel.bottom - 25),
+                4 if dot_index == self.route_briefing_index else 3,
+            )
+
+        final_line = self.route_briefing_index == len(ROUTE_BRIEFING_DIALOGUE) - 1
+        next_destination = self.route.next_destination
+        prompt_text = (
+            f"DEPART FOR {next_destination.planet_name.upper()}"
+            if final_line and next_destination is not None
+            else "CLICK OR PRESS ENTER TO CONTINUE"
+        )
+        prompt = self.tutorial_label_font.render(prompt_text, True, accent)
+        prompt_panel = prompt.get_rect(center=(panel.centerx + 95, panel.bottom - 25)).inflate(24, 12)
+        pygame.draw.rect(self.screen, (12, 30, 40), prompt_panel, border_radius=10)
+        pygame.draw.rect(self.screen, accent, prompt_panel, width=2, border_radius=10)
+        self.screen.blit(prompt, prompt.get_rect(center=prompt_panel.center))
+
+    def record_current_route_performance(self):
+        """Preserve this shift's results before daily counters are reset."""
+
+        performance = ShiftPerformance(
+            destination_key=self.current_destination.key,
+            day_number=self.day_number,
+            patients_seen=len(self.waiting_room_queue),
+            correct_diagnoses=self.daily_correct_diagnoses,
+            supported_diagnoses=self.daily_evidence_cases,
+            wrong_diagnoses=self.daily_wrong_diagnoses,
+            patients_lost=self.daily_patients_lost,
+            tests_run=self.daily_test_count,
+            net_pay=self.get_daily_pay_breakdown()[3],
+            ending_balance=self.player.balance,
+        )
+        return self.route.complete_current_shift(performance)
+
     def finish_ending_sequence(self):
-        """Skip or complete the departure animation and show the final report."""
+        """Finish departure at an arrival screen or the completed-route report."""
 
         self.ending_started_at = None
-        self.state = GameState.FINAL
+        if self.route.arrival_pending:
+            self.arrival_started_at = pygame.time.get_ticks()
+            self.state = GameState.ARRIVAL
+        else:
+            self.state = GameState.FINAL
 
     def update_ending_sequence(self):
         """Advance automatically to the final report when the animation completes."""
@@ -114,7 +239,224 @@ class EndingMixin:
                 pygame.draw.line(self.screen, color, (x, y - 5), (x, y + 5), width=1)
 
     def draw_ending_screen(self):
-        """Draw the clinic shrinking into space at the end of the shift."""
+        """Draw route travel between stops or the final clinic departure."""
+
+        if self.route.arrival_pending:
+            self.draw_interplanetary_travel_screen()
+        else:
+            self.draw_final_departure_screen()
+
+    def draw_interplanetary_travel_screen(self):
+        """Draw a clean, readable flight between two configured destinations."""
+
+        elapsed = (
+            0
+            if self.ending_started_at is None
+            else pygame.time.get_ticks() - self.ending_started_at
+        )
+        progress = self.get_ending_progress()
+        eased = self._intro_smooth(progress)
+        departing = self.route.completed_destinations[-1]
+        arriving = self.current_destination
+
+        self.screen.fill((5, 9, 25))
+        atmosphere = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        pygame.draw.circle(
+            atmosphere,
+            (*departing.theme.accent_color, 12),
+            (72, 405),
+            116,
+        )
+        pygame.draw.circle(
+            atmosphere,
+            (*arriving.theme.accent_color, 16),
+            (930, 285),
+            158,
+        )
+        self.screen.blit(atmosphere, (0, 0))
+
+        # Moving points provide parallax without turning the sky into a field
+        # of disconnected white dashes.
+        for index, (star_x, star_y, star_size) in enumerate(self.intro_stars):
+            shifted_x = (star_x - round(eased * (75 + index % 4 * 24))) % WINDOW_SIZE[0]
+            twinkle = (elapsed // 210 + index) % 9 == 0
+            color = (199, 222, 242) if twinkle else (99, 132, 170)
+            pygame.draw.circle(
+                self.screen,
+                color,
+                (shifted_x, star_y),
+                star_size + int(twinkle and star_size == 1),
+            )
+
+        self.draw_travel_planet(
+            departing,
+            (72 - round(eased * 28), 405 + round(eased * 8)),
+            64 - round(eased * 8),
+            foreground=False,
+        )
+
+        # Two small moons frame Triska without crossing its ring or the ship.
+        moon_shift = round(math.sin(elapsed / 650) * 3)
+        pygame.draw.circle(
+            self.screen,
+            arriving.theme.secondary_color,
+            (824 + moon_shift, 184),
+            14,
+        )
+        pygame.draw.circle(
+            self.screen,
+            (191, 203, 221),
+            (1034 - moon_shift, 382),
+            10,
+        )
+        self.draw_travel_planet(
+            arriving,
+            (930, 285),
+            94 + round(eased * 10),
+            foreground=True,
+        )
+
+        # Follow a gentle arc and stop well before Triska's ring. The arrival
+        # screen handles the final approach, so the two scenes no longer collide.
+        start = (230, 430)
+        control = (475, 342)
+        end = (710, 292)
+        inverse = 1.0 - eased
+        ship_center = (
+            round(inverse * inverse * start[0] + 2 * inverse * eased * control[0] + eased * eased * end[0]),
+            round(
+                inverse * inverse * start[1]
+                + 2 * inverse * eased * control[1]
+                + eased * eased * end[1]
+                + math.sin(progress * math.pi * 4) * 3
+            ),
+        )
+        trail = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        trail_length = 82 + round(28 * math.sin(progress * math.pi))
+        pygame.draw.polygon(
+            trail,
+            (*arriving.theme.secondary_color, 48),
+            (
+                (ship_center[0] - 25, ship_center[1] - 4),
+                (ship_center[0] - trail_length, ship_center[1] + 11),
+                (ship_center[0] - 25, ship_center[1] + 9),
+            ),
+        )
+        pygame.draw.polygon(
+            trail,
+            (207, 244, 255, 125),
+            (
+                (ship_center[0] - 24, ship_center[1] + 1),
+                (ship_center[0] - round(trail_length * 0.72), ship_center[1] + 8),
+                (ship_center[0] - 24, ship_center[1] + 6),
+            ),
+        )
+        self.screen.blit(trail, (0, 0))
+        self.draw_approaching_ufo(ship_center, 0.14, elapsed, rotation=-4)
+
+        # A few fading navigation pips reinforce direction without drawing a
+        # hard line through the UFO and destination planet.
+        for pip_index in range(3):
+            pip_x = ship_center[0] - 102 - pip_index * 42
+            pip_y = ship_center[1] + 9 + pip_index * 8
+            pip_alpha = 105 - pip_index * 25
+            pip = pygame.Surface((12, 12), pygame.SRCALPHA)
+            pygame.draw.circle(
+                pip,
+                (*arriving.theme.secondary_color, pip_alpha),
+                (6, 6),
+                3,
+            )
+            self.screen.blit(pip, (pip_x - 6, pip_y - 6))
+
+        title = self.heading_font.render("EN ROUTE", True, COLORS["accent"])
+        self.screen.blit(title, title.get_rect(center=(WINDOW_SIZE[0] // 2, 72)))
+        route_name = self.small_font.render(
+            f"{departing.planet_name.upper()}  TO  {arriving.planet_name.upper()}",
+            True,
+            COLORS["text"],
+        )
+        route_panel = route_name.get_rect(center=(WINDOW_SIZE[0] // 2, 112)).inflate(28, 16)
+        pygame.draw.rect(self.screen, (12, 25, 37), route_panel, border_radius=10)
+        pygame.draw.rect(self.screen, arriving.theme.accent_color, route_panel, width=2, border_radius=10)
+        self.screen.blit(route_name, route_name.get_rect(center=route_panel.center))
+
+        status = self.small_font.render(
+            f"PATIENT FILES RECEIVED  •  APPROACHING {arriving.planet_name.upper()}",
+            True,
+            arriving.theme.accent_color,
+        )
+        status_rect = status.get_rect(center=(WINDOW_SIZE[0] // 2, 548)).inflate(28, 14)
+        pygame.draw.rect(self.screen, (10, 20, 34), status_rect, border_radius=9)
+        pygame.draw.rect(
+            self.screen,
+            (*arriving.theme.accent_color,),
+            status_rect,
+            width=1,
+            border_radius=9,
+        )
+        self.screen.blit(status, status.get_rect(center=status_rect.center))
+        self.draw_cinematic_skip_prompt()
+
+    def draw_travel_planet(self, destination, center, radius, foreground=False):
+        """Draw a compact route marker planet without exposing clipped layers."""
+
+        theme = destination.theme
+        def blend(first, second, amount):
+            return tuple(
+                round(a + (b - a) * amount)
+                for a, b in zip(first, second)
+            )
+
+        radius = max(20, radius)
+        glow = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        pygame.draw.circle(glow, (*theme.accent_color, 26), center, radius + 16)
+        self.screen.blit(glow, (0, 0))
+
+        ring = pygame.Rect(
+            center[0] - round(radius * 1.42),
+            center[1] - round(radius * 0.38),
+            round(radius * 2.84),
+            round(radius * 0.76),
+        )
+        if foreground:
+            pygame.draw.arc(
+                self.screen,
+                theme.secondary_color,
+                ring,
+                0,
+                math.pi * 2,
+                width=3,
+            )
+
+        diameter = radius * 2
+        globe = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pygame.draw.circle(globe, theme.accent_color, (radius, radius), radius)
+        pygame.draw.ellipse(
+            globe,
+            blend(theme.accent_color, theme.horizon_color, 0.48),
+            pygame.Rect(-radius // 3, round(radius * 1.15), round(radius * 2.6), round(radius * 0.55)),
+        )
+        pygame.draw.ellipse(
+            globe,
+            blend(theme.accent_color, theme.secondary_color, 0.2),
+            pygame.Rect(round(radius * 0.2), round(radius * 0.42), round(radius * 1.35), round(radius * 0.34)),
+        )
+        shadow = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pygame.draw.ellipse(
+            shadow,
+            (4, 8, 22, 105 if foreground else 130),
+            pygame.Rect(round(radius * 1.12), -radius // 8, radius, round(radius * 2.25)),
+        )
+        globe.blit(shadow, (0, 0))
+        mask = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pygame.draw.circle(mask, (255, 255, 255, 255), (radius, radius), radius)
+        globe.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        self.screen.blit(globe, (center[0] - radius, center[1] - radius))
+        pygame.draw.circle(self.screen, theme.secondary_color, center, radius, width=3)
+
+    def draw_final_departure_screen(self):
+        """Draw the farewell-style departure after the final configured stop."""
 
         elapsed = (
             0
@@ -199,39 +541,364 @@ class EndingMixin:
                 pygame.draw.circle(surface, (22, 35, 55), position, 10)
                 pygame.draw.circle(surface, (56, 66, 82), position, 5)
 
+    def get_arrival_progress(self):
+        """Return the destination approach animation's zero-to-one progress."""
+
+        if self.arrival_started_at is None:
+            return 1.0
+        elapsed = pygame.time.get_ticks() - self.arrival_started_at
+        return max(0.0, min(1.0, elapsed / self.arrival_animation_duration))
+
+    def draw_planet_arrival_screen(self):
+        """Draw the clinic approaching the route controller's new destination."""
+
+        destination = self.current_destination
+        theme = destination.theme
+        elapsed = (
+            0
+            if self.arrival_started_at is None
+            else pygame.time.get_ticks() - self.arrival_started_at
+        )
+        progress = self._intro_smooth(self.get_arrival_progress())
+        self.screen.fill(theme.space_color)
+
+        haze = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        pygame.draw.ellipse(
+            haze,
+            (*theme.horizon_color, 34),
+            pygame.Rect(560, 58, 570, 465),
+        )
+        pygame.draw.ellipse(
+            haze,
+            (*theme.secondary_color, 17),
+            pygame.Rect(-110, 290, 710, 310),
+        )
+        self.screen.blit(haze, (0, 0))
+
+        for index, (star_x, star_y, star_size) in enumerate(self.intro_stars):
+            twinkle = (elapsed // 180 + index) % 7 == 0
+            star_color = (230, 242, 255) if twinkle else (106, 139, 177)
+            pygame.draw.circle(
+                self.screen,
+                star_color,
+                (star_x, star_y),
+                star_size + int(twinkle and star_size == 1),
+            )
+
+        self.draw_destination_planet(destination, elapsed)
+        self.draw_arrival_ufo(progress, elapsed)
+        self.draw_arrival_information(destination)
+        self.draw_arrival_begin_button(destination)
+
+    def draw_destination_planet(self, destination, elapsed):
+        """Draw clean, layered planet art derived from destination metadata."""
+
+        theme = destination.theme
+        def blend(first, second, amount):
+            return tuple(
+                round(a + (b - a) * amount)
+                for a, b in zip(first, second)
+            )
+
+        center = (835, 300)
+        radius = 145
+        layer = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+
+        for glow_radius, glow_alpha in ((181, 14), (166, 22), (154, 30)):
+            pygame.draw.circle(
+                layer,
+                (*theme.accent_color, glow_alpha),
+                center,
+                glow_radius,
+            )
+
+        if "paired_moons" in theme.window_details:
+            moon_shift = round(math.sin(elapsed / 780) * 4)
+            pygame.draw.circle(
+                layer,
+                (*theme.secondary_color, 220),
+                (705 + moon_shift, 151),
+                25,
+            )
+            pygame.draw.circle(
+                layer,
+                (24, 38, 65, 100),
+                (696 + moon_shift, 145),
+                9,
+            )
+            pygame.draw.circle(
+                layer,
+                (211, 219, 229, 210),
+                (1016 - moon_shift, 424),
+                17,
+            )
+            pygame.draw.circle(
+                layer,
+                (146, 158, 182, 120),
+                (1011 - moon_shift, 419),
+                5,
+            )
+
+        # Draw the full ring behind the globe so it remains visible on the
+        # outer edges without ever appearing to pass through the planet.
+        orbit = pygame.Rect(center[0] - 205, center[1] - 58, 410, 116)
+        pygame.draw.arc(
+            layer,
+            (*theme.secondary_color, 125),
+            orbit,
+            0,
+            math.pi * 2,
+            width=4,
+        )
+
+        diameter = radius * 2
+        globe = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        globe_center = (radius, radius)
+        pygame.draw.circle(globe, (*theme.accent_color, 255), globe_center, radius)
+
+        # Soft atmospheric bands stay clipped to the circular globe instead
+        # of becoming the large rectangular-looking patches seen previously.
+        pygame.draw.ellipse(
+            globe,
+            blend(theme.accent_color, theme.horizon_color, 0.48),
+            pygame.Rect(-20, 183, 330, 57),
+        )
+        pygame.draw.ellipse(
+            globe,
+            blend(theme.accent_color, theme.secondary_color, 0.18),
+            pygame.Rect(34, 69, 164, 28),
+        )
+        pygame.draw.ellipse(
+            globe,
+            blend(theme.accent_color, (255, 229, 180), 0.3),
+            pygame.Rect(36, 28, 158, 58),
+        )
+        for offset_x, offset_y, crater_radius in (
+            (-61, 18, 13),
+            (43, -44, 9),
+            (62, 46, 16),
+            (-5, 75, 7),
+        ):
+            pygame.draw.circle(
+                globe,
+                blend(theme.accent_color, theme.horizon_color, 0.58),
+                (radius + offset_x, radius + offset_y),
+                crater_radius,
+            )
+
+        terminator = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pygame.draw.ellipse(
+            terminator,
+            (8, 12, 35, 92),
+            pygame.Rect(radius + 35, -18, radius, diameter + 36),
+        )
+        globe.blit(terminator, (0, 0))
+
+        mask = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pygame.draw.circle(mask, (255, 255, 255, 255), globe_center, radius)
+        globe.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        layer.blit(globe, (center[0] - radius, center[1] - radius))
+        pygame.draw.circle(
+            layer,
+            (*theme.secondary_color, 205),
+            center,
+            radius,
+            width=3,
+        )
+
+        if "orbital_traffic" in theme.window_details:
+            station_angle = elapsed / 900
+            station = (
+                round(center[0] + math.cos(station_angle) * 188),
+                round(center[1] + math.sin(station_angle) * 51),
+            )
+            pygame.draw.line(
+                layer,
+                (215, 230, 235, 220),
+                (station[0] - 10, station[1]),
+                (station[0] + 10, station[1]),
+                width=3,
+            )
+            pygame.draw.rect(
+                layer,
+                (*theme.accent_color, 230),
+                pygame.Rect(station[0] - 4, station[1] - 5, 8, 10),
+                border_radius=2,
+            )
+
+        self.screen.blit(layer, (0, 0))
+
+    def draw_arrival_ufo(self, progress, elapsed):
+        """Fly the clinic from the foreground toward the destination planet."""
+
+        start = (175, 500)
+        end = (661, 360)
+        center = (
+            round(start[0] + (end[0] - start[0]) * progress),
+            round(start[1] + (end[1] - start[1]) * progress),
+        )
+        scale = 0.25 - 0.15 * progress
+        trail = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        trail_alpha = round(120 * (1 - progress))
+        pygame.draw.line(
+            trail,
+            (*self.current_destination.theme.secondary_color, trail_alpha),
+            (45, 545),
+            (center[0] - 35, center[1] + 18),
+            width=4,
+        )
+        pygame.draw.line(
+            trail,
+            (215, 247, 255, min(190, trail_alpha + 45)),
+            (82, 528),
+            (center[0] - 31, center[1] + 10),
+            width=2,
+        )
+        self.screen.blit(trail, (0, 0))
+        self.draw_approaching_ufo(center, scale, elapsed, rotation=-6)
+
+    def draw_arrival_information(self, destination):
+        """Draw destination, roster, and location details in a compact panel."""
+
+        theme = destination.theme
+        panel = pygame.Rect(48, 82, 555, 350)
+        pygame.draw.rect(self.screen, (2, 7, 15), panel.move(7, 8), border_radius=18)
+        pygame.draw.rect(self.screen, (17, 30, 43), panel, border_radius=18)
+        pygame.draw.rect(
+            self.screen,
+            theme.accent_color,
+            panel,
+            width=3,
+            border_radius=18,
+        )
+
+        tag = self.small_font.render("NEXT STOP", True, theme.accent_color)
+        self.screen.blit(tag, (panel.x + 28, panel.y + 24))
+        name_box = pygame.Rect(panel.x + 28, panel.y + 58, panel.width - 56, 72)
+        self.draw_wrapped_text(
+            destination.planet_name.upper(),
+            self.heading_font,
+            COLORS["text"],
+            name_box,
+            line_spacing=0,
+        )
+        subtitle = self.small_font.render(
+            destination.subtitle.upper(),
+            True,
+            theme.secondary_color,
+        )
+        self.screen.blit(subtitle, (panel.x + 28, panel.y + 137))
+        pygame.draw.line(
+            self.screen,
+            (*theme.secondary_color,),
+            (panel.x + 28, panel.y + 171),
+            (panel.right - 28, panel.y + 171),
+            width=2,
+        )
+
+        roster_text = (
+            f"DAY {destination.day_number}  •  "
+            f"{len(destination.patient_roster)} PATIENTS WAITING"
+        )
+        roster = self.body_font.render(roster_text, True, theme.accent_color)
+        self.screen.blit(roster, (panel.x + 28, panel.y + 193))
+        message_box = pygame.Rect(
+            panel.x + 28,
+            panel.y + 235,
+            panel.width - 56,
+            76,
+        )
+        self.draw_wrapped_text(
+            destination.arrival_message,
+            self.body_font,
+            COLORS["text"],
+            message_box,
+            line_spacing=4,
+        )
+
+    def draw_arrival_begin_button(self, destination):
+        """Draw the action that opens the arrived destination's reception."""
+
+        hovered = self.arrival_begin_button.collidepoint(self.get_mouse_position())
+        fill = (116, 255, 191) if hovered else destination.theme.accent_color
+        pygame.draw.rect(
+            self.screen,
+            (2, 7, 13),
+            self.arrival_begin_button.move(4, 6),
+            border_radius=10,
+        )
+        pygame.draw.rect(
+            self.screen,
+            fill,
+            self.arrival_begin_button,
+            border_radius=10,
+        )
+        pygame.draw.rect(
+            self.screen,
+            (225, 244, 239),
+            self.arrival_begin_button,
+            width=2,
+            border_radius=10,
+        )
+        label = self.body_font.render(
+            f"BEGIN DAY {destination.day_number}",
+            True,
+            (5, 16, 22),
+        )
+        self.screen.blit(label, label.get_rect(center=self.arrival_begin_button.center))
+        hint = self.card_font.render(
+            "Press Enter to begin the next clinic shift",
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(
+            hint,
+            hint.get_rect(center=(WINDOW_SIZE[0] // 2, 632)),
+        )
+
+    def handle_arrival_click(self, position):
+        """Begin the arrived destination when its action is selected."""
+
+        if self.arrival_begin_button.collidepoint(position):
+            self.play_sfx("button")
+            self.start_next_shift()
+
     def draw_final_screen(self):
-        """Draw an empty Day 2 reception that is ready for a future roster."""
+        """Draw an empty clinic after every configured route stop is complete."""
 
         self.screen.fill(COLORS["background"])
         self.draw_game_logo((WINDOW_SIZE[0] // 2, 38), scale=0.86)
-        subtitle = self.small_font.render(f"DAY {self.day_number + 1}  //  RECEPTION", True, COLORS["muted"])
+        subtitle = self.small_font.render(
+            f"ROUTE STATUS  //  {self.current_destination.planet_name.upper()}",
+            True,
+            COLORS["muted"],
+        )
         self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_SIZE[0] // 2, 76)))
 
         self.draw_reception_room()
         self.draw_waiting_room_windows()
         self.draw_waiting_room_door()
         self.draw_waiting_room_chairs()
-        self.draw_reception_desk()
+        self.draw_reception_desk(force_empty=True)
         self.draw_next_day_status()
 
-        upcoming_roster = self.next_shift_queue or self.later_shift_roster()
-        has_roster = bool(upcoming_roster)
-        action_label = f"START DAY {self.day_number + 1}" if has_roster else "REPLAY DAY 1"
-        self.draw_ending_button(self.final_replay_button, action_label, False)
+        replay_label = "REPLAY ROUTE" if self.has_return_passage() else "RESTART ROUTE"
+        self.draw_ending_button(self.final_replay_button, replay_label, False)
         self.draw_ending_button(self.final_quit_button, "QUIT GAME", True)
+        hint_text = (
+            "Earth transit is authorized. Future story content can now complete the journey home."
+            if self.has_return_passage()
+            else "Completed destinations will remain available when the route expands."
+        )
         hint = self.card_font.render(
-            (
-                f"New patient files received. Day {self.day_number + 1} is ready to begin."
-                if has_roster
-                else "New patient files can be added to the Day 2 roster here."
-            ),
+            hint_text,
             True,
             COLORS["muted"],
         )
         self.screen.blit(hint, hint.get_rect(center=(WINDOW_SIZE[0] // 2, 584)))
 
     def draw_next_day_status(self):
-        """Draw the Day 2 monitor and roster-pending message over empty chairs."""
+        """Draw route-completion status without inventing another clinic day."""
 
         status = pygame.Rect(30, 100, 1040, 49)
         pygame.draw.rect(self.screen, (54, 78, 78), status, border_radius=10)
@@ -239,13 +906,11 @@ class EndingMixin:
         display = status.inflate(-10, -10)
         pygame.draw.rect(self.screen, (5, 19, 24), display, border_radius=7)
 
-        upcoming_roster = self.next_shift_queue or self.later_shift_roster()
-        has_roster = bool(upcoming_roster)
-        status_color = COLORS["accent"] if has_roster else (255, 198, 75)
+        status_color = (255, 198, 75)
         pygame.draw.circle(self.screen, status_color, (display.x + 15, display.centery), 5)
-        day_label = self.body_font.render(f"DAY {self.day_number + 1} RECEPTION", True, COLORS["text"])
+        day_label = self.body_font.render("ROUTE STATUS", True, COLORS["text"])
         roster_label = self.small_font.render(
-            "PATIENT ROSTER READY" if has_roster else "NO PATIENTS SCHEDULED YET",
+            "ALL SCHEDULED STOPS COMPLETE",
             True,
             status_color,
         )
@@ -265,20 +930,23 @@ class EndingMixin:
         pygame.draw.rect(self.screen, (4, 12, 20), notice.move(5, 6), border_radius=13)
         pygame.draw.rect(self.screen, (19, 31, 45), notice, border_radius=13)
         pygame.draw.rect(self.screen, status_color, notice, width=2, border_radius=13)
+        heading_text = (
+            "RETURN PASSAGE SECURED"
+            if self.has_return_passage()
+            else ROUTE_COMPLETE_HEADING
+        )
+        message_text = (
+            "Earth transit authorization has been added to the clinic route."
+            if self.has_return_passage()
+            else ROUTE_COMPLETE_MESSAGE
+        )
         notice_heading = self.heading_font.render(
-            "ROSTER READY" if has_roster else "ROSTER PENDING",
+            heading_text,
             True,
             status_color,
         )
-        notice_body = self.small_font.render(
-            (
-                (
-                    f"{len(upcoming_roster)} patient"
-                    f"{'s are' if len(upcoming_roster) != 1 else ' is'} waiting for Day {self.day_number + 1}."
-                )
-                if has_roster
-                else "The clinic is waiting for new patient files."
-            ),
+        notice_body = self.compact_ui_font.render(
+            message_text,
             True,
             COLORS["text"],
         )
@@ -305,16 +973,11 @@ class EndingMixin:
         self.screen.blit(text, text.get_rect(center=rect.center))
 
     def handle_final_screen_click(self, position):
-        """Start an available Day 2 roster, replay Day 1, or close the game."""
+        """Restart the configured route or close the game."""
 
         if self.final_replay_button.collidepoint(position):
             self.play_sfx("button")
-            if self.next_shift_queue or self.later_shift_roster():
-                next_roster = list(self.next_shift_queue or self.later_shift_roster())
-                self.next_shift_queue = []
-                self.start_next_shift(next_roster)
-            else:
-                self.restart_game()
+            self.restart_game()
         elif self.final_quit_button.collidepoint(position):
             self.play_sfx("button")
             self.running = False
@@ -339,14 +1002,23 @@ class EndingMixin:
 
         timer_names = (
             "intro_started_at",
+            "intro_dialogue_started_at",
             "test_result_started_at",
             "diagnosis_folder_animation_started_at",
             "notebook_attention_started_at",
+            "notebook_preview_last_tick",
             "reception_transition_started_at",
             "queue_shift_started_at",
             "patient_fade_started_at",
             "end_day_shutdown_started_at",
             "ending_started_at",
+            "arrival_started_at",
+            "card_draw_notice_started_at",
+            "card_shop_notice_started_at",
+            "guided_tutorial_step_started_at",
+            "guided_tutorial_nudge_started_at",
+            "tutorial_opened_at",
+            "help_attention_started_at",
         )
         for timer_name in timer_names:
             started_at = getattr(self, timer_name, None)
@@ -370,23 +1042,57 @@ class EndingMixin:
             self.close_exit_confirmation()
         elif self.exit_reception_button.collidepoint(position):
             self.play_sfx("button")
-            self.restart_game()
+            self.restart_current_shift()
         elif self.exit_quit_button.collidepoint(position):
             self.play_sfx("button")
             self.running = False
 
-    def start_next_shift(self, patient_queue):
-        """Load a future shift roster while preserving clinic upgrades and money."""
+    def load_current_destination(self):
+        """Load the route controller's current roster into the playable GUI."""
 
+        destination = self.route.current_destination
+        if destination.key != self.destinations[0].key:
+            self.finish_guided_tutorial()
+        patient_queue = self.roster_for_destination(destination)
         if not patient_queue:
-            raise ValueError("A shift requires at least one patient.")
-        self.day_number += 1
-        self.waiting_room_queue = list(patient_queue)
+            raise ValueError("A destination requires at least one patient.")
+        self.waiting_room_queue = patient_queue
         self.ending_started_at = None
+        self.arrival_started_at = None
         self.exit_confirmation_open = False
         self.exit_confirmation_opened_at = None
         self.reset_day()
         self.state = GameState.TITLE
+
+    def start_next_shift(self):
+        """Start the shift at the destination reached after Shop departure."""
+
+        self.route.begin_current_shift()
+        self.load_current_destination()
+
+    def restart_current_shift(self):
+        """Return to the active destination without erasing campaign progress."""
+
+        restart_training = self.guided_tutorial_active and self.is_training_destination()
+        # If payroll has already been collected for this exact destination,
+        # remember that fact so replaying it cannot award the same pay twice.
+        # A pending arrival belongs to the *next* destination, so that shift
+        # must still begin with a fresh unpaid ledger.
+        preserve_paid_status = (
+            self.daily_payout_applied and not self.route.arrival_pending
+        )
+        self.finish_guided_tutorial()
+        self.intro_dialogue_active = False
+        self.intro_dialogue_started_at = None
+        if self.route.arrival_pending:
+            self.route.begin_current_shift()
+        elif self.route.current_is_complete:
+            self.route.reopen_current_shift()
+        self.load_current_destination()
+        if preserve_paid_status:
+            self.daily_payout_applied = True
+        if restart_training:
+            self.start_guided_tutorial()
 
     def restart_game(self):
         """Reset campaign progress and return to reception without the intro."""
@@ -399,13 +1105,13 @@ class EndingMixin:
         self.player.machine_levels.clear()
         self.player.test_discount = 0
         self.purchased_shop_upgrades.clear()
+        self.route_briefing_seen = False
+        self.route_briefing_index = 0
         self.ending_started_at = None
         self.exit_confirmation_open = False
         self.exit_confirmation_opened_at = None
-        self.day_number = 0
-        self.next_shift_queue = []
-        self.start_next_shift(self.day_one_queue)
-        self.next_shift_queue = [dict(entry) for entry in self.day_two_queue]
+        self.route.reset()
+        self.load_current_destination()
         if restart_training:
             self.start_guided_tutorial()
 
