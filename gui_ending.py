@@ -32,6 +32,9 @@ class EndingMixin:
         """Leave the Shop and begin the clinic departure animation."""
 
         self.record_current_route_performance()
+        if self.has_return_passage() and not self.route.arrival_pending:
+            self.finish_ending_sequence()
+            return
         self.exit_confirmation_open = False
         self.ending_duration = 4200
         self.ending_started_at = pygame.time.get_ticks()
@@ -124,7 +127,7 @@ class EndingMixin:
         pygame.draw.rect(self.screen, accent, prompt_panel, width=2, border_radius=10)
         self.screen.blit(prompt, prompt.get_rect(center=prompt_panel.center))
 
-    def record_current_route_performance(self, *, advance=True):
+    def record_current_route_performance(self):
         """Preserve this shift's results before daily counters are reset."""
 
         performance = ShiftPerformance(
@@ -139,20 +142,18 @@ class EndingMixin:
             net_pay=self.get_daily_pay_breakdown()[3],
             ending_balance=self.player.balance,
         )
-        if not advance:
-            return self.route.record_current_shift(performance)
         return self.route.complete_current_shift(performance)
 
     def begin_homecoming_sequence(self):
-        """Record the shift and start the final flight without advancing the route."""
-        self.record_current_route_performance(advance=False)
+        """Start the final flight after the player chooses to go home."""
+        self.homecoming_started = True
         self.exit_confirmation_open = False
         self.ending_duration = 14000
         self.ending_started_at = pygame.time.get_ticks()
         self.state = GameState.ENDING
 
     def can_skip_ending(self):
-        return not self.has_return_passage()
+        return not self.homecoming_started
 
     def finish_ending_sequence(self):
         """Finish departure at an arrival screen or the completed-route report."""
@@ -472,7 +473,7 @@ class EndingMixin:
     def draw_final_departure_screen(self):
         """Draw the farewell-style departure after the final configured stop."""
 
-        if self.has_return_passage():
+        if self.homecoming_started:
             self.draw_homecoming_ending()
             return
         elapsed = (
@@ -967,7 +968,7 @@ class EndingMixin:
     def draw_final_screen(self):
         """Draw an empty clinic after every configured route stop is complete."""
 
-        if self.has_return_passage():
+        if self.homecoming_started:
             self.draw_homecoming_ending(finished=True)
             for text, y, font in (("HOME, AT LAST.", 63, self.heading_font),
                                   (f"You made it home after {self.day_number} shifts.", 96, self.small_font)):
@@ -992,9 +993,13 @@ class EndingMixin:
         self.draw_reception_desk(force_empty=True)
         self.draw_next_day_status()
 
-        self.draw_ending_button(self.final_replay_button, "RESTART ROUTE", False)
-        self.draw_ending_button(self.final_quit_button, "QUIT GAME", True)
-        hint_text = "The route is complete. Return Passage was not purchased."
+        ticket_secured = self.has_return_passage()
+        self.draw_ending_button(self.final_replay_button, "KEEP GOING" if ticket_secured else "RESTART ROUTE", False)
+        self.draw_ending_button(self.final_quit_button, "GO HOME" if ticket_secured else "QUIT GAME", not ticket_secured)
+        hint_text = (
+            "Replay this stop with your money, upgrades, and ticket."
+            if ticket_secured else "The route is complete. Return Passage was not purchased."
+        )
         hint = self.card_font.render(
             hint_text,
             True,
@@ -1036,12 +1041,12 @@ class EndingMixin:
         pygame.draw.rect(self.screen, (19, 31, 45), notice, border_radius=13)
         pygame.draw.rect(self.screen, status_color, notice, width=2, border_radius=13)
         notice_heading = self.heading_font.render(
-            ROUTE_COMPLETE_HEADING,
+            "RETURN PASSAGE SECURED" if self.has_return_passage() else ROUTE_COMPLETE_HEADING,
             True,
             status_color,
         )
         notice_body = self.compact_ui_font.render(
-            ROUTE_COMPLETE_MESSAGE,
+            "Keep working or take the UFO home." if self.has_return_passage() else ROUTE_COMPLETE_MESSAGE,
             True,
             COLORS["text"],
         )
@@ -1068,14 +1073,21 @@ class EndingMixin:
         self.screen.blit(text, text.get_rect(center=rect.center))
 
     def handle_final_screen_click(self, position):
-        """Restart the configured route or close the game."""
+        """Handle the route-complete choice or the post-homecoming buttons."""
 
+        choosing = self.has_return_passage() and not self.homecoming_started
         if self.final_replay_button.collidepoint(position):
             self.play_sfx("button")
-            self.restart_game()
+            if choosing:
+                self.restart_current_shift()
+            else:
+                self.restart_game()
         elif self.final_quit_button.collidepoint(position):
             self.play_sfx("button")
-            self.running = False
+            if choosing:
+                self.begin_homecoming_sequence()
+            else:
+                self.running = False
 
     def open_exit_confirmation(self):
         """Pause interaction and open the three-option exit confirmation."""
@@ -1168,6 +1180,7 @@ class EndingMixin:
     def restart_current_shift(self):
         """Return to the active destination without erasing campaign progress."""
 
+        self.homecoming_started = False
         restart_training = self.guided_tutorial_active and self.is_training_destination()
         # If payroll has already been collected for this exact destination,
         # remember that fact so replaying it cannot award the same pay twice.
@@ -1202,6 +1215,7 @@ class EndingMixin:
         self.player.free_tests_used.clear()
         self.player.test_discount = 0
         self.purchased_shop_upgrades.clear()
+        self.homecoming_started = False
         self.route_briefing_seen = False
         self.route_briefing_index = 0
         self.ending_started_at = None

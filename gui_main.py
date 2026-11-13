@@ -216,6 +216,7 @@ class CosmicClinicGUI(
         self.exit_continue_button = pygame.Rect(365, 300, 370, 46)
         self.exit_reception_button = pygame.Rect(365, 360, 370, 46)
         self.exit_quit_button = pygame.Rect(365, 420, 370, 46)
+        self.homecoming_started = False
         self.final_replay_button = pygame.Rect(300, 500, 235, 48)
         self.final_quit_button = pygame.Rect(565, 500, 235, 48)
         self.tutorial_open = False

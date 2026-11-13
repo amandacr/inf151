@@ -701,7 +701,19 @@ class GuiFlowSmokeTests(unittest.TestCase):
         g.handle_shop_upgrade_click(g.shop_purchase_button.center)
         self.assertEqual(g.player.balance, 0)
         self.assertIn("return_passage", g.purchased_shop_upgrades)
+        self.assertEqual(g.state, GameState.FINAL)
+        self.assertFalse(g.homecoming_started)
+        g.handle_final_screen_click(g.final_replay_button.center)
+        self.assertEqual(g.state, GameState.TITLE)
+        self.assertEqual(g.day_number, 2)
+        self.assertEqual(g.player.balance, 0)
+        self.assertTrue(g.has_return_passage())
+        g.state = GameState.SHOP
+        g.handle_shop_click(g.shop_button.center)
+        self.assertEqual(g.state, GameState.FINAL)
+        g.handle_final_screen_click(g.final_quit_button.center)
         self.assertEqual(g.state, GameState.ENDING)
+        self.assertTrue(g.homecoming_started)
         pygame.event.post(pygame.event.Event(
             pygame.MOUSEBUTTONDOWN, button=1, pos=(100, 100),
         ))
@@ -3065,7 +3077,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.assertTrue(self.game.has_return_passage())
         self.assertEqual(self.game.player.balance, 0)
-        self.assertEqual(self.game.state, GameState.ENDING)
+        self.assertEqual(self.game.state, GameState.FINAL)
         self.game.draw()
 
     def test_workspace_tools_use_the_swapped_non_overlapping_layout(self):

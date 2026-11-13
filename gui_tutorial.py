@@ -564,7 +564,7 @@ class TutorialMixin:
             ),
             GameState.SHOP: (
                 "SUPPLY SHOP",
-                "Buy upgrades that carry between planets, or save for Return Passage after the final shift.",
+                "Buy upgrades or secure Return Passage after the final shift. You choose when to go home.",
             ),
             GameState.ROUTE_BRIEFING: (
                 "ROUTE BRIEFING",

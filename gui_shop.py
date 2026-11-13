@@ -38,7 +38,7 @@ SHOP_UPGRADES = (
     {"id": "smart_cards", "name": "SMART TEST CARDS", "category": "CARD UPGRADE", "cost": 25,
      "description": "Every test costs $1 less. Stacks with upgrades.", "discount": 1},
     {"id": "return_passage", "name": "RETURN PASSAGE", "category": "EARTH TRANSIT", "cost": RETURN_PASSAGE_COST,
-     "description": "Take the UFO home after the final shift. Ends the campaign.", "passage": True},
+     "description": "Secure a ticket, then keep working or take the UFO home.", "passage": True},
 
     {"id": "recycler", "name": "CARD RECYCLER", "category": "CARD MANAGEMENT", "cost": 50,
      "description": "Once per patient, swap a test card for a random one free."},
@@ -785,7 +785,7 @@ class ShopMixin:
                 self.player.test_discount += upgrade["discount"]
             self.purchased_shop_upgrades.add(upgrade["id"])
             if upgrade.get("passage"):
-                self.begin_homecoming_sequence()
+                self.begin_ending_sequence()
                 return
             self.shop_message = ("Recycler installed! Select a test card to recycle once per patient."
                                  if upgrade["id"] == "recycler" else
