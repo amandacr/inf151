@@ -87,6 +87,16 @@ class ShopMixin:
 
         return "return_passage" in self.purchased_shop_upgrades
 
+    def get_return_passage_progress(self):
+        """Return the persistent fraction of the Earth-ticket goal funded."""
+
+        if self.has_return_passage():
+            return 1.0
+        return min(
+            1.0,
+            max(0.0, self.player.balance / RETURN_PASSAGE_COST),
+        )
+
     def is_shop_day_locked(self, upgrade):
         return bool(upgrade.get("passage") and self.route.next_destination is not None)
 
@@ -306,7 +316,7 @@ class ShopMixin:
         self.screen.blit(label, label.get_rect(center=(badge.centerx, badge.y + 12)))
         track = pygame.Rect(badge.x + 10, badge.bottom - 10, badge.width - 20, 5)
         pygame.draw.rect(self.screen, (7, 12, 22), track, border_radius=3)
-        progress = 1.0 if secured else min(1.0, max(0.0, self.player.balance / RETURN_PASSAGE_COST))
+        progress = self.get_return_passage_progress()
         if progress > 0:
             fill = pygame.Rect(track.x, track.y, max(2, round(track.width * progress)), track.height)
             pygame.draw.rect(self.screen, accent, fill, border_radius=3)

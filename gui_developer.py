@@ -338,7 +338,7 @@ class DeveloperMixin:
         return tuple(entries_by_id[scene_id] for scene_id in scene_ids)
 
     def get_developer_roster(self, day_number=None):
-        """Return a stable Day 1 or Day 2 roster for preview checkpoints."""
+        """Return the selected configured destination's stable preview roster."""
 
         selected_day = day_number or self.developer_selected_day
         return self.roster_for_day(selected_day)
@@ -543,6 +543,11 @@ class DeveloperMixin:
         """Build a consistent completed-shift state for late-game checkpoints."""
 
         self.prepare_developer_campaign_day()
+        self.populate_developer_shift_metrics()
+
+    def populate_developer_shift_metrics(self):
+        """Fill the active preview shift with stable successful results."""
+
         self.patients_called = len(self.waiting_room_queue)
         self.daily_correct_diagnoses = len(self.waiting_room_queue)
         self.daily_test_count = len(self.waiting_room_queue) * 2
@@ -551,7 +556,7 @@ class DeveloperMixin:
         self.daily_payout_applied = False
 
     def prepare_developer_arrival_checkpoint(self):
-        """Complete the previous route stop and approach the selected one."""
+        """Complete every earlier stop and approach the selected destination."""
 
         selected_day = self.developer_selected_day
         destination_index = next(
@@ -561,11 +566,17 @@ class DeveloperMixin:
         )
         if destination_index == 0:
             raise ValueError("The first destination uses the opening story, not arrival.")
-        previous_day = self.destinations[destination_index - 1].day_number
-        self.developer_selected_day = previous_day
-        self.prepare_developer_shift_checkpoint()
-        self.settle_daily_pay()
-        reached_destination = self.record_current_route_performance()
+
+        self.restart_game()
+        reached_destination = None
+        for completed_index in range(destination_index):
+            if completed_index:
+                self.route.begin_current_shift()
+                self.load_current_destination()
+            self.populate_developer_shift_metrics()
+            self.settle_daily_pay()
+            reached_destination = self.record_current_route_performance()
+
         self.developer_selected_day = selected_day
         if (
             reached_destination is None
@@ -583,7 +594,11 @@ class DeveloperMixin:
         )
         if selected_destination is not self.destinations[-1]:
             raise ValueError("Route Complete belongs to the final configured destination.")
-        self.prepare_developer_shift_checkpoint()
+
+        self.prepare_developer_arrival_checkpoint()
+        self.route.begin_current_shift()
+        self.load_current_destination()
+        self.populate_developer_shift_metrics()
         self.settle_daily_pay()
         self.record_current_route_performance()
 

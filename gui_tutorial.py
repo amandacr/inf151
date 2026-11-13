@@ -528,7 +528,10 @@ class TutorialMixin:
         if self.state == GameState.TITLE:
             return (
                 "RECEPTION",
-                "Call the next patient and watch the waiting-room queue move toward the examination bay.",
+                (
+                    f"At {self.current_destination.planet_name}, call the next patient "
+                    "and watch the queue move toward the examination bay."
+                ),
             )
         if self.state == GameState.PATIENT:
             if self.diagnosis_confirmation_open:
@@ -641,7 +644,10 @@ class TutorialMixin:
             ),
             (
                 "PLANET ROUTE",
-                "Each shift visits a new destination with different aliens and conditions.",
+                (
+                    "Day 1 Training > Day 2 Triska > Day 3 Lumora. "
+                    "Each new destination has different aliens and conditions."
+                ),
             ),
         )
 

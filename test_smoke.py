@@ -17,8 +17,22 @@ import main as game_launcher
 from Deck import Deck
 from Diagnosis import DIAGNOSES
 from Notebook import Notebook
-from PatientData import create_conmann, create_titus, create_zoogy, create_zorpa
-from PlanetData import DESTINATIONS, get_destination, validate_destinations
+from PatientData import (
+    create_conmann,
+    create_gribble,
+    create_krix,
+    create_oola,
+    create_titus,
+    create_velli,
+    create_zoogy,
+    create_zorpa,
+)
+from PlanetData import (
+    DESTINATIONS,
+    LUMORA_PATIENTS,
+    get_destination,
+    validate_destinations,
+)
 from Player import (
     CLINIC_OPERATING_FEE,
     DIAGNOSIS_REWARD,
@@ -120,25 +134,39 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertTrue(route.arrival_pending)
         self.assertEqual(route.begin_current_shift(), get_destination(2))
         self.assertFalse(route.arrival_pending)
-        self.assertIsNone(route.next_destination)
+        self.assertEqual(route.next_destination, get_destination(3))
         self.assertFalse(route.route_is_complete)
-        self.assertIsNone(route.complete_current_shift(
-            ShiftPerformance(
-                destination_key="triska_station",
-                day_number=2,
-                patients_seen=4,
-                correct_diagnoses=4,
-                supported_diagnoses=4,
-                wrong_diagnoses=0,
-                patients_lost=0,
-                tests_run=8,
-                net_pay=75,
-                ending_balance=210,
-            )
-        ))
+        day_two = ShiftPerformance(
+            destination_key="triska_station",
+            day_number=2,
+            patients_seen=4,
+            correct_diagnoses=4,
+            supported_diagnoses=4,
+            wrong_diagnoses=0,
+            patients_lost=0,
+            tests_run=8,
+            net_pay=75,
+            ending_balance=210,
+        )
+        self.assertEqual(route.complete_current_shift(day_two), get_destination(3))
+        self.assertEqual(route.begin_current_shift(), get_destination(3))
+        self.assertIsNone(route.next_destination)
+        day_three = ShiftPerformance(
+            destination_key="lumora_canopy",
+            day_number=3,
+            patients_seen=4,
+            correct_diagnoses=4,
+            supported_diagnoses=3,
+            wrong_diagnoses=1,
+            patients_lost=0,
+            tests_run=9,
+            net_pay=50,
+            ending_balance=260,
+        )
+        self.assertIsNone(route.complete_current_shift(day_three))
         self.assertTrue(route.route_is_complete)
-        self.assertEqual(route.overall_performance["patients_seen"], 8)
-        self.assertEqual(route.overall_performance["net_pay"], 110)
+        self.assertEqual(route.overall_performance["patients_seen"], 12)
+        self.assertEqual(route.overall_performance["net_pay"], 160)
 
         self.assertEqual(route.reset(), get_destination(1))
         self.assertEqual(route.completed_destinations, ())
@@ -402,6 +430,318 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertNotIn("lactose", conmann_allergy)
         self.assertNotIn("intolerance", conmann_allergy)
         self.assertNotIn("lactose", conmann_blood)
+
+    def test_velli_has_complete_medical_content(self):
+        """Velli should provide a complete validated Day 3 case."""
+
+        patient = create_velli()
+        test_names = {test.name for test in create_test_catalog()}
+
+        self.assertEqual(patient.name, "Velli Mosswhistle")
+        self.assertEqual(
+            patient.profile,
+            {
+                "Species": "Luminari Floran",
+                "Occupation": "Canopy Lightkeeper",
+                "Home Planet": "Lumora",
+            },
+        )
+        self.assertEqual(patient.medical_info["Normal temperature"], "78°F")
+        self.assertEqual(
+            patient.medical_info["Circulation"],
+            "2 sap hearts; chlorophyll-rich plasma",
+        )
+        self.assertEqual(len(patient.dialogue), 3)
+        self.assertEqual(set(patient.test_results), test_names)
+        self.assertEqual(len(patient.diagnosis_options), 5)
+        self.assertEqual(len({item.name for item in patient.diagnosis_options}), 5)
+        self.assertEqual(
+            sum(item is patient.diagnosis for item in patient.diagnosis_options),
+            1,
+        )
+
+        evidence_pair = {"BLOOD CHEMISTRY", "OXYGEN SCAN"}
+        self.assertTrue(patient.has_supporting_evidence(evidence_pair))
+        for test_name in evidence_pair:
+            self.assertFalse(patient.has_supporting_evidence({test_name}))
+            self.assertFalse(
+                patient.has_supporting_evidence(test_names - {test_name})
+            )
+
+        combined_results = " ".join(patient.test_results.values()).casefold()
+        self.assertNotIn("photosynthetic circulation failure", combined_results)
+        for diagnosis in patient.diagnosis_options:
+            self.assertTrue(diagnosis.description)
+            self.assertTrue(diagnosis.treatment)
+            self.assertTrue(diagnosis.evidence_combinations)
+            if diagnosis is patient.diagnosis:
+                self.assertIsNone(diagnosis.rejection_reason)
+                continue
+            self.assertIsNone(diagnosis.get_rejection_reason(set()))
+            self.assertTrue(diagnosis.rejection_tests)
+            self.assertTrue(
+                diagnosis.get_rejection_reason(diagnosis.rejection_tests)
+            )
+            for test_name in diagnosis.rejection_tests:
+                self.assertIsNone(
+                    diagnosis.get_rejection_reason(
+                        diagnosis.rejection_tests - {test_name}
+                    )
+                )
+
+    def test_lumora_has_a_complete_fixed_day_three_roster(self):
+        """Every validated Lumora record should belong to the configured route."""
+
+        self.assertEqual(len(LUMORA_PATIENTS), 4)
+        self.assertEqual(get_destination(3).patient_roster, LUMORA_PATIENTS)
+        self.assertEqual(
+            [slot.create().name for slot in LUMORA_PATIENTS],
+            [
+                "Velli Mosswhistle",
+                "Gribble Sporekin",
+                "Oola Dewdrop",
+                "Krix Lanternback",
+            ],
+        )
+        self.assertEqual(
+            {slot.serial for slot in LUMORA_PATIENTS},
+            {"LUM-014-VM", "MYC-073-GS", "DEW-228-OD", "LTN-091-KL"},
+        )
+
+    def test_velli_has_complete_visual_metadata(self):
+        """Velli should retain its approved art settings inside Day 3."""
+
+        slot = LUMORA_PATIENTS[0]
+        self.assertEqual(slot.asset, "velli")
+        self.assertEqual(slot.create().name, "Velli Mosswhistle")
+        self.assertEqual(slot.serial, "LUM-014-VM")
+        self.assertEqual(len(slot.portrait), 4)
+        self.assertGreater(slot.presentation_scale, 0)
+
+    def test_gribble_has_complete_medical_content(self):
+        """Gribble's close diagnoses must require complementary observations."""
+
+        patient = create_gribble()
+        test_names = {test.name for test in create_test_catalog()}
+
+        self.assertEqual(patient.profile["Species"], "Mycori Sporekin")
+        self.assertEqual(patient.profile["Home Planet"], "Lumora")
+        self.assertEqual(patient.medical_info["Normal temperature"], "64°F")
+        self.assertEqual(len(patient.dialogue), 3)
+        self.assertEqual(set(patient.test_results), test_names)
+        self.assertEqual(len(patient.diagnosis_options), 5)
+        self.assertEqual(len({item.name for item in patient.diagnosis_options}), 5)
+        self.assertEqual(
+            sum(item is patient.diagnosis for item in patient.diagnosis_options),
+            1,
+        )
+        evidence_pair = {"NEURAL SCAN", "ULTRASOUND"}
+        self.assertTrue(patient.has_supporting_evidence(evidence_pair))
+        for test_name in evidence_pair:
+            self.assertFalse(patient.has_supporting_evidence({test_name}))
+            self.assertFalse(
+                patient.has_supporting_evidence(test_names - {test_name})
+            )
+        combined_results = " ".join(patient.test_results.values()).casefold()
+        self.assertNotIn("mycelial neural cross-talk", combined_results)
+        for diagnosis in patient.diagnosis_options:
+            self.assertTrue(diagnosis.description)
+            self.assertTrue(diagnosis.treatment)
+            self.assertTrue(diagnosis.evidence_combinations)
+            if diagnosis is patient.diagnosis:
+                self.assertIsNone(diagnosis.rejection_reason)
+                continue
+            self.assertIsNone(diagnosis.get_rejection_reason(set()))
+            self.assertTrue(diagnosis.rejection_tests)
+            self.assertTrue(
+                diagnosis.get_rejection_reason(diagnosis.rejection_tests)
+            )
+            for test_name in diagnosis.rejection_tests:
+                self.assertIsNone(
+                    diagnosis.get_rejection_reason(
+                        diagnosis.rejection_tests - {test_name}
+                    )
+                )
+
+    def test_oola_has_complete_medical_content(self):
+        """Oola's respiratory reaction must require both immune and airflow clues."""
+
+        patient = create_oola()
+        test_names = {test.name for test in create_test_catalog()}
+
+        self.assertEqual(patient.profile["Species"], "Dewfin Amphibian")
+        self.assertEqual(patient.profile["Home Planet"], "Lumora")
+        self.assertEqual(patient.medical_info["Normal temperature"], "58°F")
+        self.assertEqual(len(patient.dialogue), 3)
+        self.assertEqual(set(patient.test_results), test_names)
+        self.assertEqual(len(patient.diagnosis_options), 5)
+        self.assertEqual(len({item.name for item in patient.diagnosis_options}), 5)
+        self.assertEqual(
+            sum(item is patient.diagnosis for item in patient.diagnosis_options),
+            1,
+        )
+        evidence_pair = {"ALLERGY", "OXYGEN SCAN"}
+        self.assertTrue(patient.has_supporting_evidence(evidence_pair))
+        for test_name in evidence_pair:
+            self.assertFalse(patient.has_supporting_evidence({test_name}))
+            self.assertFalse(
+                patient.has_supporting_evidence(test_names - {test_name})
+            )
+        combined_results = " ".join(patient.test_results.values()).casefold()
+        self.assertNotIn("night-spore respiratory reaction", combined_results)
+        for diagnosis in patient.diagnosis_options:
+            self.assertTrue(diagnosis.description)
+            self.assertTrue(diagnosis.treatment)
+            self.assertTrue(diagnosis.evidence_combinations)
+            if diagnosis is patient.diagnosis:
+                self.assertIsNone(diagnosis.rejection_reason)
+                continue
+            self.assertIsNone(diagnosis.get_rejection_reason(set()))
+            self.assertTrue(diagnosis.rejection_tests)
+            self.assertTrue(
+                diagnosis.get_rejection_reason(diagnosis.rejection_tests)
+            )
+            for test_name in diagnosis.rejection_tests:
+                self.assertIsNone(
+                    diagnosis.get_rejection_reason(
+                        diagnosis.rejection_tests - {test_name}
+                    )
+                )
+
+    def test_krix_has_complete_medical_content(self):
+        """Krix's thermal gradient and displaced core must form one clue pair."""
+
+        patient = create_krix()
+        test_names = {test.name for test in create_test_catalog()}
+
+        self.assertEqual(patient.profile["Species"], "Lanternback Coniferid")
+        self.assertEqual(patient.profile["Home Planet"], "Lumora")
+        self.assertEqual(
+            patient.medical_info["Normal temperature"],
+            "102°F, evenly distributed",
+        )
+        self.assertEqual(len(patient.dialogue), 3)
+        self.assertEqual(set(patient.test_results), test_names)
+        self.assertEqual(len(patient.diagnosis_options), 5)
+        self.assertEqual(len({item.name for item in patient.diagnosis_options}), 5)
+        self.assertEqual(
+            sum(item is patient.diagnosis for item in patient.diagnosis_options),
+            1,
+        )
+        evidence_pair = {"TEMPERATURE", "X-RAY"}
+        self.assertTrue(patient.has_supporting_evidence(evidence_pair))
+        for test_name in evidence_pair:
+            self.assertFalse(patient.has_supporting_evidence({test_name}))
+            self.assertFalse(
+                patient.has_supporting_evidence(test_names - {test_name})
+            )
+        combined_results = " ".join(patient.test_results.values()).casefold()
+        self.assertNotIn("bioluminescent core instability", combined_results)
+        for diagnosis in patient.diagnosis_options:
+            self.assertTrue(diagnosis.description)
+            self.assertTrue(diagnosis.treatment)
+            self.assertTrue(diagnosis.evidence_combinations)
+            if diagnosis is patient.diagnosis:
+                self.assertIsNone(diagnosis.rejection_reason)
+                continue
+            self.assertIsNone(diagnosis.get_rejection_reason(set()))
+            self.assertTrue(diagnosis.rejection_tests)
+            self.assertTrue(
+                diagnosis.get_rejection_reason(diagnosis.rejection_tests)
+            )
+            for test_name in diagnosis.rejection_tests:
+                self.assertIsNone(
+                    diagnosis.get_rejection_reason(
+                        diagnosis.rejection_tests - {test_name}
+                    )
+                )
+
+    def test_lumora_patient_copy_fits_every_compact_medical_surface(self):
+        """Day 3 copy must remain complete in interviews, reports, and outcomes."""
+
+        game = CosmicClinicGUI(card_seed=151)
+        result_box = pygame.Rect(0, 0, 514, 78)
+        outcome_box = pygame.Rect(0, 0, 514, 88)
+        report_fonts = (
+            game.body_font,
+            game.small_font,
+            game.card_font,
+            game.legible_micro_font,
+        )
+
+        def assert_complete_and_fitted(text, fonts, rect, spacing):
+            font, lines = game.get_fitted_wrapped_text_layout(
+                text,
+                fonts,
+                rect,
+                line_spacing=spacing,
+            )
+            self.assertEqual(" ".join(lines), " ".join(text.split()))
+            heights = [
+                font.render(line, True, (0, 0, 0)).get_height()
+                for line in lines
+            ]
+            self.assertLessEqual(
+                sum(heights) + max(0, len(lines) - 1) * spacing,
+                rect.height,
+            )
+
+        for slot in LUMORA_PATIENTS:
+            patient = slot.create()
+            for statement in patient.dialogue:
+                font, lines = game.fit_interview_statement(statement, 89, 54)
+                self.assertEqual(" ".join(lines), " ".join(statement.split()))
+                self.assertLessEqual(len(lines) * font.get_linesize(), 54)
+
+            for result in patient.test_results.values():
+                assert_complete_and_fitted(result, report_fonts, result_box, 7)
+
+            for diagnosis in patient.diagnosis_options:
+                assert_complete_and_fitted(
+                    diagnosis.treatment,
+                    report_fonts,
+                    outcome_box,
+                    6,
+                )
+                if diagnosis is patient.diagnosis:
+                    continue
+                rejection = (
+                    f"{diagnosis.rejection_reason} Return to the examination "
+                    "and collect more information."
+                )
+                assert_complete_and_fitted(
+                    rejection,
+                    report_fonts,
+                    outcome_box,
+                    6,
+                )
+
+    def test_all_lumora_patients_are_available_only_on_day_three(self):
+        """Lumora's new roster must not leak into either earlier destination."""
+
+        live_patient_names = {
+            slot.create().name
+            for destination in DESTINATIONS
+            for slot in destination.alien_population
+        }
+        lumora_names = {
+            create_velli().name,
+            create_gribble().name,
+            create_oola().name,
+            create_krix().name,
+        }
+        earlier_names = {
+            slot.create().name
+            for destination in DESTINATIONS[:2]
+            for slot in destination.alien_population
+        }
+        day_three_names = {
+            slot.create().name for slot in get_destination(3).alien_population
+        }
+        self.assertTrue(lumora_names.isdisjoint(earlier_names))
+        self.assertEqual(day_three_names, lumora_names)
+        self.assertEqual(len(live_patient_names), 12)
+        self.assertEqual(len(DESTINATIONS), 3)
 
     def test_existing_conditions_define_two_card_clue_paths(self):
         """Every diagnosis defines valid two-test evidence routes."""
@@ -693,7 +1033,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         g.handle_shop_upgrade_click(g.shop_purchase_button.center)
         self.assertEqual(g.player.balance, 500)
         self.assertNotIn("return_passage", g.purchased_shop_upgrades)
-        g.route.select_day(2)
+        g.route.select_day(3)
         g.player.balance = 399
         g.handle_shop_upgrade_click(g.shop_purchase_button.center)
         self.assertEqual(g.player.balance, 399)
@@ -705,7 +1045,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertFalse(g.homecoming_started)
         g.handle_final_screen_click(g.final_replay_button.center)
         self.assertEqual(g.state, GameState.TITLE)
-        self.assertEqual(g.day_number, 2)
+        self.assertEqual(g.day_number, 3)
         self.assertEqual(g.player.balance, 0)
         self.assertTrue(g.has_return_passage())
         g.state = GameState.SHOP
@@ -1277,8 +1617,14 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertIn("carry between planets", help_copy)
         self.assertIn("new destination", help_copy)
         self.assertIn("different aliens and conditions", help_copy)
+        self.assertIn("Lumora", help_copy)
+        self.assertIn("Day 3", help_copy)
         self.assertIn("H Help", self.game.get_help_controls())
         self.assertNotIn("F10", self.game.get_help_controls())
+
+        self.game.route.select_day(3)
+        self.game.load_current_destination()
+        self.assertIn("Lumora Canopy Haven", self.game.get_help_context()[1])
 
         self.assertFalse(self.game.tutorial_open)
         pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_h))
@@ -1319,7 +1665,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game.set_guided_tutorial_step("symptom")
         symptom_target = self.game.get_guided_tutorial_target()
-        self.assertEqual(symptom_target.size, (105, 76))
+        self.assertEqual(symptom_target.size, (105, 84))
         self.assertEqual(self.game.patient_dialogue_index, 0)
         for expected_dialogue_index in range(1, len(self.game.patient.dialogue)):
             self.game.handle_guided_tutorial_click(self.game.layout["alien"].center)
@@ -1727,16 +2073,16 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_events()
         self.assertFalse(self.game.developer_navigator_open)
 
-        self.game.developer_selected_day = 2
+        self.game.developer_selected_day = 3
         self.game.jump_to_developer_screen(
             self.game.get_developer_scene_index("arrival")
         )
         self.assertEqual(self.game.state, GameState.ARRIVAL)
-        self.assertEqual(self.game.current_destination, get_destination(2))
+        self.assertEqual(self.game.current_destination, get_destination(3))
         self.assertTrue(self.game.route.arrival_pending)
         self.assertEqual(
             self.game.route.completed_destinations,
-            (get_destination(1),),
+            (get_destination(1), get_destination(2)),
         )
         self.game.draw()
 
@@ -1744,7 +2090,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.game.get_developer_scene_index("final")
         )
         self.assertEqual(self.game.state, GameState.FINAL)
-        self.assertEqual(self.game.current_destination, get_destination(2))
+        self.assertEqual(self.game.current_destination, get_destination(3))
         self.assertTrue(self.game.route.route_is_complete)
         self.game.draw()
 
@@ -1816,8 +2162,6 @@ class GuiFlowSmokeTests(unittest.TestCase):
                 "recap",
                 "shop",
                 "ending",
-                "final",
-                "homecoming",
             ],
         )
         self.assertIn(
@@ -2766,13 +3110,20 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.player.balance, 0)
 
     def test_planet_catalog_defines_valid_consecutive_campaign_days(self):
-        """Planet metadata should own both rosters without changing their order."""
+        """Planet metadata should own all fixed rosters in campaign order."""
 
         self.assertTrue(validate_destinations())
-        self.assertEqual([destination.day_number for destination in DESTINATIONS], [1, 2])
+        self.assertEqual(
+            [destination.day_number for destination in DESTINATIONS],
+            [1, 2, 3],
+        )
         self.assertEqual(
             [destination.planet_name for destination in DESTINATIONS],
-            ["Cosmic Clinic Training Orbit", "Triska Orbital Station"],
+            [
+                "Cosmic Clinic Training Orbit",
+                "Triska Orbital Station",
+                "Lumora Canopy Haven",
+            ],
         )
         self.assertEqual(
             [slot.create().name for slot in get_destination(1).patient_roster],
@@ -2786,6 +3137,15 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(
             [slot.create().name for slot in get_destination(2).patient_roster],
             ["Flersch", "Dooski", "Flump", "Roldi"],
+        )
+        self.assertEqual(
+            [slot.create().name for slot in get_destination(3).patient_roster],
+            [
+                "Velli Mosswhistle",
+                "Gribble Sporekin",
+                "Oola Dewdrop",
+                "Krix Lanternback",
+            ],
         )
         for destination in DESTINATIONS:
             self.assertEqual(len(destination.patient_roster), 4)
@@ -2833,8 +3193,179 @@ class GuiFlowSmokeTests(unittest.TestCase):
                 [slot.presentation_scale for slot in destination.patient_roster],
             )
 
+    def test_velli_visuals_render_in_every_required_patient_context(self):
+        """Velli's approved sprite and interview face should share one silhouette."""
+
+        slot = LUMORA_PATIENTS[0]
+        neutral = self.game.patient_source(slot.asset)
+        interview = self.game.patient_source(slot.asset, "interview")
+        self.assertEqual(neutral.get_size(), interview.get_size())
+        self.assertGreater(pygame.mask.from_surface(neutral).count(), 0)
+        self.assertGreater(pygame.mask.from_surface(interview).count(), 0)
+        self.assertNotEqual(
+            bytes(pygame.image.tobytes(neutral, "RGBA")),
+            bytes(pygame.image.tobytes(interview, "RGBA")),
+        )
+
+        self.game.screen.fill((0, 0, 0))
+        with patch("pygame.time.get_ticks", return_value=0):
+            self.game.draw_waiting_asset(
+                slot.asset,
+                450,
+                render_style="smooth",
+                presentation_scale=slot.presentation_scale,
+            )
+        first_idle_frame = bytes(pygame.image.tobytes(self.game.screen, "RGB"))
+        self.game.screen.fill((0, 0, 0))
+        with patch("pygame.time.get_ticks", return_value=900):
+            self.game.draw_waiting_asset(
+                slot.asset,
+                450,
+                render_style="smooth",
+                presentation_scale=slot.presentation_scale,
+            )
+        second_idle_frame = bytes(pygame.image.tobytes(self.game.screen, "RGB"))
+        self.assertNotEqual(first_idle_frame, second_idle_frame)
+        head = self.game.draw_exam_asset(
+            slot.asset,
+            pygame.Rect(250, 210, 340, 210),
+            420,
+            pygame.Rect(350, 382, 140, 18),
+            0,
+            0,
+            False,
+            render_style="smooth",
+            presentation_scale=slot.presentation_scale,
+        )
+        self.assertGreater(head.width, 0)
+        self.assertGreater(head.height, 0)
+
+        portrait = pygame.Rect(610, 220, 48, 60)
+        fitted = self.game.fit_patient_sprite(
+            slot.asset,
+            portrait.inflate(-8, -8),
+            render_style="smooth",
+            presentation_scale=0.92,
+            anchor="center",
+        )
+        self.assertTrue(portrait.colliderect(fitted))
+
+    def test_gribble_visuals_render_in_every_required_patient_context(self):
+        """Gribble should replace placeholder art with a matching expressive sprite."""
+
+        slot = LUMORA_PATIENTS[1]
+        neutral = self.game.patient_source(slot.asset)
+        interview = self.game.patient_source(slot.asset, "interview")
+        self.assertEqual(neutral.get_height(), 512)
+        self.assertEqual(interview.get_height(), 512)
+        self.assertLessEqual(abs(neutral.get_width() - interview.get_width()), 1)
+        self.assertGreater(pygame.mask.from_surface(neutral).count(), 0)
+        self.assertGreater(pygame.mask.from_surface(interview).count(), 0)
+        neutral_sample = pygame.transform.smoothscale(neutral, (96, 96))
+        interview_sample = pygame.transform.smoothscale(interview, (96, 96))
+        self.assertNotEqual(
+            bytes(pygame.image.tobytes(neutral_sample, "RGBA")),
+            bytes(pygame.image.tobytes(interview_sample, "RGBA")),
+        )
+
+        self.game.screen.fill((0, 0, 0))
+        with patch("pygame.time.get_ticks", return_value=0):
+            self.game.draw_waiting_asset(
+                slot.asset,
+                450,
+                render_style="smooth",
+                presentation_scale=slot.presentation_scale,
+            )
+        first_idle_frame = bytes(pygame.image.tobytes(self.game.screen, "RGB"))
+        self.game.screen.fill((0, 0, 0))
+        with patch("pygame.time.get_ticks", return_value=1100):
+            self.game.draw_waiting_asset(
+                slot.asset,
+                450,
+                render_style="smooth",
+                presentation_scale=slot.presentation_scale,
+            )
+        second_idle_frame = bytes(pygame.image.tobytes(self.game.screen, "RGB"))
+        self.assertNotEqual(first_idle_frame, second_idle_frame)
+
+        head = self.game.draw_exam_asset(
+            slot.asset,
+            pygame.Rect(250, 210, 340, 210),
+            420,
+            pygame.Rect(350, 382, 140, 18),
+            0,
+            0,
+            False,
+            render_style="smooth",
+            presentation_scale=slot.presentation_scale,
+        )
+        self.assertGreater(head.width, 0)
+        self.assertGreater(head.height, 0)
+
+        portrait = pygame.Rect(610, 220, 48, 60)
+        fitted = self.game.fit_patient_sprite(
+            slot.asset,
+            portrait.inflate(-8, -8),
+            render_style="smooth",
+            presentation_scale=0.92,
+            anchor="center",
+        )
+        self.assertTrue(portrait.colliderect(fitted))
+
+    def test_oola_and_krix_replace_placeholders_with_complete_sprite_sets(self):
+        """The final Lumora pair should match its roster in every patient view."""
+
+        for slot in LUMORA_PATIENTS[2:]:
+            neutral = self.game.patient_source(slot.asset)
+            interview = self.game.patient_source(slot.asset, "interview")
+            self.assertEqual(neutral.get_height(), 512)
+            self.assertEqual(interview.get_height(), 512)
+            self.assertLessEqual(abs(neutral.get_width() - interview.get_width()), 1)
+            self.assertGreater(pygame.mask.from_surface(neutral).count(), 0)
+            self.assertGreater(pygame.mask.from_surface(interview).count(), 0)
+            neutral_sample = pygame.transform.smoothscale(neutral, (96, 96))
+            interview_sample = pygame.transform.smoothscale(interview, (96, 96))
+            self.assertNotEqual(
+                pygame.image.tobytes(neutral_sample, "RGBA"),
+                pygame.image.tobytes(interview_sample, "RGBA"),
+            )
+
+            self.game.screen.fill((0, 0, 0))
+            with patch("pygame.time.get_ticks", return_value=0):
+                self.game.draw_waiting_asset(
+                    slot.asset,
+                    450,
+                    render_style="smooth",
+                    presentation_scale=slot.presentation_scale,
+                )
+            first_idle_frame = pygame.image.tobytes(self.game.screen, "RGB")
+            self.game.screen.fill((0, 0, 0))
+            with patch("pygame.time.get_ticks", return_value=950):
+                self.game.draw_waiting_asset(
+                    slot.asset,
+                    450,
+                    render_style="smooth",
+                    presentation_scale=slot.presentation_scale,
+                )
+            second_idle_frame = pygame.image.tobytes(self.game.screen, "RGB")
+            self.assertNotEqual(first_idle_frame, second_idle_frame)
+
+            head = self.game.draw_exam_asset(
+                slot.asset,
+                pygame.Rect(250, 210, 340, 210),
+                420,
+                pygame.Rect(350, 382, 140, 18),
+                0,
+                0,
+                False,
+                render_style="smooth",
+                presentation_scale=slot.presentation_scale,
+            )
+            self.assertGreater(head.width, 0)
+            self.assertGreater(head.height, 0)
+
     def test_reception_environment_follows_the_selected_destination(self):
-        """Both configured reception themes should render through one layout."""
+        """Configured reception themes should render through one shared layout."""
 
         self.assertEqual(self.game.get_reception_theme().scene, "training_orbit")
         self.game.draw_title_screen()
@@ -2847,6 +3378,69 @@ class GuiFlowSmokeTests(unittest.TestCase):
         triska_snapshot = bytes(pygame.image.tobytes(self.game.screen, "RGB"))
 
         self.assertNotEqual(training_snapshot, triska_snapshot)
+
+    def test_lumora_reception_keeps_shared_controls_and_animates_its_jungle(self):
+        """Day 3 scenery should move without relocating reception gameplay."""
+
+        shared_start_button = self.game.start_button.copy()
+        self.game.route.select_day(3)
+        self.game.load_current_destination()
+        self.assertEqual(self.game.get_reception_theme().scene, "lumora_orbit")
+
+        with (
+            patch.object(
+                self.game,
+                "draw_lumora_waiting_room_windows",
+                wraps=self.game.draw_lumora_waiting_room_windows,
+            ) as draw_lumora,
+            patch("pygame.time.get_ticks", return_value=1_000),
+        ):
+            self.game.draw_title_screen()
+            first_window = pygame.image.tobytes(
+                self.game.screen.subsurface(pygame.Rect(37, 164, 792, 239)),
+                "RGB",
+            )
+
+        draw_lumora.assert_called_once()
+        self.assertEqual(self.game.start_button, shared_start_button)
+
+        with patch("pygame.time.get_ticks", return_value=2_800):
+            self.game.draw_title_screen()
+            later_window = pygame.image.tobytes(
+                self.game.screen.subsurface(pygame.Rect(37, 164, 792, 239)),
+                "RGB",
+            )
+
+        self.assertNotEqual(first_window, later_window)
+
+    def test_lumora_destination_loads_with_safe_review_stage_art(self):
+        """Day 3 should render before every final patient sprite is approved."""
+
+        self.game.route.select_day(3)
+        self.game.load_current_destination()
+        destination = self.game.current_destination
+        self.assertEqual(destination.key, "lumora_canopy")
+        self.assertEqual(destination.ambience, "lumora_canopy_hum")
+        self.assertEqual(destination.theme.scene, "lumora_orbit")
+        self.assertEqual(destination.theme.decor_style, "lumora_vines")
+        self.assertEqual(destination.theme.particle_style, "glow_spores")
+        self.assertEqual(
+            [entry["create"]().name for entry in self.game.waiting_room_queue],
+            [
+                "Velli Mosswhistle",
+                "Gribble Sporekin",
+                "Oola Dewdrop",
+                "Krix Lanternback",
+            ],
+        )
+        for entry in self.game.waiting_room_queue:
+            sprite = self.game.patient_sprite(
+                entry["asset"],
+                (64, 96),
+                render_style=entry["render_style"],
+            )
+            self.assertGreater(pygame.mask.from_surface(sprite).count(), 0)
+        self.game.draw_title_screen()
 
     def test_new_asset_patients_join_from_day_two_and_restart_resets_roster(self):
         originals = {entry['create']().name for entry in self.game.waiting_room_queue}
@@ -2875,7 +3469,15 @@ class GuiFlowSmokeTests(unittest.TestCase):
             {entry['create']().name for entry in self.game.waiting_room_queue},
             new_names,
         )
-        self.assertEqual(self.game.roster_for_day(3), [])
+        self.assertEqual(
+            [entry['create']().name for entry in self.game.roster_for_day(3)],
+            [
+                "Velli Mosswhistle",
+                "Gribble Sporekin",
+                "Oola Dewdrop",
+                "Krix Lanternback",
+            ],
+        )
         self.game.restart_game()
         self.assertEqual(self.game.day_number, 1)
         self.assertEqual({entry['create']().name for entry in self.game.waiting_room_queue}, originals)
@@ -2985,6 +3587,40 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.patient.name, "Flersch")
         self.assertEqual(self.game.player.balance, 175)
 
+    def test_lumora_arrival_uses_its_animated_planet_art_and_ufo_approach(self):
+        """Day 3 should keep its distinct arrival art and visible clinic approach."""
+
+        self.game.developer_selected_day = 3
+        self.game.prepare_developer_arrival_checkpoint()
+        self.assertEqual(self.game.current_destination, get_destination(3))
+        self.assertEqual(self.game.current_destination.theme.scene, "lumora_orbit")
+
+        self.game.arrival_started_at = 1_000
+        with (
+            patch.object(
+                self.game,
+                "draw_lumora_destination_planet",
+                wraps=self.game.draw_lumora_destination_planet,
+            ) as draw_lumora,
+            patch.object(
+                self.game,
+                "draw_arrival_ufo",
+                wraps=self.game.draw_arrival_ufo,
+            ) as draw_ufo,
+            patch("pygame.time.get_ticks", return_value=1_000),
+        ):
+            self.game.draw_planet_arrival_screen()
+            first_frame = pygame.image.tobytes(self.game.screen, "RGB")
+
+        draw_lumora.assert_called_once()
+        draw_ufo.assert_called_once()
+
+        with patch("pygame.time.get_ticks", return_value=2_800):
+            self.game.draw_planet_arrival_screen()
+            later_frame = pygame.image.tobytes(self.game.screen, "RGB")
+
+        self.assertNotEqual(first_frame, later_frame)
+
     def test_end_of_day_flow_runs_recap_shop_departure_and_arrival_in_order(self):
         """A completed shift should travel only through the configured route."""
 
@@ -3009,7 +3645,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.patient.name, "Flersch")
 
     def test_final_destination_finishes_without_a_nonexistent_arrival(self):
-        """Completing Day 2 should show Route Complete rather than another stop."""
+        """Completing Lumora should show Route Complete rather than another stop."""
 
         self.game.begin_ending_sequence()
         self.game.finish_ending_sequence()
@@ -3018,11 +3654,17 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game.begin_ending_sequence()
         self.game.finish_ending_sequence()
+        self.assertEqual(self.game.state, GameState.ARRIVAL)
+        self.game.handle_arrival_click(self.game.arrival_begin_button.center)
+        self.assertEqual(self.game.current_destination, get_destination(3))
+
+        self.game.begin_ending_sequence()
+        self.game.finish_ending_sequence()
         self.assertEqual(self.game.state, GameState.FINAL)
         self.assertTrue(self.game.route.route_is_complete)
         self.assertFalse(self.game.route.arrival_pending)
         self.assertIsNone(self.game.route.next_destination)
-        self.assertEqual(self.game.day_number, 2)
+        self.assertEqual(self.game.day_number, 3)
         self.assertEqual(ROUTE_COMPLETE_HEADING, "CURRENT ROUTE COMPLETE")
         self.assertEqual(
             ROUTE_COMPLETE_MESSAGE,
@@ -3061,7 +3703,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             if upgrade["id"] == "return_passage"
         )
         self.assertEqual(passage["cost"], RETURN_PASSAGE_COST)
-        self.game.route.select_day(2)
+        self.game.route.select_day(3)
         self.game.state = GameState.SHOP
         self.game.player.balance = RETURN_PASSAGE_COST
         passage_index = SHOP_UPGRADES.index(passage)

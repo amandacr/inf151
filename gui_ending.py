@@ -310,20 +310,7 @@ class EndingMixin:
             foreground=False,
         )
 
-        # Two small moons frame Triska without crossing its ring or the ship.
-        moon_shift = round(math.sin(elapsed / 650) * 3)
-        pygame.draw.circle(
-            self.screen,
-            arriving.theme.secondary_color,
-            (824 + moon_shift, 184),
-            14,
-        )
-        pygame.draw.circle(
-            self.screen,
-            (191, 203, 221),
-            (1034 - moon_shift, 382),
-            10,
-        )
+        self.draw_travel_moons(arriving, elapsed)
         self.draw_travel_planet(
             arriving,
             (930, 285),
@@ -413,6 +400,30 @@ class EndingMixin:
         self.screen.blit(status, status.get_rect(center=status_rect.center))
         self.draw_cinematic_skip_prompt()
 
+    def draw_travel_moons(self, destination, elapsed):
+        """Frame the next route marker with destination-specific moons."""
+
+        moon_shift = round(math.sin(elapsed / 650) * 3)
+        if destination.theme.scene == "lumora_orbit":
+            pygame.draw.circle(self.screen, (238, 139, 126), (817 + moon_shift, 172), 15)
+            pygame.draw.circle(self.screen, (255, 194, 156), (812 + moon_shift, 167), 5)
+            pygame.draw.circle(self.screen, (99, 210, 218), (1031 - moon_shift, 228), 11)
+            pygame.draw.circle(self.screen, (204, 133, 232), (1027 - moon_shift, 401), 13)
+            return
+
+        pygame.draw.circle(
+            self.screen,
+            destination.theme.secondary_color,
+            (824 + moon_shift, 184),
+            14,
+        )
+        pygame.draw.circle(
+            self.screen,
+            (191, 203, 221),
+            (1034 - moon_shift, 382),
+            10,
+        )
+
     def draw_travel_planet(self, destination, center, radius, foreground=False):
         """Draw a compact route marker planet without exposing clipped layers."""
 
@@ -447,16 +458,40 @@ class EndingMixin:
         diameter = radius * 2
         globe = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
         pygame.draw.circle(globe, theme.accent_color, (radius, radius), radius)
-        pygame.draw.ellipse(
-            globe,
-            blend(theme.accent_color, theme.horizon_color, 0.48),
-            pygame.Rect(-radius // 3, round(radius * 1.15), round(radius * 2.6), round(radius * 0.55)),
-        )
-        pygame.draw.ellipse(
-            globe,
-            blend(theme.accent_color, theme.secondary_color, 0.2),
-            pygame.Rect(round(radius * 0.2), round(radius * 0.42), round(radius * 1.35), round(radius * 0.34)),
-        )
+        if theme.scene == "lumora_orbit":
+            pygame.draw.ellipse(
+                globe,
+                (39, 124, 91),
+                pygame.Rect(-radius // 4, round(radius * 0.98), round(radius * 2.4), round(radius * 0.72)),
+            )
+            pygame.draw.ellipse(
+                globe,
+                (80, 187, 119),
+                pygame.Rect(round(radius * 0.1), round(radius * 0.42), round(radius * 1.18), round(radius * 0.5)),
+            )
+            pygame.draw.ellipse(
+                globe,
+                (168, 232, 209, 125),
+                pygame.Rect(-radius // 5, round(radius * 0.62), round(radius * 1.8), round(radius * 0.18)),
+            )
+            for light_x, light_y in ((0.44, 0.72), (0.66, 1.18), (1.16, 0.88), (1.3, 1.3)):
+                pygame.draw.circle(
+                    globe,
+                    (196, 255, 163),
+                    (round(radius * light_x), round(radius * light_y)),
+                    max(2, radius // 18),
+                )
+        else:
+            pygame.draw.ellipse(
+                globe,
+                blend(theme.accent_color, theme.horizon_color, 0.48),
+                pygame.Rect(-radius // 3, round(radius * 1.15), round(radius * 2.6), round(radius * 0.55)),
+            )
+            pygame.draw.ellipse(
+                globe,
+                blend(theme.accent_color, theme.secondary_color, 0.2),
+                pygame.Rect(round(radius * 0.2), round(radius * 0.42), round(radius * 1.35), round(radius * 0.34)),
+            )
         shadow = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
         pygame.draw.ellipse(
             shadow,
@@ -695,6 +730,10 @@ class EndingMixin:
     def draw_destination_planet(self, destination, elapsed):
         """Draw clean, layered planet art derived from destination metadata."""
 
+        if destination.theme.scene == "lumora_orbit":
+            self.draw_lumora_destination_planet(destination, elapsed)
+            return
+
         theme = destination.theme
         def blend(first, second, amount):
             return tuple(
@@ -827,6 +866,134 @@ class EndingMixin:
                 pygame.Rect(station[0] - 4, station[1] - 5, 8, 10),
                 border_radius=2,
             )
+
+        self.screen.blit(layer, (0, 0))
+
+    def draw_lumora_destination_planet(self, destination, elapsed):
+        """Draw Lumora as a living bioluminescent jungle world."""
+
+        theme = destination.theme
+        center = (835, 300)
+        radius = 148
+        pulse = (math.sin(elapsed / 430) + 1) / 2
+        layer = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+
+        for glow_radius, glow_alpha in (
+            (205, 10),
+            (184, 18),
+            (164, 28 + round(pulse * 8)),
+        ):
+            pygame.draw.circle(
+                layer,
+                (*theme.accent_color, glow_alpha),
+                center,
+                glow_radius,
+            )
+
+        # Three differently colored moons establish Lumora as a new system at
+        # a glance and remain outside the information panel and flight path.
+        moon_drift = round(math.sin(elapsed / 820) * 4)
+        moon_specs = (
+            ((690 + moon_drift, 150), 26, (236, 139, 126), (255, 194, 156)),
+            ((1010 - moon_drift, 174), 18, (91, 198, 216), (161, 236, 229)),
+            ((1022 + moon_drift, 430), 22, (188, 121, 222), (230, 181, 241)),
+        )
+        for moon_center, moon_radius, moon_color, moon_highlight in moon_specs:
+            pygame.draw.circle(layer, moon_color, moon_center, moon_radius)
+            pygame.draw.circle(
+                layer,
+                moon_highlight,
+                (moon_center[0] - moon_radius // 3, moon_center[1] - moon_radius // 3),
+                max(4, moon_radius // 3),
+            )
+            pygame.draw.circle(
+                layer,
+                (16, 35, 51, 72),
+                (moon_center[0] + moon_radius // 3, moon_center[1] + moon_radius // 4),
+                max(3, moon_radius // 4),
+            )
+
+        # Thin orbital glows sit behind the globe and disappear naturally when
+        # the planet is composited over them.
+        orbit = pygame.Rect(center[0] - 205, center[1] - 55, 410, 110)
+        pygame.draw.arc(layer, (*theme.secondary_color, 82), orbit, 0, math.pi * 2, width=3)
+        inner_orbit = pygame.Rect(center[0] - 178, center[1] - 78, 356, 156)
+        pygame.draw.arc(layer, (100, 223, 218, 65), inner_orbit, 0, math.pi * 2, width=2)
+
+        diameter = radius * 2
+        globe = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        globe_center = (radius, radius)
+        pygame.draw.circle(globe, (20, 82, 82, 255), globe_center, radius)
+
+        # Layered jungle landmasses create depth without resembling the flat
+        # rectangular bands from the early placeholder planet.
+        pygame.draw.ellipse(globe, (43, 128, 91), pygame.Rect(-35, 150, 235, 118))
+        pygame.draw.ellipse(globe, (67, 166, 102), pygame.Rect(78, 42, 184, 118))
+        pygame.draw.ellipse(globe, (93, 191, 111), pygame.Rect(24, 28, 118, 82))
+        pygame.draw.ellipse(globe, (35, 116, 91), pygame.Rect(174, 176, 150, 92))
+        pygame.draw.polygon(
+            globe,
+            (56, 154, 102),
+            ((10, 128), (70, 102), (129, 127), (170, 111), (218, 151),
+             (183, 188), (112, 177), (52, 198)),
+        )
+
+        # Bioluminescent canopy clusters pulse gently across the night side.
+        light_points = (
+            (53, 180, 5), (78, 147, 4), (104, 195, 6), (135, 154, 4),
+            (166, 211, 5), (196, 172, 4), (220, 224, 6), (245, 136, 4),
+            (258, 195, 5), (91, 82, 4), (137, 69, 5), (187, 91, 4),
+        )
+        canopy_glow = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        for light_x, light_y, light_radius in light_points:
+            glow_radius = light_radius + 4 + round(pulse * 2)
+            pygame.draw.circle(
+                canopy_glow,
+                (178, 255, 145, 38 + round(pulse * 22)),
+                (light_x, light_y),
+                glow_radius,
+            )
+            pygame.draw.circle(
+                canopy_glow,
+                (203, 255, 166, 225),
+                (light_x, light_y),
+                light_radius,
+            )
+        globe.blit(canopy_glow, (0, 0))
+
+        # Mint, aqua, and lavender cloud banks curve around the world. Their
+        # translucent overlap makes the atmosphere feel colorful and alive.
+        clouds = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        cloud_shift = round(math.sin(elapsed / 1200) * 4)
+        cloud_data = (
+            (pygame.Rect(-34 + cloud_shift, 72, 190, 34), (205, 249, 213, 138)),
+            (pygame.Rect(98 - cloud_shift, 111, 218, 39), (161, 231, 229, 122)),
+            (pygame.Rect(18 + cloud_shift, 222, 196, 35), (221, 190, 240, 105)),
+            (pygame.Rect(164 - cloud_shift, 47, 145, 27), (218, 248, 224, 118)),
+        )
+        for cloud_rect, cloud_color in cloud_data:
+            pygame.draw.ellipse(clouds, cloud_color, cloud_rect)
+            pygame.draw.ellipse(
+                clouds,
+                (*cloud_color[:3], max(28, cloud_color[3] // 2)),
+                cloud_rect.inflate(-22, 10),
+            )
+        globe.blit(clouds, (0, 0))
+
+        terminator = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pygame.draw.ellipse(
+            terminator,
+            (5, 14, 31, 100),
+            pygame.Rect(radius + 35, -18, radius, diameter + 36),
+        )
+        globe.blit(terminator, (0, 0))
+
+        mask = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pygame.draw.circle(mask, (255, 255, 255, 255), globe_center, radius)
+        globe.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        layer.blit(globe, (center[0] - radius, center[1] - radius))
+        pygame.draw.circle(layer, (105, 226, 176, 230), center, radius, width=4)
+        pygame.draw.circle(layer, (*theme.secondary_color, 130), center, radius + 5, width=2)
 
         self.screen.blit(layer, (0, 0))
 

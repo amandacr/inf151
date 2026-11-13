@@ -1,6 +1,15 @@
 """Patient records used by The Cosmic Clinic GUI."""
 
-from Diagnosis import DIAGNOSES, DOOSKI_DIAGNOSES, FLUMP_DIAGNOSES, ROLDI_DIAGNOSES
+from Diagnosis import (
+    DIAGNOSES,
+    DOOSKI_DIAGNOSES,
+    FLUMP_DIAGNOSES,
+    GRIBBLE_DIAGNOSES,
+    KRIX_DIAGNOSES,
+    OOLA_DIAGNOSES,
+    ROLDI_DIAGNOSES,
+    VELLI_DIAGNOSES,
+)
 from Patient import Patient
 
 
@@ -327,5 +336,285 @@ def create_conmann():
             DIAGNOSES["lactose_intolerance"],
             DIAGNOSES["foodborne_toxin_exposure"],
             DIAGNOSES["oil_blood_metabolic_failure"],
+        ),
+    )
+
+
+def create_velli():
+    """Create Velli's Lumora circulation case."""
+
+    return Patient(
+        "Velli Mosswhistle",
+        None,
+        None,
+        "fading bioluminescence, pale leaves, severe fatigue",
+        VELLI_DIAGNOSES["photosynthetic_circulation_failure"],
+        {
+            "TEMPERATURE": (
+                "Current temperature: 78°F, within the normal Luminari range."
+            ),
+            "X-RAY": (
+                "The stem lattice and root structures are intact, with no "
+                "fractures or compressed channels."
+            ),
+            "ULTRASOUND": (
+                "Both sap hearts beat regularly. Major sap vessels are open, "
+                "with no root mass or physical obstruction."
+            ),
+            "ALLERGY": (
+                "No immune response was detected to the Night-Bloom pollen sample."
+            ),
+            "BLOOD CHEMISTRY": (
+                "Chlorophyll-bearing sap cells are intact, but most carry "
+                "unusually little stored light energy. Root minerals and sugar "
+                "reserves remain within the Luminari baseline. No heat-stress "
+                "pigment damage was detected."
+            ),
+            "OXYGEN SCAN": (
+                "The leaf crown releases oxygen at the expected rate, but oxygen "
+                "saturation drops sharply before the sap reaches the outer leaves."
+            ),
+            "TOXIN SCREEN": (
+                "No Night-Bloom spores, poisons, or foreign compounds were "
+                "detected in the sap sample."
+            ),
+            "NEURAL SCAN": (
+                "Leaf and vine movement signals are normal, with no neural "
+                "damage or involuntary motor activity."
+            ),
+        },
+        profile={
+            "Species": "Luminari Floran",
+            "Occupation": "Canopy Lightkeeper",
+            "Home Planet": "Lumora",
+        },
+        medical_info={
+            "Circulation": "2 sap hearts; chlorophyll-rich plasma",
+            "Respiration": "Leaf pores; 1 reserve gas bladder",
+            "Light intake": "Crown stores starlight",
+            "Normal temperature": "78°F",
+            "Medical alert": "Copper-based medicines cause leaf scarring",
+        },
+        dialogue=(
+            "My glow keeps fading, no matter how long I rest.",
+            "I feel exhausted even after standing beneath the sunlamps.",
+            "The tips of my leaves turned pale during the Night Bloom.",
+        ),
+        diagnosis_options=(
+            VELLI_DIAGNOSES["root_mineral_deficiency"],
+            VELLI_DIAGNOSES["night_bloom_pollen_allergy"],
+            VELLI_DIAGNOSES["photosynthetic_circulation_failure"],
+            VELLI_DIAGNOSES["night_spore_toxin_exposure"],
+            VELLI_DIAGNOSES["solar_overexposure"],
+        ),
+    )
+
+
+def create_gribble():
+    """Create Gribble's Lumora neural case."""
+
+    return Patient(
+        "Gribble Sporekin",
+        None,
+        None,
+        "involuntary arm movement, delayed coordination, cap tingling",
+        GRIBBLE_DIAGNOSES["mycelial_neural_cross_talk"],
+        {
+            "TEMPERATURE": (
+                "Current temperature: 64°F, within the normal Mycori range."
+            ),
+            "X-RAY": (
+                "The cap frame, stem, and limb supports are intact, with no "
+                "fractures or structural compression."
+            ),
+            "ULTRASOUND": (
+                "Rhythmic signal pulses travel from the cap's mycelial hub into "
+                "multiple limbs at slightly different intervals. Cap pressure "
+                "is normal, with no trapped fluid or foreign colony growth."
+            ),
+            "ALLERGY": (
+                "Allergy screening produced no reaction to local pollen or spores."
+            ),
+            "BLOOD CHEMISTRY": (
+                "Conductive minerals, cap nutrients, and spore proteins are "
+                "within the normal Mycori range."
+            ),
+            "OXYGEN SCAN": (
+                "Cap gills exchange gases normally, and oxygen delivery remains "
+                "stable during involuntary movement."
+            ),
+            "TOXIN SCREEN": (
+                "No foreign spores, parasites, poisons, or electrical residues "
+                "were detected."
+            ),
+            "NEURAL SCAN": (
+                "Each intended motor command produces a weaker secondary impulse "
+                "along a neighboring mycelial pathway. No burned or severed "
+                "nerve fibers were detected."
+            ),
+        },
+        profile={
+            "Species": "Mycori Sporekin",
+            "Occupation": "Spore Archive Curator",
+            "Home Planet": "Lumora",
+        },
+        medical_info={
+            "Circulation": "1 cap heart; silver mycelial fluid",
+            "Respiration": "Cap gills and stem pores",
+            "Nervous system": "Interconnected mycelial nerve web",
+            "Normal temperature": "64°F",
+            "Medical alert": "Avoid broad-spectrum antifungal medicine",
+        },
+        dialogue=(
+            "My arms sometimes move before I tell them to.",
+            "Then another arm copies the motion a moment later.",
+            "The tingling starts beneath my cap and travels downward.",
+        ),
+        diagnosis_options=(
+            GRIBBLE_DIAGNOSES["cap_pressure_syndrome"],
+            GRIBBLE_DIAGNOSES["parasitic_spore_colonization"],
+            GRIBBLE_DIAGNOSES["mycelial_neural_cross_talk"],
+            GRIBBLE_DIAGNOSES["motor_mineral_depletion"],
+            GRIBBLE_DIAGNOSES["static_charge_nerve_injury"],
+        ),
+    )
+
+
+def create_oola():
+    """Create Oola's Lumora respiratory case."""
+
+    return Patient(
+        "Oola Dewdrop",
+        None,
+        None,
+        "swollen throat pouch, strained breathing, skin irritation",
+        OOLA_DIAGNOSES["night_spore_respiratory_reaction"],
+        {
+            "TEMPERATURE": (
+                "Current temperature: 58°F, within the normal Dewfin range."
+            ),
+            "X-RAY": (
+                "The throat frame and main airway are intact, with no swallowed "
+                "object or structural blockage."
+            ),
+            "ULTRASOUND": (
+                "Throat-pouch tissue is diffusely swollen, with no abscess, fluid "
+                "pocket, parasites, or damaged tissue."
+            ),
+            "ALLERGY": (
+                "A severe immune response occurred when the evening-air residue "
+                "sample contacted the patient's tissue culture."
+            ),
+            "BLOOD CHEMISTRY": (
+                "Acute immune-response markers are elevated. Hydration salts and "
+                "water reserves remain normal, with no infectious markers."
+            ),
+            "OXYGEN SCAN": (
+                "Airflow through the swollen throat pouch is restricted, while "
+                "both skin gills process Lumora's ambient gases normally."
+            ),
+            "TOXIN SCREEN": (
+                "No swamp gases, poisons, or hazardous airborne compounds were "
+                "detected in the respiratory sample."
+            ),
+            "NEURAL SCAN": (
+                "Breathing and vocal-pouch motor signals are normal, with no "
+                "nerve damage or involuntary contraction."
+            ),
+        },
+        profile={
+            "Species": "Dewfin Amphibian",
+            "Occupation": "Rain-Canopy Courier",
+            "Home Planet": "Lumora",
+        },
+        medical_info={
+            "Circulation": "1 three-chambered heart; aqua hemolymph",
+            "Respiration": "1 throat pouch; paired skin gills",
+            "Hydration": "Dermal water sacs",
+            "Normal temperature": "58°F",
+            "Medical alert": "Requires humidified treatment air",
+        },
+        dialogue=(
+            "My throat pouch started swelling after the Night Bloom opened.",
+            "The air feels tight, but breathing through my skin still works.",
+            "My spots began itching before my throat became sore.",
+        ),
+        diagnosis_options=(
+            OOLA_DIAGNOSES["vocal_pouch_infection"],
+            OOLA_DIAGNOSES["swamp_gas_poisoning"],
+            OOLA_DIAGNOSES["night_spore_respiratory_reaction"],
+            OOLA_DIAGNOSES["atmospheric_oxygen_intolerance"],
+            OOLA_DIAGNOSES["aquatic_dehydration"],
+        ),
+    )
+
+
+def create_krix():
+    """Create Krix's Lumora thermal-core case."""
+
+    return Patient(
+        "Krix Lanternback",
+        None,
+        None,
+        "burning shell, cold extremities, irregular bioluminescent pulses",
+        KRIX_DIAGNOSES["bioluminescent_core_instability"],
+        {
+            "TEMPERATURE": (
+                "Shell plates measure 138°F while the limbs and internal tissues "
+                "measure 79°F. A healthy Lanternback maintains an even 102°F."
+            ),
+            "X-RAY": (
+                "The photonic core lens sits off-axis inside its housing, leaving "
+                "heat concentrated beneath otherwise intact shell plates."
+            ),
+            "ULTRASOUND": (
+                "The core pump and amber hemolymph flow normally. No organisms, "
+                "eggs, foreign tissue, or circulation blockages were detected."
+            ),
+            "ALLERGY": (
+                "Allergy screening produced no reaction to local pollen, metal, "
+                "or beacon-coolant samples."
+            ),
+            "BLOOD CHEMISTRY": (
+                "Luminous compounds and energy-production markers are within the "
+                "Lanternback baseline. Thermal carriers remain evenly mixed, "
+                "with no infection markers."
+            ),
+            "OXYGEN SCAN": (
+                "All six abdominal vents exchange gases normally, including "
+                "during bright shell pulses."
+            ),
+            "TOXIN SCREEN": (
+                "No poisons, parasite-related compounds, or beacon-coolant "
+                "contamination were detected."
+            ),
+            "NEURAL SCAN": (
+                "Shell-light timing signals are regular, and all four arms receive "
+                "normal motor commands."
+            ),
+        },
+        profile={
+            "Species": "Lanternback Coniferid",
+            "Occupation": "Canopy Beacon Mechanic",
+            "Home Planet": "Lumora",
+        },
+        medical_info={
+            "Circulation": "1 core pump; amber thermal hemolymph",
+            "Respiration": "6 abdominal vents",
+            "Exoskeleton": "6 photonic light plates",
+            "Normal temperature": "102°F, evenly distributed",
+            "Medical alert": "Strong magnets disrupt the core lens",
+        },
+        dialogue=(
+            "My shell feels like it is burning, but my hands are freezing.",
+            "The light on my back keeps flashing out of rhythm.",
+            "It started after I repaired a canopy beacon during the storm.",
+        ),
+        diagnosis_options=(
+            KRIX_DIAGNOSES["shell_light_overproduction"],
+            KRIX_DIAGNOSES["internal_heat_parasite"],
+            KRIX_DIAGNOSES["bioluminescent_core_instability"],
+            KRIX_DIAGNOSES["molting_complication"],
+            KRIX_DIAGNOSES["thermal_blood_separation"],
         ),
     )

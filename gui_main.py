@@ -261,6 +261,7 @@ class CosmicClinicGUI(
         self.tiny_font = pygame.font.Font(None, 10)
         self.compact_ui_font = pygame.font.SysFont("Arial", 12, bold=True)
         self.compact_card_title_font = pygame.font.SysFont("Arial", 11, bold=True)
+        self.interview_tiny_font = pygame.font.SysFont("Arial", 10, bold=True)
         self.legible_micro_font = pygame.font.SysFont("Arial", 9, bold=True)
         self.id_detail_font = pygame.font.SysFont("Arial", 12, bold=True)
         self.notebook_preview_font = pygame.font.Font(None, 15)
@@ -942,6 +943,54 @@ class CosmicClinicGUI(
                 break
             self.screen.blit(surface, (rect.x, y))
             y += surface.get_height() + line_spacing
+
+    def get_fitted_wrapped_text_layout(
+        self,
+        text,
+        fonts,
+        rect,
+        line_spacing=2,
+    ):
+        """Return the largest font whose complete wrapped text fits a rectangle."""
+
+        for font in fonts:
+            lines = self.wrap_text(text, font, rect.width)
+            heights = [font.render(line, True, (0, 0, 0)).get_height() for line in lines]
+            total_height = sum(heights) + max(0, len(lines) - 1) * line_spacing
+            if total_height <= rect.height:
+                return font, lines
+
+        font = fonts[-1]
+        lines = self.wrap_text(text, font, rect.width)
+        return font, lines
+
+    def draw_fitted_wrapped_text(
+        self,
+        text,
+        fonts,
+        color,
+        rect,
+        line_spacing=2,
+    ):
+        """Draw complete wrapped copy at the largest size that fits its box."""
+
+        font, lines = self.get_fitted_wrapped_text_layout(
+            text,
+            fonts,
+            rect,
+            line_spacing=line_spacing,
+        )
+        previous_clip = self.screen.get_clip()
+        self.screen.set_clip(rect)
+        try:
+            y = rect.y
+            for line_text in lines:
+                surface = font.render(line_text, True, color)
+                self.screen.blit(surface, (rect.x, y))
+                y += surface.get_height() + line_spacing
+        finally:
+            self.screen.set_clip(previous_clip)
+        return font, lines
 
     def wrap_text(self, text, font, width):
         """Return a list of lines that fit within width pixels."""

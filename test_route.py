@@ -35,6 +35,14 @@ class RouteRegressionTests(unittest.TestCase):
         self.assertTrue(self.game.route.arrival_pending)
         self.game.start_next_shift()
 
+    def travel_to_day_three(self):
+        """Complete the first two route records and load Lumora reception."""
+
+        self.travel_to_day_two()
+        self.game.begin_ending_sequence()
+        self.assertTrue(self.game.route.arrival_pending)
+        self.game.start_next_shift()
+
     def test_every_destination_contains_a_valid_fixed_alpha_roster(self):
         self.assertTrue(validate_destinations())
         self.assertGreaterEqual(len(DESTINATIONS), 2)
@@ -97,6 +105,91 @@ class RouteRegressionTests(unittest.TestCase):
             self.game.purchased_shop_upgrades,
             {"temperature", "neural", "smart_cards"},
         )
+
+    def test_full_day_two_to_lumora_sequence_preserves_campaign_progress(self):
+        """Payroll, Shop, departure, arrival, and Day 3 must form one safe chain."""
+
+        self.travel_to_day_two()
+        self.assertEqual(self.game.current_destination, get_destination(2))
+
+        # These represent permanent purchases made before the Triska shift.
+        self.game.player.balance = 225
+        self.game.player.machine_levels.update(
+            {"TEMPERATURE": 2, "NEURAL SCAN": 2}
+        )
+        self.game.player.free_test_machines.add("OXYGEN SCAN")
+        self.game.player.test_discount = 3
+        permanent_upgrades = {
+            "temperature",
+            "neural",
+            "oxygen_free",
+            "power",
+            "smart_cards",
+            "recycler",
+        }
+        self.game.purchased_shop_upgrades.update(permanent_upgrades)
+        self.game.recycler_used = True
+
+        # File a completed Triska shift through the real payroll screen.
+        self.game.daily_correct_diagnoses = 4
+        self.game.daily_evidence_cases = 4
+        self.game.daily_wrong_diagnoses = 0
+        self.game.daily_test_count = 8
+        self.game.daily_test_expenses = 60
+        self.game.daily_draw_expenses = 5
+        self.game.daily_card_shop_expenses = 10
+        expected_net_pay = self.game.get_daily_pay_breakdown()[3]
+        self.game.state = GameState.DAY_COMPLETE
+        self.game.handle_day_complete_click(self.game.day_complete_button.center)
+
+        self.assertEqual(self.game.state, GameState.SHOP)
+        self.assertTrue(self.game.daily_payout_applied)
+        payroll_balance = 225 + expected_net_pay
+        self.assertEqual(self.game.player.balance, payroll_balance)
+        passage_progress = self.game.get_return_passage_progress()
+
+        # Leaving the Supply Shop records Triska, departs, and approaches Lumora.
+        self.game.handle_shop_click(self.game.shop_button.center)
+        self.assertEqual(self.game.state, GameState.ENDING)
+        self.assertEqual(self.game.current_destination, get_destination(3))
+        self.assertEqual(
+            self.game.route.completed_destinations,
+            (get_destination(1), get_destination(2)),
+        )
+        self.assertEqual(self.game.route.overall_performance["shifts_completed"], 2)
+        self.assertEqual(self.game.route.overall_performance["patients_seen"], 8)
+        self.assertEqual(self.game.route.overall_performance["correct_diagnoses"], 4)
+        self.assertEqual(self.game.route.overall_performance["tests_run"], 8)
+        self.assertEqual(self.game.route.shift_history[-1].net_pay, expected_net_pay)
+        self.assertEqual(
+            self.game.route.shift_history[-1].ending_balance,
+            payroll_balance,
+        )
+
+        self.game.finish_ending_sequence()
+        self.assertEqual(self.game.state, GameState.ARRIVAL)
+        self.assertEqual(self.game.current_destination, get_destination(3))
+        self.game.draw()
+        self.game.handle_arrival_click(self.game.arrival_begin_button.center)
+
+        self.assertEqual(self.game.state, GameState.TITLE)
+        self.assertEqual(self.game.day_number, 3)
+        self.assertEqual(
+            [entry["create"]().name for entry in self.game.waiting_room_queue],
+            ["Velli Mosswhistle", "Gribble Sporekin", "Oola Dewdrop", "Krix Lanternback"],
+        )
+        self.assertEqual(self.game.player.balance, payroll_balance)
+        self.assertEqual(
+            self.game.player.machine_levels,
+            {"TEMPERATURE": 2, "NEURAL SCAN": 2},
+        )
+        self.assertEqual(self.game.player.free_test_machines, {"OXYGEN SCAN"})
+        self.assertEqual(self.game.player.test_discount, 3)
+        self.assertEqual(self.game.purchased_shop_upgrades, permanent_upgrades)
+        self.assertIn("recycler", self.game.purchased_shop_upgrades)
+        self.assertFalse(self.game.recycler_used)
+        self.assertEqual(self.game.get_return_passage_progress(), passage_progress)
+        self.assertEqual(self.game.route.overall_performance["shifts_completed"], 2)
 
     def test_return_to_reception_preserves_day_two_campaign_progress(self):
         """Reception restart must never silently create a new campaign."""
@@ -200,7 +293,9 @@ class RouteRegressionTests(unittest.TestCase):
         self.game.handle_shop_click(self.game.shop_button.center)
 
         self.assertEqual(self.game.state, GameState.ENDING)
-        self.assertTrue(self.game.route.route_is_complete)
+        self.assertTrue(self.game.route.arrival_pending)
+        self.assertEqual(self.game.current_destination, get_destination(3))
+        self.assertFalse(self.game.route.route_is_complete)
 
     def test_restarting_the_route_restores_the_training_briefing(self):
         self.game.route_briefing_seen = True
@@ -223,8 +318,8 @@ class RouteRegressionTests(unittest.TestCase):
         self.assertFalse(self.game.guided_tutorial_active)
 
     def test_final_destination_ends_route_without_repeating_patients(self):
-        self.travel_to_day_two()
-        day_two_names = tuple(
+        self.travel_to_day_three()
+        day_three_names = tuple(
             entry["create"]().name for entry in self.game.waiting_room_queue
         )
 
@@ -234,12 +329,12 @@ class RouteRegressionTests(unittest.TestCase):
         self.assertEqual(self.game.state, GameState.FINAL)
         self.assertTrue(self.game.route.route_is_complete)
         self.assertIsNone(self.game.route.next_destination)
-        self.assertEqual(self.game.day_number, 2)
+        self.assertEqual(self.game.day_number, 3)
         self.assertEqual(
             tuple(entry["create"]().name for entry in self.game.waiting_room_queue),
-            day_two_names,
+            day_three_names,
         )
-        self.assertEqual(self.game.roster_for_day(3), [])
+        self.assertEqual(self.game.roster_for_day(4), [])
 
     def test_f10_preview_restores_the_live_campaign_exactly(self):
         self.game.state = GameState.PATIENT
@@ -264,7 +359,7 @@ class RouteRegressionTests(unittest.TestCase):
         live_fingerprint = self.game.get_campaign_state_fingerprint()
 
         self.game.toggle_developer_navigator()
-        self.game.select_developer_day(2)
+        self.game.select_developer_day(3)
         self.game.jump_to_developer_screen(
             self.game.get_developer_scene_index("patient_3")
         )
@@ -282,6 +377,85 @@ class RouteRegressionTests(unittest.TestCase):
         self.assertIsNone(self.game.developer_campaign_snapshot)
         self.assertEqual(self.game.get_campaign_state_fingerprint(), live_fingerprint)
 
+    def test_f10_exposes_every_lumora_checkpoint_and_restores_live_campaign(self):
+        """All Day 3 previews must remain an isolated developer sandbox."""
+
+        self.game.state = GameState.PATIENT
+        self.game.patients_called = 2
+        self.game.player.balance = 287
+        self.game.player.machine_levels["NEURAL SCAN"] = 2
+        self.game.player.test_discount = 3
+        self.game.purchased_shop_upgrades.update(
+            {"neural", "smart_cards", "recycler"}
+        )
+        self.game.daily_correct_diagnoses = 1
+        self.game.daily_wrong_diagnoses = 1
+        live_fingerprint = self.game.get_campaign_state_fingerprint()
+
+        self.game.toggle_developer_navigator()
+        self.assertEqual(len(self.game.get_developer_day_rects()), 3)
+        self.game.select_developer_day(3)
+        entries = self.game.get_developer_screen_entries()
+        scene_ids = {entry[1] for entry in entries}
+        self.assertTrue(
+            {
+                "arrival",
+                "reception",
+                "patient_1",
+                "patient_2",
+                "patient_3",
+                "patient_4",
+                "shop",
+                "ending",
+            }.issubset(scene_ids)
+        )
+        self.assertEqual(
+            [
+                self.game.get_developer_checkpoint_label(f"patient_{index}", f"PATIENT {index}")
+                for index in range(1, 5)
+            ],
+            [
+                "PATIENT 1  •  VELLI MOSSWHISTLE",
+                "PATIENT 2  •  GRIBBLE SPOREKIN",
+                "PATIENT 3  •  OOLA DEWDROP",
+                "PATIENT 4  •  KRIX LANTERNBACK",
+            ],
+        )
+
+        expected_states = {
+            "arrival": GameState.ARRIVAL,
+            "reception": GameState.TITLE,
+            "patient_1": GameState.PATIENT,
+            "patient_2": GameState.PATIENT,
+            "patient_3": GameState.PATIENT,
+            "patient_4": GameState.PATIENT,
+            "shop": GameState.SHOP,
+            "ending": GameState.ENDING,
+        }
+        expected_patients = {
+            "patient_1": "Velli Mosswhistle",
+            "patient_2": "Gribble Sporekin",
+            "patient_3": "Oola Dewdrop",
+            "patient_4": "Krix Lanternback",
+        }
+        for scene_id, expected_state in expected_states.items():
+            self.game.jump_to_developer_screen(
+                self.game.get_developer_scene_index(scene_id)
+            )
+            self.assertEqual(self.game.state, expected_state)
+            self.assertEqual(self.game.current_destination, get_destination(3))
+            if scene_id in expected_patients:
+                self.assertEqual(self.game.patient.name, expected_patients[scene_id])
+            self.game.draw()
+
+        self.game.toggle_developer_navigator()
+        self.game.handle_developer_click(self.game.developer_return_button.center)
+
+        self.assertFalse(self.game.developer_preview_active)
+        self.assertFalse(self.game.developer_navigator_open)
+        self.assertIsNone(self.game.developer_campaign_snapshot)
+        self.assertEqual(self.game.get_campaign_state_fingerprint(), live_fingerprint)
+
     def test_f10_homecoming_uses_the_real_ending_without_mutating_campaign(self):
         """The final destination should preview Go Home in an isolated snapshot."""
 
@@ -290,7 +464,7 @@ class RouteRegressionTests(unittest.TestCase):
         live_fingerprint = self.game.get_campaign_state_fingerprint()
 
         self.game.toggle_developer_navigator()
-        self.game.select_developer_day(2)
+        self.game.select_developer_day(3)
         self.game.jump_to_developer_screen(
             self.game.get_developer_scene_index("homecoming")
         )

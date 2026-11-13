@@ -1035,7 +1035,27 @@ class ExaminationMixin:
                 panel.width - 24,
                 panel.height - 62,
             )
-        return pygame.Rect(bay.right - 114, bay.y + 11, 105, 76)
+        return pygame.Rect(bay.right - 114, bay.y + 11, 105, 84)
+
+    def fit_interview_statement(self, statement, width, max_height):
+        """Return the largest interview font that shows the complete statement."""
+
+        fonts = (
+            self.compact_ui_font,
+            self.compact_card_title_font,
+            self.interview_tiny_font,
+            self.legible_micro_font,
+        )
+        for font in fonts:
+            lines = self.wrap_text(statement, font, width)
+            if len(lines) * font.get_linesize() <= max_height:
+                return font, lines
+
+        # Current dialogue validation keeps every statement within this final
+        # size, but retaining a bounded fallback protects future content.
+        font = fonts[-1]
+        max_lines = max(1, max_height // font.get_linesize())
+        return font, self.wrap_text(statement, font, width)[:max_lines]
 
     def advance_patient_dialogue(self):
         """Cycle the visible interview answer and file newly heard details."""
@@ -1086,19 +1106,18 @@ class ExaminationMixin:
         )
 
         statement = self.patient.dialogue[self.patient_dialogue_index]
-        symptom_lines = self.wrap_text(
+        symptom_font, symptom_lines = self.fit_interview_statement(
             statement,
-            self.compact_ui_font,
             bubble.width - 16,
+            bubble.height - 30,
         )
-        symptom_lines = symptom_lines[:3]
-        line_height = self.compact_ui_font.get_linesize()
+        line_height = symptom_font.get_linesize()
         text_height = len(symptom_lines) * line_height
-        first_y = bubble.y + 7 + max(0, (42 - text_height) // 2)
+        first_y = bubble.y + 5 + max(0, (bubble.height - 30 - text_height) // 2)
         for line_index, line_text in enumerate(symptom_lines):
             # Hovering should call attention to the interaction without
             # sacrificing the dark-on-cream dialogue contrast.
-            line = self.compact_ui_font.render(line_text, True, text_color)
+            line = symptom_font.render(line_text, True, text_color)
             line_y = first_y + line_index * line_height
             self.screen.blit(line, line.get_rect(midtop=(bubble.centerx, line_y)))
 

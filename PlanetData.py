@@ -9,8 +9,12 @@ from PatientData import (
     create_dooski,
     create_flersch,
     create_flump,
+    create_gribble,
+    create_krix,
+    create_oola,
     create_roldi,
     create_titus,
+    create_velli,
     create_zoogy,
     create_zorpa,
 )
@@ -147,6 +151,41 @@ DAY_TWO_PATIENTS = (
 )
 
 
+# Lumora's medical records and four final patient sprite sets are complete, so
+# its fixed alpha roster can participate in route validation without falling
+# back to the generated placeholder silhouettes.
+LUMORA_PATIENTS = (
+    PatientSlot(
+        "velli",
+        create_velli,
+        "LUM-014-VM",
+        ((220, 239, 204), (77, 45, 91), (151, 213, 127), (215, 240, 137)),
+        1.15,
+    ),
+    PatientSlot(
+        "gribble",
+        create_gribble,
+        "MYC-073-GS",
+        ((222, 210, 226), (68, 43, 78), (177, 132, 190), (225, 188, 226)),
+        1.18,
+    ),
+    PatientSlot(
+        "oola",
+        create_oola,
+        "DEW-228-OD",
+        ((201, 234, 230), (37, 72, 83), (81, 178, 174), (149, 229, 213)),
+        1.25,
+    ),
+    PatientSlot(
+        "krix",
+        create_krix,
+        "LTN-091-KL",
+        ((239, 222, 184), (86, 49, 68), (225, 151, 70), (248, 210, 104)),
+        1.25,
+    ),
+)
+
+
 DESTINATIONS = (
     Destination(
         key="training_orbit",
@@ -203,6 +242,36 @@ DESTINATIONS = (
             window_details=("triska", "paired_moons", "orbital_traffic"),
         ),
         ambience="station_hum",
+    ),
+    Destination(
+        key="lumora_canopy",
+        day_number=3,
+        planet_name="Lumora Canopy Haven",
+        subtitle="Bioluminescent Jungle Care Circuit",
+        arrival_message=(
+            "Lumora's canopy clinics have transmitted four new patient files."
+        ),
+        patient_roster=LUMORA_PATIENTS,
+        theme=PlanetTheme(
+            scene="lumora_orbit",
+            space_color=(6, 18, 30),
+            horizon_color=(28, 86, 77),
+            accent_color=(142, 255, 174),
+            secondary_color=(199, 126, 235),
+            room_color=(39, 62, 64),
+            wall_color=(46, 73, 70),
+            structure_color=(92, 139, 124),
+            floor_color=(43, 66, 67),
+            floor_trim_color=(138, 218, 164),
+            chair_color=(48, 65, 73),
+            chair_accent_color=(128, 102, 153),
+            sign_color=(142, 255, 174),
+            decor_style="lumora_vines",
+            particle_style="glow_spores",
+            alien_render_style="smooth",
+            window_details=("lumora", "glowing_canopy", "floating_spores"),
+        ),
+        ambience="lumora_canopy_hum",
     ),
 )
 

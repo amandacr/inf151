@@ -123,20 +123,18 @@ class ResultsMixin:
                 report.width - 40,
                 78,
             )
-            result_y = result_box.y
-            for paragraph in result_text.splitlines() or [result_text]:
-                for line_text in self.wrap_text(
-                    paragraph,
+            self.draw_fitted_wrapped_text(
+                result_text,
+                (
                     self.body_font,
-                    result_box.width,
-                ):
-                    result_line = self.body_font.render(
-                        line_text,
-                        True,
-                        COLORS["text"],
-                    )
-                    self.screen.blit(result_line, (result_box.x, result_y))
-                    result_y += result_line.get_height() + 7
+                    self.small_font,
+                    self.card_font,
+                    self.legible_micro_font,
+                ),
+                COLORS["text"],
+                result_box,
+                line_spacing=7,
+            )
 
             note_y = report.bottom - 30
             note_icon = (report.x + 26, note_y + 1)
@@ -872,9 +870,14 @@ class ResultsMixin:
                 "Return to the examination and collect more information."
             )
         detail_box = pygame.Rect(report.x + 20, report.y + 117, report.width - 40, 88)
-        self.draw_wrapped_text(
+        self.draw_fitted_wrapped_text(
             detail_text,
-            self.body_font,
+            (
+                self.body_font,
+                self.small_font,
+                self.card_font,
+                self.legible_micro_font,
+            ),
             COLORS["text"],
             detail_box,
             line_spacing=6,

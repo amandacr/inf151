@@ -575,3 +575,255 @@ ROLDI_DIAGNOSES = {
         rejection_tests=('BLOOD CHEMISTRY',),
     ),
 }
+
+
+# Keeping Velli's Day 3 set case-specific prevents similarly named plant
+# conditions from leaking patient-specific rejection feedback into other
+# Lumora cases.
+VELLI_DIAGNOSES = {
+    "root_mineral_deficiency": Diagnosis(
+        "Root-Mineral Deficiency",
+        "Insufficient mineral uptake leaves the patient's light-storing cells "
+        "unable to sustain normal energy production.",
+        "Provide a balanced Luminari mineral infusion and monitor new leaf growth.",
+        evidence_combinations=(("BLOOD CHEMISTRY", "ULTRASOUND"),),
+        rejection_reason=(
+            "Blood Chemistry shows root minerals and sugar reserves within the "
+            "normal Luminari range."
+        ),
+        rejection_tests=("BLOOD CHEMISTRY",),
+    ),
+    "night_bloom_pollen_allergy": Diagnosis(
+        "Night-Bloom Pollen Allergy",
+        "An immune reaction to Lumora's seasonal pollen inflames leaf pores, "
+        "reducing gas exchange and draining the patient's energy.",
+        "Move the patient to filtered air and administer a Luminari-safe "
+        "anti-inflammatory treatment.",
+        evidence_combinations=(("ALLERGY", "OXYGEN SCAN"),),
+        rejection_reason=(
+            "Allergy screening produced no immune response to the Night-Bloom "
+            "pollen sample."
+        ),
+        rejection_tests=("ALLERGY",),
+    ),
+    "photosynthetic_circulation_failure": Diagnosis(
+        "Photosynthetic Circulation Failure",
+        "Light-charged sap is losing usable energy before it reaches the outer "
+        "leaves, causing fading bioluminescence, pallor, and exhaustion.",
+        "Begin controlled-spectrum light therapy, administer a Luminari-safe "
+        "circulatory catalyst, and monitor energy delivery to the outer leaves.",
+        evidence_combinations=(("BLOOD CHEMISTRY", "OXYGEN SCAN"),),
+    ),
+    "night_spore_toxin_exposure": Diagnosis(
+        "Night-Spore Toxin Exposure",
+        "A toxic jungle spore is disrupting sap chemistry and suppressing the "
+        "patient's natural glow.",
+        "Remove the exposure and administer a Luminari-safe spore-binding agent.",
+        evidence_combinations=(("TOXIN SCREEN", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "The Toxin Screen detected no Night-Bloom spores, poisons, or "
+            "foreign compounds in the sap sample."
+        ),
+        rejection_tests=("TOXIN SCREEN",),
+    ),
+    "solar_overexposure": Diagnosis(
+        "Solar Overexposure",
+        "Excess stellar light has overheated and damaged the patient's "
+        "light-storing pigments, producing fatigue and an unstable glow.",
+        "Move the patient into shade, cool the leaf crown gradually, and apply "
+        "a Luminari-safe pigment-repair treatment.",
+        evidence_combinations=(("TEMPERATURE", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "Temperature is within the Luminari baseline, and Blood Chemistry "
+            "shows no heat-stress pigment damage."
+        ),
+        rejection_tests=("TEMPERATURE", "BLOOD CHEMISTRY"),
+    ),
+}
+
+
+GRIBBLE_DIAGNOSES = {
+    "cap_pressure_syndrome": Diagnosis(
+        "Cap-Pressure Syndrome",
+        "Fluid pressure beneath the cap compresses the mycelial nerve web, "
+        "causing delayed and involuntary limb movement.",
+        "Relieve cap pressure with a guided drainage procedure and monitor "
+        "motor coordination.",
+        evidence_combinations=(("ULTRASOUND", "X-RAY"),),
+        rejection_reason=(
+            "Ultrasound shows normal cap pressure with no trapped fluid or "
+            "compressed internal structures."
+        ),
+        rejection_tests=("ULTRASOUND",),
+    ),
+    "parasitic_spore_colonization": Diagnosis(
+        "Parasitic Spore Colonization",
+        "Foreign spores have rooted inside the cap and are interfering with "
+        "the patient's native motor network.",
+        "Administer a Mycori-safe antiparasitic treatment and isolate the "
+        "foreign colony.",
+        evidence_combinations=(("TOXIN SCREEN", "ULTRASOUND"),),
+        rejection_reason=(
+            "The Toxin Screen and Ultrasound detected no foreign spores, "
+            "parasites, or colony growth."
+        ),
+        rejection_tests=("TOXIN SCREEN", "ULTRASOUND"),
+    ),
+    "mycelial_neural_cross_talk": Diagnosis(
+        "Mycelial Neural Cross-Talk",
+        "Motor commands are echoing through interconnected mycelial pathways, "
+        "causing limbs to react before or after the intended movement.",
+        "Apply a Mycori-safe signal separator and retrain the affected motor "
+        "pathways under monitored movement.",
+        evidence_combinations=(("NEURAL SCAN", "ULTRASOUND"),),
+    ),
+    "motor_mineral_depletion": Diagnosis(
+        "Motor-Mineral Depletion",
+        "Low conductive mineral levels weaken motor signaling and cause "
+        "uncontrolled movement in the limbs.",
+        "Provide a balanced Mycori mineral infusion and monitor motor response.",
+        evidence_combinations=(("BLOOD CHEMISTRY", "NEURAL SCAN"),),
+        rejection_reason=(
+            "Blood Chemistry shows conductive minerals and cap nutrients within "
+            "the normal Mycori range."
+        ),
+        rejection_tests=("BLOOD CHEMISTRY",),
+    ),
+    "static_charge_nerve_injury": Diagnosis(
+        "Static-Charge Nerve Injury",
+        "A powerful electrical discharge has damaged the cap's motor pathways, "
+        "producing erratic limb commands.",
+        "Ground the remaining charge and begin Mycori-safe nerve-repair therapy.",
+        evidence_combinations=(("NEURAL SCAN", "TEMPERATURE"),),
+        rejection_reason=(
+            "The Neural Scan shows no burned, severed, or permanently damaged "
+            "motor fibers."
+        ),
+        rejection_tests=("NEURAL SCAN",),
+    ),
+}
+
+
+OOLA_DIAGNOSES = {
+    "vocal_pouch_infection": Diagnosis(
+        "Vocal-Pouch Infection",
+        "An infection inside the throat pouch causes swelling, discomfort, and "
+        "restricted breathing.",
+        "Begin a Dewfin-safe antimicrobial treatment and reduce inflammation "
+        "around the throat pouch.",
+        evidence_combinations=(("BLOOD CHEMISTRY", "ULTRASOUND"),),
+        rejection_reason=(
+            "Blood Chemistry shows no infectious markers, and Ultrasound found "
+            "no abscess, fluid pocket, or damaged pouch tissue."
+        ),
+        rejection_tests=("BLOOD CHEMISTRY", "ULTRASOUND"),
+    ),
+    "swamp_gas_poisoning": Diagnosis(
+        "Swamp-Gas Poisoning",
+        "A hazardous jungle gas has irritated the respiratory system and reduced "
+        "normal oxygen exchange.",
+        "Move the patient to clean air and administer a Dewfin-safe toxin-binding "
+        "respiratory treatment.",
+        evidence_combinations=(("TOXIN SCREEN", "OXYGEN SCAN"),),
+        rejection_reason=(
+            "The Toxin Screen detected no swamp gases, poisons, or hazardous "
+            "airborne compounds."
+        ),
+        rejection_tests=("TOXIN SCREEN",),
+    ),
+    "night_spore_respiratory_reaction": Diagnosis(
+        "Night-Spore Respiratory Reaction",
+        "An acute immune response to airborne Night-Bloom residue has swollen "
+        "the throat pouch and restricted airflow.",
+        "Move the patient to filtered humid air and administer a Dewfin-safe "
+        "anti-inflammatory allergy treatment.",
+        evidence_combinations=(("ALLERGY", "OXYGEN SCAN"),),
+    ),
+    "atmospheric_oxygen_intolerance": Diagnosis(
+        "Atmospheric Oxygen Intolerance",
+        "The local oxygen mixture overwhelms the patient's respiratory tissues, "
+        "causing swelling and shortness of breath.",
+        "Provide a regulated Dewfin breathing mixture and monitor both skin gills.",
+        evidence_combinations=(("OXYGEN SCAN", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "The Oxygen Scan shows both skin gills processing Lumora's ambient "
+            "mixture normally; restriction is localized to the throat pouch."
+        ),
+        rejection_tests=("OXYGEN SCAN",),
+    ),
+    "aquatic_dehydration": Diagnosis(
+        "Aquatic Dehydration",
+        "Low dermal water reserves have dried and irritated the respiratory "
+        "tissues, producing fatigue and throat-pouch swelling.",
+        "Restore hydration gradually with a balanced Dewfin mineral bath.",
+        evidence_combinations=(("BLOOD CHEMISTRY", "TEMPERATURE"),),
+        rejection_reason=(
+            "Blood Chemistry shows normal hydration salts and water reserves, "
+            "while Temperature remains at the Dewfin baseline."
+        ),
+        rejection_tests=("BLOOD CHEMISTRY", "TEMPERATURE"),
+    ),
+}
+
+
+KRIX_DIAGNOSES = {
+    "shell_light_overproduction": Diagnosis(
+        "Shell-Light Overproduction",
+        "The patient's luminous glands are generating excess energy, "
+        "overheating the shell and draining the rest of the body.",
+        "Dim the luminous glands with a Lanternback-safe regulator and monitor "
+        "energy production.",
+        evidence_combinations=(("BLOOD CHEMISTRY", "TEMPERATURE"),),
+        rejection_reason=(
+            "Blood Chemistry shows luminous compounds and energy-production "
+            "markers within the normal Lanternback range."
+        ),
+        rejection_tests=("BLOOD CHEMISTRY",),
+    ),
+    "internal_heat_parasite": Diagnosis(
+        "Internal Heat Parasite",
+        "A heat-feeding organism has entered the shell and is concentrating "
+        "thermal energy around the luminous core.",
+        "Remove the organism and administer a Lanternback-safe antiparasitic "
+        "treatment.",
+        evidence_combinations=(("ULTRASOUND", "TOXIN SCREEN"),),
+        rejection_reason=(
+            "Ultrasound and Toxin Screen found no organism, eggs, foreign tissue, "
+            "or parasite-related compounds."
+        ),
+        rejection_tests=("ULTRASOUND", "TOXIN SCREEN"),
+    ),
+    "bioluminescent_core_instability": Diagnosis(
+        "Bioluminescent Core Instability",
+        "The photonic core is cycling out of alignment, trapping heat beneath "
+        "the shell while failing to warm the rest of the body evenly.",
+        "Realign the core lens, vent trapped heat gradually, and stabilize the "
+        "light cycle under monitored output.",
+        evidence_combinations=(("TEMPERATURE", "X-RAY"),),
+    ),
+    "molting_complication": Diagnosis(
+        "Molting Complication",
+        "An incomplete molt has trapped old shell plates against new growth, "
+        "causing heat, pressure, and uneven light output.",
+        "Separate the retained plates with a Lanternback-safe molting treatment.",
+        evidence_combinations=(("X-RAY", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "X-ray shows every shell plate firmly seated, with no retained layer, "
+            "separation, or compressed new growth."
+        ),
+        rejection_tests=("X-RAY",),
+    ),
+    "thermal_blood_separation": Diagnosis(
+        "Thermal-Blood Separation",
+        "The patient's heat-carrying hemolymph has separated into layers, "
+        "preventing warmth from circulating beyond the shell.",
+        "Recombine the hemolymph with a Lanternback-safe thermal binder and "
+        "monitor circulation.",
+        evidence_combinations=(("BLOOD CHEMISTRY", "ULTRASOUND"),),
+        rejection_reason=(
+            "Blood Chemistry shows evenly mixed thermal carriers, and Ultrasound "
+            "shows normal hemolymph flow through the core pump."
+        ),
+        rejection_tests=("BLOOD CHEMISTRY", "ULTRASOUND"),
+    ),
+}

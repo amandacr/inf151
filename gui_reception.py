@@ -380,6 +380,46 @@ class ReceptionMixin:
                 width=1,
             )
 
+        if theme.scene == "lumora_orbit":
+            self.draw_lumora_room_lighting(room)
+
+
+    def draw_lumora_room_lighting(self, room):
+        """Wash Lumora's reception shell with soft living-jungle light."""
+
+        elapsed = pygame.time.get_ticks()
+        pulse = (math.sin(elapsed / 720) + 1) / 2
+        glow = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+
+        # The wall strips and floor pools make the clinic feel powered by its
+        # destination without changing any of the shared room geometry.
+        strip_color = (126, 255, 177, 46 + round(pulse * 18))
+        pygame.draw.line(glow, strip_color, (56, 158), (812, 158), width=6)
+        pygame.draw.line(glow, (199, 126, 235, 38), (842, 158), (1046, 158), width=5)
+        for light_x, light_color in (
+            (177, (113, 247, 177, 30)),
+            (550, (109, 225, 214, 26)),
+            (918, (203, 133, 232, 25)),
+        ):
+            pygame.draw.ellipse(
+                glow,
+                light_color,
+                pygame.Rect(light_x - 108, room.bottom - 56, 216, 58),
+            )
+        self.screen.blit(glow, (0, 0))
+
+        # Small botanical indicator lights climb the structural seams.
+        for stem_x, phase in ((365, 0), (742, 3)):
+            points = []
+            for index in range(7):
+                stem_y = 182 + index * 33
+                stem_offset = round(math.sin(elapsed / 650 + index + phase) * 3)
+                points.append((stem_x + stem_offset, stem_y))
+            pygame.draw.lines(self.screen, (69, 154, 111), False, points, width=2)
+            for index, point in enumerate(points[1::2]):
+                node_color = (182, 255, 153) if (index + elapsed // 420) % 2 else (106, 225, 203)
+                pygame.draw.circle(self.screen, node_color, point, 3)
+
 
     def draw_reception_status(self):
         """Draw reception, waiting status, shift, and money on a clinic monitor."""
@@ -432,7 +472,11 @@ class ReceptionMixin:
     def draw_waiting_room_windows(self):
         """Draw the panoramic space windows across the waiting-room wall."""
 
-        if self.get_reception_theme().scene == "triska_orbit":
+        scene = self.get_reception_theme().scene
+        if scene == "lumora_orbit":
+            self.draw_lumora_waiting_room_windows()
+            return
+        if scene == "triska_orbit":
             self.draw_triska_waiting_room_windows()
             return
 
@@ -593,6 +637,181 @@ class ReceptionMixin:
         self.screen.blit(poster_title, poster_title.get_rect(center=(poster.centerx, poster.y + 17)))
         self.screen.blit(poster_line, poster_line.get_rect(center=(poster.centerx, poster.y + 40)))
         self.screen.blit(poster_line_two, poster_line_two.get_rect(center=(poster.centerx, poster.y + 55)))
+
+    def draw_lumora_waiting_room_windows(self):
+        """Draw Lumora's rain-soaked glowing jungle beyond the clinic glass."""
+
+        theme = self.get_reception_theme()
+        window = pygame.Rect(37, 164, 792, 239)
+        elapsed = pygame.time.get_ticks()
+        previous_clip = self.screen.get_clip()
+        self.screen.set_clip(window)
+
+        # Layered night colors keep the exterior readable behind the patients.
+        pygame.draw.rect(self.screen, theme.space_color, window, border_radius=13)
+        sky = pygame.Surface(window.size, pygame.SRCALPHA)
+        for band_index, band_color in enumerate(
+            ((10, 35, 44), (13, 49, 52), (16, 61, 56), (20, 71, 61))
+        ):
+            band = pygame.Rect(0, band_index * 60, window.width, 62)
+            pygame.draw.rect(sky, band_color, band)
+        pygame.draw.ellipse(sky, (107, 231, 208, 22), pygame.Rect(310, 4, 430, 175))
+        pygame.draw.ellipse(sky, (199, 126, 235, 16), pygame.Rect(-80, 48, 370, 160))
+        self.screen.blit(sky, window.topleft)
+
+        # A hazy moon hangs behind the canopy while far trunks establish depth.
+        moon = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        pygame.draw.circle(moon, (196, 238, 213, 62), (706, 202), 53)
+        pygame.draw.circle(moon, (152, 221, 194, 44), (706, 202), 42)
+        self.screen.blit(moon, (0, 0))
+        for trunk_x, trunk_width, sway in (
+            (91, 29, -8), (177, 22, 12), (330, 34, -14),
+            (505, 25, 10), (653, 31, -12), (784, 26, 8),
+        ):
+            pygame.draw.polygon(
+                self.screen,
+                (10, 43, 42),
+                (
+                    (trunk_x - trunk_width // 2, window.bottom),
+                    (trunk_x - trunk_width // 3, window.y + 43),
+                    (trunk_x + sway, window.y + 8),
+                    (trunk_x + trunk_width // 3, window.y + 47),
+                    (trunk_x + trunk_width // 2, window.bottom),
+                ),
+            )
+
+        # Broad canopy silhouettes fill the lower horizon, dotted with living
+        # lights rather than the generic planets used by earlier destinations.
+        canopy_clusters = (
+            (47, 323, 83, 66), (112, 306, 97, 78), (205, 329, 112, 70),
+            (303, 302, 121, 91), (415, 326, 107, 70), (521, 298, 118, 93),
+            (632, 321, 111, 75), (735, 302, 122, 96),
+        )
+        for index, (canopy_x, canopy_y, canopy_w, canopy_h) in enumerate(canopy_clusters):
+            leaf_color = (14, 73, 60) if index % 2 else (16, 83, 65)
+            pygame.draw.ellipse(
+                self.screen,
+                leaf_color,
+                pygame.Rect(canopy_x, canopy_y, canopy_w, canopy_h),
+            )
+            pygame.draw.ellipse(
+                self.screen,
+                (23, 105, 76),
+                pygame.Rect(canopy_x + 15, canopy_y + 10, canopy_w - 30, canopy_h // 2),
+            )
+
+        canopy_lights = (
+            (84, 347, (184, 255, 145)), (148, 330, (111, 237, 212)),
+            (248, 354, (215, 156, 240)), (349, 329, (179, 255, 154)),
+            (439, 353, (106, 229, 211)), (554, 326, (201, 147, 236)),
+            (614, 358, (186, 255, 145)), (730, 336, (105, 229, 213)),
+            (790, 363, (218, 164, 241)),
+        )
+        light_layer = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        for index, (light_x, light_y, light_color) in enumerate(canopy_lights):
+            pulse = (math.sin(elapsed / 430 + index * 0.8) + 1) / 2
+            pygame.draw.circle(
+                light_layer,
+                (*light_color, 28 + round(pulse * 25)),
+                (light_x, light_y),
+                8 + round(pulse * 3),
+            )
+            pygame.draw.circle(self.screen, light_color, (light_x, light_y), 2 + round(pulse))
+        self.screen.blit(light_layer, (0, 0))
+
+        # Luminous vines hang from the canopy roof and gently sway in place.
+        vine_specs = ((222, 93, 116), (389, 116, 83), (576, 70, 132), (760, 104, 92))
+        for vine_index, (vine_x, vine_length, phase) in enumerate(vine_specs):
+            vine_points = []
+            for step in range(8):
+                point_y = window.y + step * vine_length // 7
+                point_x = vine_x + round(math.sin(elapsed / 780 + step * 0.65 + phase) * 5)
+                vine_points.append((point_x, point_y))
+            pygame.draw.lines(self.screen, (54, 155, 101), False, vine_points, width=3)
+            pygame.draw.lines(self.screen, (116, 231, 151), False, vine_points, width=1)
+            for node_index, node in enumerate(vine_points[2::2]):
+                node_color = (181, 255, 148) if (node_index + vine_index) % 2 else (96, 226, 210)
+                pygame.draw.circle(self.screen, node_color, node, 3)
+                pygame.draw.circle(self.screen, (223, 255, 203), node, 1)
+
+        # Tiny gliding wildlife gives the jungle a living silhouette without
+        # competing with the patient sprites seated in front of the windows.
+        wildlife = (
+            (310 + round(math.sin(elapsed / 900) * 16), 225, 1.0),
+            (468 + round(math.sin(elapsed / 760 + 2) * 13), 256, 0.75),
+            (664 + round(math.sin(elapsed / 1040 + 1) * 18), 232, 0.9),
+        )
+        for creature_x, creature_y, scale in wildlife:
+            wing = round(8 * scale)
+            body = round(5 * scale)
+            pygame.draw.polygon(
+                self.screen,
+                (8, 26, 34),
+                (
+                    (creature_x - wing, creature_y - 2),
+                    (creature_x - body, creature_y + 3),
+                    (creature_x, creature_y),
+                    (creature_x + body, creature_y + 3),
+                    (creature_x + wing, creature_y - 2),
+                    (creature_x, creature_y + 5),
+                ),
+            )
+
+        # Floating spores move slowly behind faster rain streaks on the glass.
+        for index in range(24):
+            spore_x = window.x + ((index * 71 + elapsed // 37) % (window.width - 16))
+            spore_y = window.y + 18 + ((index * 47 - elapsed // 52) % (window.height - 30))
+            spore_color = (
+                (186, 255, 145) if index % 3 == 0
+                else (111, 232, 216) if index % 3 == 1
+                else (214, 155, 239)
+            )
+            pygame.draw.circle(self.screen, spore_color, (spore_x, spore_y), 1 + int(index % 7 == 0))
+
+        rain_layer = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        for index in range(42):
+            rain_x = window.x + ((index * 43 + elapsed // 13) % window.width)
+            rain_y = window.y + ((index * 67 + elapsed // 7) % window.height)
+            rain_length = 8 + (index % 4) * 3
+            pygame.draw.line(
+                rain_layer,
+                (177, 231, 224, 58 if index % 3 else 86),
+                (rain_x, rain_y),
+                (rain_x - 3, rain_y + rain_length),
+                width=1,
+            )
+        self.screen.blit(rain_layer, (0, 0))
+
+        # Reuse the exact shared bay divisions so patients and chairs retain
+        # the same spatial relationships on every destination.
+        for divider_x in (235, 433, 631):
+            pygame.draw.line(
+                self.screen,
+                theme.structure_color,
+                (divider_x, window.y + 4),
+                (divider_x, window.bottom - 4),
+                width=3,
+            )
+        pygame.draw.rect(
+            self.screen,
+            theme.structure_color,
+            window,
+            width=4,
+            border_radius=13,
+        )
+        self.screen.set_clip(previous_clip)
+
+        # This replaces the generic reminder with a local station identifier.
+        plaque = pygame.Rect(58, 184, 147, 73)
+        pygame.draw.rect(self.screen, (13, 45, 45), plaque.move(3, 4), border_radius=7)
+        pygame.draw.rect(self.screen, (20, 66, 57), plaque, border_radius=7)
+        pygame.draw.rect(self.screen, theme.sign_color, plaque, width=2, border_radius=7)
+        title = self.pile_font.render("LUMORA HAVEN", True, (220, 255, 218))
+        route = self.pile_font.render("CANOPY CARE", True, theme.sign_color)
+        weather = self.pile_font.render("GENTLE RAIN", True, theme.secondary_color)
+        self.screen.blit(title, title.get_rect(center=(plaque.centerx, plaque.y + 17)))
+        self.screen.blit(route, route.get_rect(center=(plaque.centerx, plaque.y + 40)))
+        self.screen.blit(weather, weather.get_rect(center=(plaque.centerx, plaque.y + 55)))
 
     def draw_triska_waiting_room_windows(self):
         """Draw Triska's amber desert world and its paired moons."""
