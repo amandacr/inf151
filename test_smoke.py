@@ -1817,6 +1817,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
                 "shop",
                 "ending",
                 "final",
+                "homecoming",
             ],
         )
         self.assertIn(

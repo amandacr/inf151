@@ -247,7 +247,12 @@ class RouteRegressionTests(unittest.TestCase):
         self.game.player.balance = 263
         self.game.player.machine_levels["BLOOD CHEMISTRY"] = 2
         self.game.player.test_discount = 2
-        self.game.purchased_shop_upgrades.update({"blood", "smart_cards"})
+        self.game.player.free_test_machines.add("OXYGEN SCAN")
+        self.game.player.free_tests_used.add("OXYGEN SCAN")
+        self.game.purchased_shop_upgrades.update(
+            {"blood", "smart_cards", "recycler"}
+        )
+        self.game.recycler_used = True
         self.game.daily_correct_diagnoses = 1
         self.game.daily_test_count = 3
         self.game.daily_test_expenses = 35
@@ -276,6 +281,37 @@ class RouteRegressionTests(unittest.TestCase):
         self.assertFalse(self.game.developer_navigator_open)
         self.assertIsNone(self.game.developer_campaign_snapshot)
         self.assertEqual(self.game.get_campaign_state_fingerprint(), live_fingerprint)
+
+    def test_f10_homecoming_uses_the_real_ending_without_mutating_campaign(self):
+        """The final destination should preview Go Home in an isolated snapshot."""
+
+        self.game.state = GameState.PATIENT
+        self.game.player.balance = 263
+        live_fingerprint = self.game.get_campaign_state_fingerprint()
+
+        self.game.toggle_developer_navigator()
+        self.game.select_developer_day(2)
+        self.game.jump_to_developer_screen(
+            self.game.get_developer_scene_index("homecoming")
+        )
+
+        self.assertEqual(self.game.state, GameState.ENDING)
+        self.assertTrue(self.game.homecoming_started)
+        self.assertTrue(self.game.has_return_passage())
+        self.assertTrue(self.game.route.route_is_complete)
+        self.assertEqual(self.game.ending_duration, 14000)
+        self.game.draw()
+
+        self.game.toggle_developer_navigator()
+        self.game.handle_developer_click(
+            self.game.developer_return_button.center
+        )
+
+        self.assertFalse(self.game.developer_preview_active)
+        self.assertEqual(
+            self.game.get_campaign_state_fingerprint(),
+            live_fingerprint,
+        )
 
 
 if __name__ == "__main__":

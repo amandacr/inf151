@@ -22,6 +22,7 @@ DEVELOPER_SCREENS = (
     ("D", "ending", "DEPART PLANET", GameState.ENDING),
     ("A", "arrival", "PLANET ARRIVAL", GameState.ARRIVAL),
     ("F", "final", "ROUTE COMPLETE", GameState.FINAL),
+    ("G", "homecoming", "GO HOME", GameState.ENDING),
 )
 
 DEVELOPER_KEY_MAP = {
@@ -37,6 +38,7 @@ DEVELOPER_KEY_MAP = {
     pygame.K_d: "ending",
     pygame.K_a: "arrival",
     pygame.K_f: "final",
+    pygame.K_g: "homecoming",
 }
 
 
@@ -60,6 +62,7 @@ DEVELOPER_SNAPSHOT_FIELDS = (
     "daily_patients_lost",
     "daily_draw_expenses",
     "money_deduction_animation",
+    "recycler_used",
     "purchased_shop_upgrades",
     "selected_shop_upgrade",
     "shop_scroll_row",
@@ -109,6 +112,8 @@ DEVELOPER_SNAPSHOT_FIELDS = (
     "end_day_shutdown_started_at",
     "test_result_started_at",
     "ending_started_at",
+    "ending_duration",
+    "homecoming_started",
     "arrival_started_at",
     "exit_confirmation_open",
     "exit_confirmation_opened_at",
@@ -209,6 +214,9 @@ class DeveloperMixin:
             self.player.balance,
             tuple(sorted(self.player.machine_levels.items())),
             self.player.test_discount,
+            tuple(sorted(self.player.free_test_machines)),
+            tuple(sorted(self.player.free_tests_used)),
+            self.recycler_used,
             tuple(sorted(self.purchased_shop_upgrades)),
             self.patients_called,
             self.patient.name,
@@ -225,6 +233,8 @@ class DeveloperMixin:
             self.daily_draw_expenses,
             self.route_briefing_seen,
             self.route_briefing_index,
+            self.ending_duration,
+            self.homecoming_started,
             self.guided_tutorial_active,
             self.guided_tutorial_step,
         )
@@ -323,6 +333,7 @@ class DeveloperMixin:
             scene_ids.insert(0, "arrival")
         if destination_index == len(self.destinations) - 1:
             scene_ids.append("final")
+            scene_ids.append("homecoming")
         entries_by_id = {entry[1]: entry for entry in DEVELOPER_SCREENS}
         return tuple(entries_by_id[scene_id] for scene_id in scene_ids)
 
@@ -486,6 +497,8 @@ class DeveloperMixin:
             self.prepare_developer_arrival_checkpoint()
         elif scene_id == "final":
             self.prepare_developer_final_checkpoint()
+        elif scene_id == "homecoming":
+            self.prepare_developer_homecoming_checkpoint()
 
         if scene_id in ("shop", "route_briefing", "ending"):
             self.settle_daily_pay()
@@ -573,6 +586,13 @@ class DeveloperMixin:
         self.prepare_developer_shift_checkpoint()
         self.settle_daily_pay()
         self.record_current_route_performance()
+
+    def prepare_developer_homecoming_checkpoint(self):
+        """Preview the real ticket-funded flight home from the final stop."""
+
+        self.prepare_developer_final_checkpoint()
+        self.purchased_shop_upgrades.add("return_passage")
+        self.begin_homecoming_sequence()
 
     def prepare_developer_campaign_day(self):
         """Reset safely, then load the selected preview roster when needed."""
