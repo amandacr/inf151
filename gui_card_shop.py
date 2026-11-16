@@ -97,8 +97,8 @@ class CardShopMixin:
         if self.get_card_shop_inventory_count(selected.name) <= 0:
             return False, "SOLD OUT"
         price = self.get_card_shop_price()
-        if self.get_live_balance() < price:
-            return False, f"NEED ${price - self.get_live_balance()} MORE"
+        if not self.can_spend_clinic_funds(price):
+            return False, "CREDIT LIMIT -$50"
         return True, f"BUY FOR ${price}  •  NEXT CARD ${price + CARD_SHOP_PRICE_STEP}"
 
     def get_card_shop_information(self):

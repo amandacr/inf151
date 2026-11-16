@@ -5,6 +5,7 @@ import random
 
 import pygame
 
+from Card import Card
 from gui_state import GameState
 from gui_theme import (
     COLORS,
@@ -146,9 +147,23 @@ class CardMixin:
             return
 
         card = self.player.test_hand[self.selected_card_index]
+        allowed, charged_cost, emergency = self.get_test_charge_state(card.value)
+        if not allowed:
+            self.set_card_draw_notice(
+                "CREDIT LIMIT REACHED  •  RUN A COMMON TEST"
+                if not self.emergency_test_used
+                else "CREDIT LIMIT REACHED  •  EMERGENCY TEST USED"
+            )
+            return False
         self.last_test_name = card.value.name
-        self.last_test_cost = self.player.get_test_cost(card.value)
-        self.player.consume_test_use(card.value)
+        self.last_test_cost = charged_cost
+        self.last_test_was_emergency = emergency
+        if emergency:
+            self.emergency_test_granted = True
+            self.emergency_test_used = True
+            self.set_card_draw_notice("EMERGENCY BASIC TEST  •  NO CHARGE")
+        else:
+            self.player.consume_test_use(card.value)
         self.start_live_money_deduction(self.last_test_cost, "TEST COST")
         self.daily_test_count += 1
         self.daily_test_expenses += self.last_test_cost
@@ -156,6 +171,8 @@ class CardMixin:
         self.last_test_result = result.replace("RESULTS: ", "", 1)
 
         self.player.play(card)
+        if card is self.emergency_test_card:
+            self.emergency_test_card = None
         self.pending_test_discard = card
         self.selected_card_index = None
         self.run_test_button = None
@@ -164,6 +181,7 @@ class CardMixin:
         self.state = GameState.TEST_RESULT
         self.notebook.add_test(self.patient, self.last_test_name, self.last_test_result)
         self.play_sfx("scan")
+        return True
 
 
     def get_recycler_button(self, rect):
@@ -177,6 +195,9 @@ class CardMixin:
             return False
         index = self.selected_card_index
         if not 0 <= index < len(self.player.test_hand):
+            return False
+        if self.player.test_hand[index] is self.emergency_test_card:
+            self.set_card_draw_notice("EMERGENCY CARD  •  RUN THIS TEST OR KEEP IT")
             return False
         replacement = self.deck.draw()
         if replacement is None:
@@ -204,6 +225,10 @@ class CardMixin:
         if not 0 <= self.selected_card_index < len(self.player.test_hand):
             self.selected_card_index = None
             self.refresh_hand_layout()
+            return False
+
+        if self.player.test_hand[self.selected_card_index] is self.emergency_test_card:
+            self.set_card_draw_notice("EMERGENCY CARD  •  CANNOT DISCARD")
             return False
 
         selected_rect = self.get_selected_card_rect(self.selected_card_index)
@@ -318,6 +343,10 @@ class CardMixin:
         self.player.play(card)
         self.diagnosis_correct = self.patient.receive_diagnosis(card.value)
         performed_tests = set(self.notebook.get_entries(self.patient)) - {"No tests"}
+        (
+            self.last_diagnosis_evidence_count,
+            self.last_diagnosis_evidence_total,
+        ) = self.patient.get_evidence_progress(performed_tests)
         self.last_diagnosis_supported = self.patient.has_supporting_evidence(
             performed_tests
         )
@@ -325,6 +354,8 @@ class CardMixin:
             self.daily_correct_diagnoses += 1
             if self.last_diagnosis_supported:
                 self.daily_evidence_cases += 1
+            elif self.last_diagnosis_evidence_count > 0:
+                self.daily_partial_evidence_cases += 1
             self.play_sfx("correct")
         else:
             self.start_live_money_deduction(
@@ -543,9 +574,6 @@ class CardMixin:
         if self.discard_animation is not None:
             self.set_card_draw_notice("MED-WASTE IN USE  •  PLEASE WAIT")
             return False
-        if not self.deck.contents:
-            self.set_card_draw_notice("DRAW DECK EMPTY  •  NO CHARGE")
-            return False
         if len(self.player.test_hand) >= MAX_TEST_HAND_SIZE:
             self.set_card_draw_notice("HAND FULL  •  DISCARD FIRST")
             return False
@@ -554,17 +582,58 @@ class CardMixin:
         # the player never pays for a card hidden behind Diagnosis Options.
         if self.showing_diagnosis_hand:
             self.switch_active_hand(False)
-        card = self.deck.draw()
+        emergency_draw = not self.can_spend_clinic_funds(DRAW_COST)
+        if emergency_draw:
+            has_common_card = any(
+                getattr(card.value, "rarity", None) == "Common"
+                for card in self.player.test_hand
+            )
+            if self.emergency_test_granted or self.emergency_test_used:
+                self.set_card_draw_notice(
+                    "CREDIT LIMIT REACHED  •  EMERGENCY SUPPORT USED"
+                )
+                return False
+            if has_common_card:
+                self.set_card_draw_notice(
+                    "CREDIT LIMIT REACHED  •  RUN A COMMON TEST FREE"
+                )
+                return False
+            card = self.deck.draw_rarity("Common")
+            if card is None:
+                emergency_test = next(
+                    (
+                        test
+                        for test in self.card_shop_catalog
+                        if test.rarity == "Common"
+                    ),
+                    None,
+                )
+                if emergency_test is None:
+                    self.set_card_draw_notice(
+                        "CREDIT LIMIT REACHED  •  BASIC TEST UNAVAILABLE"
+                    )
+                    return False
+                card = Card("Test", emergency_test)
+            self.emergency_test_granted = True
+            self.emergency_test_card = card
+        else:
+            if not self.deck.contents:
+                self.set_card_draw_notice("DRAW DECK EMPTY  •  NO CHARGE")
+                return False
+            card = self.deck.draw()
         if card is None:
             self.set_card_draw_notice("DRAW DECK EMPTY  •  NO CHARGE")
             return False
         self.player.draw(card)
-        self.start_live_money_deduction(DRAW_COST, "CARD DRAW")
-        self.daily_draw_expenses += DRAW_COST
+        if not emergency_draw:
+            self.start_live_money_deduction(DRAW_COST, "CARD DRAW")
+            self.daily_draw_expenses += DRAW_COST
         self.selected_card_index = None
         self.refresh_hand_layout()
         remaining = len(self.deck.contents)
-        if remaining == 0:
+        if emergency_draw:
+            self.set_card_draw_notice("EMERGENCY BASIC CARD  •  NO DRAW FEE")
+        elif remaining == 0:
             self.set_card_draw_notice("LAST CARD DRAWN  •  DECK EMPTY")
         elif remaining <= 5:
             self.set_card_draw_notice(f"LOW DECK  •  {remaining} CARDS LEFT")
@@ -995,8 +1064,10 @@ class CardMixin:
         pygame.draw.rect(self.screen, header_color, header, border_radius=7)
         self.draw_fitted_card_title(test.name, header, selected=True)
 
+        allowed, charged_cost, emergency = self.get_test_charge_state(test)
+        cost_label = "EMERGENCY FREE" if emergency else f"COST ${charged_cost}"
         rarity = self.card_font.render(
-            f"LV.{self.player.get_machine_level(test)} {test.rarity.upper()}  •  COST ${self.player.get_test_cost(test)}",
+            f"LV.{self.player.get_machine_level(test)} {test.rarity.upper()}  •  {cost_label}",
             True,
             rarity_color,
         )
@@ -1034,11 +1105,14 @@ class CardMixin:
         )
 
         self.run_test_button = self.get_run_test_button(card_rect)
-        pygame.draw.rect(
-            self.screen, COLORS["panel_border"], self.run_test_button, border_radius=5
-        )
+        run_color = COLORS["panel_border"] if allowed else (111, 86, 91)
+        pygame.draw.rect(self.screen, run_color, self.run_test_button, border_radius=5)
         run_text = self.small_font.render(
-            f"RUN  ${self.player.get_test_cost(test)}",
+            "RUN FREE"
+            if emergency
+            else f"RUN  ${charged_cost}"
+            if allowed
+            else "CREDIT LIMIT",
             True,
             COLORS["background"],
         )

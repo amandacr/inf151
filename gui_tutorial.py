@@ -8,10 +8,12 @@ from gui_card_shop import CARD_SHOP_BASE_PRICE, CARD_SHOP_PRICE_STEP
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
 from Player import (
+    DEBT_LIMIT,
     DIAGNOSIS_REWARD,
     DRAW_COST,
     LIMITED_EVIDENCE_REWARD,
     MAX_TEST_HAND_SIZE,
+    NO_EVIDENCE_REWARD,
     RETURN_PASSAGE_COST,
     WRONG_DIAGNOSIS_PENALTY,
 )
@@ -616,8 +618,9 @@ class TutorialMixin:
             (
                 "CARD HAND",
                 (
-                    f"Random draws cost ${DRAW_COST}; max {MAX_TEST_HAND_SIZE}. "
-                    "Used/discarded cards leave; unused cards return."
+                    f"Draws ${DRAW_COST}  •  Max {MAX_TEST_HAND_SIZE}  •  "
+                    f"Floor -${abs(DEBT_LIMIT)}  •  unused cards return. "
+                    "Emergency Common test/patient."
                 ),
             ),
             (
@@ -631,8 +634,9 @@ class TutorialMixin:
             (
                 "DIAGNOSIS PAY",
                 (
-                    f"Correct: ${LIMITED_EVIDENCE_REWARD} limited evidence / "
-                    f"${DIAGNOSIS_REWARD} full evidence."
+                    f"Correct: ${NO_EVIDENCE_REWARD} with 0/2 clues, "
+                    f"${LIMITED_EVIDENCE_REWARD} with 1/2, "
+                    f"${DIAGNOSIS_REWARD} with 2/2."
                 ),
             ),
             (

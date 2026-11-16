@@ -35,10 +35,12 @@ from PlanetData import (
 )
 from Player import (
     CLINIC_OPERATING_FEE,
+    DEBT_LIMIT,
     DIAGNOSIS_REWARD,
     DRAW_COST,
     LIMITED_EVIDENCE_REWARD,
     MAX_TEST_HAND_SIZE,
+    NO_EVIDENCE_REWARD,
     PATIENT_WALKOUT_THRESHOLD,
     PERFECT_DAY_BONUS,
     RETURN_PASSAGE_COST,
@@ -46,6 +48,7 @@ from Player import (
     STARTING_TEST_HAND_SIZE,
     WRONG_DIAGNOSIS_PENALTY,
     Player,
+    get_diagnosis_reward,
 )
 from Tests.AllergyTest import AllergyTest
 from Tests.BloodChemistryTest import BloodChemistryTest
@@ -81,7 +84,7 @@ from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
 from gui_results import ResultsMixin
 from gui_shop import SHOP_UPGRADES, ShopMixin
-from gui_theme import TEST_SUBTITLES, WINDOW_SIZE
+from gui_theme import COLORS, TEST_SUBTITLES, WINDOW_SIZE
 from gui_tutorial import TutorialMixin
 from RouteController import RouteController, ShiftPerformance
 
@@ -1866,7 +1869,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.daily_card_shop_purchases, 2)
         self.assertEqual(self.game.get_card_shop_price(), 20)
 
-    def test_card_shop_blocks_full_hand_sold_out_stock_and_low_funds(self):
+    def test_card_shop_blocks_full_hand_sold_out_stock_and_credit_limit(self):
         """Failed targeted purchases must never consume cards or charge money."""
 
         selected = self.game.card_shop_catalog[0]
@@ -1897,12 +1900,16 @@ class GuiFlowSmokeTests(unittest.TestCase):
             if self.game.get_card_shop_inventory_count(test.name)
         )
         self.game.selected_card_shop_test = available.name
-        self.game.player.balance = CARD_SHOP_BASE_PRICE - 1
+        self.game.player.balance = DEBT_LIMIT + CARD_SHOP_BASE_PRICE - 1
         deck_before = len(self.game.deck.contents)
         self.assertFalse(self.game.purchase_selected_card_shop_test())
         self.assertEqual(len(self.game.deck.contents), deck_before)
         self.assertEqual(self.game.daily_card_shop_expenses, 0)
-        self.assertIn("Need $1 More", self.game.card_shop_message)
+        self.assertIn("Credit Limit -$50", self.game.card_shop_message)
+
+        self.game.player.balance = DEBT_LIMIT + CARD_SHOP_BASE_PRICE
+        self.assertTrue(self.game.purchase_selected_card_shop_test())
+        self.assertEqual(self.game.get_live_balance(), DEBT_LIMIT)
 
     def test_card_shop_explains_every_test_and_draw_stack_stays_in_its_tray(self):
         """Every shop option needs guidance and every deck layer must remain clipped."""
@@ -2201,7 +2208,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.daily_correct_diagnoses = len(self.game.waiting_room_queue)
         self.assertEqual(
             self.game.get_daily_pay_breakdown()[3],
-            len(self.game.waiting_room_queue) * LIMITED_EVIDENCE_REWARD
+            len(self.game.waiting_room_queue) * NO_EVIDENCE_REWARD
             - get_test_cost(first_test)
             - CLINIC_OPERATING_FEE,
         )
@@ -2309,6 +2316,58 @@ class GuiFlowSmokeTests(unittest.TestCase):
             starting_balance - DRAW_COST,
         )
 
+    def test_money_formatting_and_clinic_credit_limit(self):
+        """Debt uses -$ formatting, warning color, and a -$50 spending floor."""
+
+        self.assertEqual(self.game.format_money(-5), "-$5")
+        self.assertEqual(self.game.format_money(5), "$5")
+        self.assertEqual(self.game.get_balance_color(-5), (245, 130, 115))
+        self.assertEqual(self.game.get_balance_color(0), COLORS["accent"])
+
+        self.game.player.balance = DEBT_LIMIT + DRAW_COST
+        self.assertTrue(self.game.can_spend_clinic_funds(DRAW_COST))
+        self.game.player.balance = DEBT_LIMIT + DRAW_COST - 1
+        self.assertFalse(self.game.can_spend_clinic_funds(DRAW_COST))
+
+    def test_credit_limit_provides_one_emergency_basic_test(self):
+        """A stuck patient receives one free Common card/run, but not unlimited aid."""
+
+        self.game.player.balance = DEBT_LIMIT
+        self.game.player.test_hand = [
+            card
+            for card in self.game.player.test_hand
+            if card.value.rarity != "Common"
+        ]
+        self.game.deck.contents = [
+            card
+            for card in self.game.deck.contents
+            if card.value.rarity != "Common"
+        ]
+        hand_before = len(self.game.player.test_hand)
+        expenses_before = self.game.daily_draw_expenses
+
+        self.assertTrue(self.game.draw_card_from_pile())
+        self.assertEqual(len(self.game.player.test_hand), hand_before + 1)
+        emergency_card = self.game.player.test_hand[-1]
+        self.assertEqual(emergency_card.value.rarity, "Common")
+        self.assertEqual(self.game.daily_draw_expenses, expenses_before)
+        self.assertTrue(self.game.emergency_test_granted)
+        self.assertFalse(self.game.emergency_test_used)
+        self.assertIn("EMERGENCY BASIC CARD", self.game.card_draw_notice)
+        self.assertFalse(self.game.draw_card_from_pile())
+
+        self.game.selected_card_index = len(self.game.player.test_hand) - 1
+        self.assertFalse(self.game.discard_selected_test())
+        self.assertIn("CANNOT DISCARD", self.game.card_draw_notice)
+        self.assertTrue(self.game.run_selected_test())
+        self.assertEqual(self.game.last_test_cost, 0)
+        self.assertTrue(self.game.emergency_test_used)
+        self.assertEqual(self.game.get_live_balance(), DEBT_LIMIT)
+
+        allowed, _, emergency = self.game.get_test_charge_state(emergency_card.value)
+        self.assertFalse(allowed)
+        self.assertFalse(emergency)
+
     def test_paid_draw_reveals_test_hand_and_full_hand_blocks_extra_charge(self):
         """Drawn cards stay visible, while a full readable hand refuses the draw."""
 
@@ -2377,7 +2436,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.player.balance, STARTING_BALANCE)
         self.assertEqual(STARTING_BALANCE, 100)
         self.assertEqual(DIAGNOSIS_REWARD, 50)
-        self.assertEqual(LIMITED_EVIDENCE_REWARD, 10)
+        self.assertEqual(NO_EVIDENCE_REWARD, 5)
+        self.assertEqual(LIMITED_EVIDENCE_REWARD, 20)
         self.assertEqual(WRONG_DIAGNOSIS_PENALTY, 35)
         self.assertEqual(CLINIC_OPERATING_FEE, 50)
 
@@ -2409,10 +2469,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(
             self.game.get_daily_pay_breakdown(),
             (
-                patient_count * LIMITED_EVIDENCE_REWARD,
+                patient_count * NO_EVIDENCE_REWARD,
                 0,
                 0,
-                patient_count * LIMITED_EVIDENCE_REWARD
+                patient_count * NO_EVIDENCE_REWARD
                 - CLINIC_OPERATING_FEE,
             ),
         )
@@ -2550,7 +2610,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertFalse(self.game.last_diagnosis_supported)
         self.assertEqual(
             self.game.get_daily_pay_breakdown()[0],
-            LIMITED_EVIDENCE_REWARD,
+            get_diagnosis_reward(
+                self.game.last_diagnosis_evidence_count,
+                self.game.last_diagnosis_evidence_total,
+            ),
         )
 
         self.game.draw()
@@ -2606,6 +2669,35 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.daily_evidence_cases, 1)
         self.assertEqual(self.game.get_daily_pay_breakdown()[0], DIAGNOSIS_REWARD)
         self.game.draw()
+
+    def test_correct_diagnosis_pay_has_three_evidence_tiers(self):
+        """Zero, one, and two collected clues pay $5, $20, and $50."""
+
+        self.assertEqual(get_diagnosis_reward(0, 2), NO_EVIDENCE_REWARD)
+        self.assertEqual(get_diagnosis_reward(1, 2), LIMITED_EVIDENCE_REWARD)
+        self.assertEqual(get_diagnosis_reward(2, 2), DIAGNOSIS_REWARD)
+
+        self.game.notebook.add_test(
+            self.game.patient,
+            "TEMPERATURE",
+            "Current temperature is below the species baseline.",
+        )
+        self.game.switch_active_hand(True)
+        self.game.selected_card_index = next(
+            index
+            for index, card in enumerate(self.game.player.diagnosis_hand)
+            if card.value == self.game.patient.diagnosis
+        )
+        self.game.play_selected_diagnosis()
+
+        self.assertTrue(self.game.diagnosis_correct)
+        self.assertFalse(self.game.last_diagnosis_supported)
+        self.assertEqual(self.game.last_diagnosis_evidence_count, 1)
+        self.assertEqual(self.game.daily_partial_evidence_cases, 1)
+        self.assertEqual(
+            self.game.get_daily_pay_breakdown()[0],
+            LIMITED_EVIDENCE_REWARD,
+        )
 
     def test_incorrect_diagnosis_returns_to_test_hand(self):
         """A wrong diagnosis should be discarded before returning to test cards."""
@@ -2785,10 +2877,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(
             self.game.get_daily_pay_breakdown(),
             (
-                len(expected_names) * LIMITED_EVIDENCE_REWARD,
+                len(expected_names) * NO_EVIDENCE_REWARD,
                 0,
                 0,
-                len(expected_names) * LIMITED_EVIDENCE_REWARD
+                len(expected_names) * NO_EVIDENCE_REWARD
                 - CLINIC_OPERATING_FEE,
             ),
         )
@@ -2798,7 +2890,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(
             self.game.player.balance,
             starting_balance
-            + len(expected_names) * LIMITED_EVIDENCE_REWARD
+            + len(expected_names) * NO_EVIDENCE_REWARD
             - CLINIC_OPERATING_FEE,
         )
         paid_balance = self.game.player.balance
@@ -2971,10 +3063,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(
             self.game.get_daily_pay_breakdown(),
             (
-                len(self.game.waiting_room_queue) * LIMITED_EVIDENCE_REWARD,
+                len(self.game.waiting_room_queue) * NO_EVIDENCE_REWARD,
                 2 * WRONG_DIAGNOSIS_PENALTY,
                 0,
-                len(self.game.waiting_room_queue) * LIMITED_EVIDENCE_REWARD
+                len(self.game.waiting_room_queue) * NO_EVIDENCE_REWARD
                 - 2 * WRONG_DIAGNOSIS_PENALTY
                 - CLINIC_OPERATING_FEE,
             ),

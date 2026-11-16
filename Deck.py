@@ -48,6 +48,18 @@ class Deck:
             return None
         return self.contents.pop(self._random.choice(matching_indices))
 
+    def draw_rarity(self, rarity):
+        """Remove and return a random card of one rarity if one remains."""
+
+        matching_indices = [
+            index
+            for index, card in enumerate(self.contents)
+            if getattr(card.value, "rarity", None) == rarity
+        ]
+        if not matching_indices:
+            return None
+        return self.contents.pop(self._random.choice(matching_indices))
+
     def shuffle_cards(self, cards):
         """Shuffle a dealt group using the same session RNG as the deck."""
 

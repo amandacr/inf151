@@ -56,6 +56,7 @@ DEVELOPER_SNAPSHOT_FIELDS = (
     "daily_test_count",
     "daily_test_expenses",
     "daily_evidence_cases",
+    "daily_partial_evidence_cases",
     "daily_payout_applied",
     "daily_card_shop_expenses",
     "daily_card_shop_purchases",
@@ -91,9 +92,15 @@ DEVELOPER_SNAPSHOT_FIELDS = (
     "last_test_name",
     "last_test_result",
     "last_test_cost",
+    "last_test_was_emergency",
     "last_diagnosis",
     "diagnosis_correct",
     "last_diagnosis_supported",
+    "last_diagnosis_evidence_count",
+    "last_diagnosis_evidence_total",
+    "emergency_test_granted",
+    "emergency_test_used",
+    "emergency_test_card",
     "patient_left",
     "patient_leave_text",
     "patient_wrong_diagnoses",
@@ -229,8 +236,11 @@ class DeveloperMixin:
             self.daily_wrong_diagnoses,
             self.daily_test_count,
             self.daily_test_expenses,
+            self.daily_partial_evidence_cases,
             self.daily_card_shop_expenses,
             self.daily_draw_expenses,
+            self.emergency_test_granted,
+            self.emergency_test_used,
             self.route_briefing_seen,
             self.route_briefing_index,
             self.ending_duration,
@@ -553,6 +563,7 @@ class DeveloperMixin:
         self.daily_test_count = len(self.waiting_room_queue) * 2
         self.daily_test_expenses = 100
         self.daily_evidence_cases = len(self.waiting_room_queue)
+        self.daily_partial_evidence_cases = 0
         self.daily_payout_applied = False
 
     def prepare_developer_arrival_checkpoint(self):

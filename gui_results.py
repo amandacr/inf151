@@ -6,9 +6,8 @@ import pygame
 
 from gui_theme import COLORS, TEST_SUBTITLES, WINDOW_SIZE
 from Player import (
-    DIAGNOSIS_REWARD,
-    LIMITED_EVIDENCE_REWARD,
     WRONG_DIAGNOSIS_PENALTY,
+    get_diagnosis_reward,
 )
 
 
@@ -735,7 +734,9 @@ class ResultsMixin:
         self.screen.blit(warning, warning.get_rect(center=bin_rect.center))
         waste_title = self.card_font.render("CARD READY FOR MED-WASTE", True, COLORS["text"])
         waste_detail = self.card_font.render(
-            f"TEST COST ${self.last_test_cost} DEDUCTED  •  INCLUDED IN SHIFT RECAP",
+            "EMERGENCY CLINIC TEST  •  NO CHARGE"
+            if self.last_test_was_emergency
+            else f"TEST COST ${self.last_test_cost} DEDUCTED  •  INCLUDED IN SHIFT RECAP",
             True,
             COLORS["muted"],
         )
@@ -806,7 +807,9 @@ class ResultsMixin:
         badge_text = self.card_font.render(
             "FULL EVIDENCE"
             if supported
-            else "LIMITED EVIDENCE"
+            else "PARTIAL EVIDENCE"
+            if correct and self.last_diagnosis_evidence_count > 0
+            else "NO EVIDENCE"
             if correct
             else "PATIENT LEFT"
             if left
@@ -1135,10 +1138,9 @@ class ResultsMixin:
         pygame.draw.circle(self.screen, (255, 230, 150), coin_center, 17, width=2)
         coin = self.small_font.render("$", True, (80, 61, 36))
         self.screen.blit(coin, coin.get_rect(center=coin_center))
-        case_reward = (
-            DIAGNOSIS_REWARD
-            if self.last_diagnosis_supported
-            else LIMITED_EVIDENCE_REWARD
+        case_reward = get_diagnosis_reward(
+            self.last_diagnosis_evidence_count,
+            self.last_diagnosis_evidence_total,
         )
         reward_text = (
             f"PENDING CASE PAY  +${case_reward}"
@@ -1150,7 +1152,9 @@ class ResultsMixin:
             (
                 "FULL EVIDENCE RATE  •  PAID AT SHIFT END"
                 if correct and self.last_diagnosis_supported
-                else "LIMITED EVIDENCE RATE  •  PAID AT SHIFT END"
+                else "PARTIAL EVIDENCE RATE  •  PAID AT SHIFT END"
+                if correct and self.last_diagnosis_evidence_count > 0
+                else "NO-EVIDENCE RATE  •  PAID AT SHIFT END"
                 if correct
                 else "DEDUCTED FROM LIVE BALANCE"
             ),

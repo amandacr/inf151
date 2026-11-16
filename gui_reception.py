@@ -458,10 +458,11 @@ class ReceptionMixin:
         else:
             middle_text = f"PATIENTS WAITING: {waiting}"
         middle = self.small_font.render(middle_text, True, waiting_color)
+        displayed_balance = self.get_displayed_balance()
         right = self.body_font.render(
-            "MONEY: $" + str(self.get_displayed_balance()),
+            "MONEY: " + self.format_money(displayed_balance),
             True,
-            theme.sign_color,
+            self.get_balance_color(displayed_balance),
         )
         self.screen.blit(left, left.get_rect(midleft=(display.x + 29, display.centery)))
         self.screen.blit(middle, middle.get_rect(center=display.center))

@@ -5,9 +5,11 @@ from Test import get_test_cost as get_base_test_cost
 
 STARTING_BALANCE = 100
 DIAGNOSIS_REWARD = 50
-LIMITED_EVIDENCE_REWARD = 10
+LIMITED_EVIDENCE_REWARD = 20
+NO_EVIDENCE_REWARD = 5
 WRONG_DIAGNOSIS_PENALTY = 35
 DRAW_COST = 5
+DEBT_LIMIT = -50
 STARTING_TEST_HAND_SIZE = 5
 MAX_TEST_HAND_SIZE = 8
 PERFECT_DAY_BONUS = 25
@@ -15,6 +17,16 @@ CLINIC_OPERATING_FEE = 50
 RETURN_PASSAGE_COST = 400
 PATIENT_WALKOUT_THRESHOLD = 2
 PATIENT_LEAVES_CHANCE = 0.25
+
+
+def get_diagnosis_reward(evidence_count, evidence_total=2):
+    """Return case pay for zero, partial, or complete supporting evidence."""
+
+    if evidence_total > 0 and evidence_count >= evidence_total:
+        return DIAGNOSIS_REWARD
+    if evidence_count > 0:
+        return LIMITED_EVIDENCE_REWARD
+    return NO_EVIDENCE_REWARD
 
 PATIENT_LEAVES_TEXT = [
     "{name} lost confidence and left the clinic to seek a second opinion.",
@@ -95,8 +107,8 @@ class Player:
         return False
 
     def pay(self, amt):
-        # player can go into debt / negative money so no need to have a balance check
-        # just like real life!
+        # Penalties and shift settlement may create debt. Optional in-shift
+        # spending is guarded by the GUI's clinic credit limit.
         self.balance -= amt
 
     def earn(self, amt):

@@ -389,8 +389,11 @@ class ExaminationMixin:
         patient = self.body_font.render(
             "PATIENT: " + self.patient.name, True, COLORS["text"]
         )
+        displayed_balance = self.get_displayed_balance()
         money = self.body_font.render(
-            "MONEY: $" + str(self.get_displayed_balance()), True, COLORS["accent"]
+            "MONEY: " + self.format_money(displayed_balance),
+            True,
+            self.get_balance_color(displayed_balance),
         )
 
         self.screen.blit(

@@ -1191,10 +1191,11 @@ class EndingMixin:
             True,
             status_color,
         )
+        displayed_balance = self.get_displayed_balance()
         money_label = self.body_font.render(
-            f"MONEY: ${self.get_displayed_balance()}",
+            f"MONEY: {self.format_money(displayed_balance)}",
             True,
-            COLORS["accent"],
+            self.get_balance_color(displayed_balance),
         )
         self.screen.blit(day_label, day_label.get_rect(midleft=(display.x + 29, display.centery)))
         self.screen.blit(roster_label, roster_label.get_rect(center=display.center))

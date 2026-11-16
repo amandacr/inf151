@@ -7,9 +7,11 @@ import pygame
 from gui_theme import COLORS
 from Player import (
     CLINIC_OPERATING_FEE,
+    DEBT_LIMIT,
     DIAGNOSIS_REWARD,
     DRAW_COST,
     LIMITED_EVIDENCE_REWARD,
+    NO_EVIDENCE_REWARD,
     PERFECT_DAY_BONUS,
     RETURN_PASSAGE_COST,
     WRONG_DIAGNOSIS_PENALTY,
@@ -82,6 +84,36 @@ for _item in SHOP_UPGRADES:
 
 
 class ShopMixin:
+    def format_money(self, amount, include_plus=False):
+        """Format currency with the sign before the dollar symbol."""
+
+        amount = round(amount)
+        if amount < 0:
+            return f"-${abs(amount)}"
+        if include_plus and amount > 0:
+            return f"+${amount}"
+        return f"${amount}"
+
+    def get_balance_color(self, amount):
+        """Use warning red for debt and clinic green for non-negative money."""
+
+        return (245, 130, 115) if amount < 0 else COLORS["accent"]
+
+    def can_spend_clinic_funds(self, amount):
+        """Return whether an optional charge stays inside the clinic credit line."""
+
+        return amount <= 0 or self.get_live_balance() - amount >= DEBT_LIMIT
+
+    def get_test_charge_state(self, test):
+        """Return (allowed, charged cost, emergency) for one test run."""
+
+        normal_cost = self.player.get_test_cost(test)
+        if self.can_spend_clinic_funds(normal_cost):
+            return True, normal_cost, False
+        if test.rarity == "Common" and not self.emergency_test_used:
+            return True, 0, True
+        return False, normal_cost, False
+
     def has_return_passage(self):
         """Return whether the campaign has purchased transport back to Earth."""
 
@@ -182,10 +214,11 @@ class ShopMixin:
     def draw_modal_balance(self, header, status_badge):
         """Keep live money feedback visible above full-screen result panels."""
 
+        displayed_balance = self.get_displayed_balance()
         balance = self.small_font.render(
-            f"MONEY  ${self.get_displayed_balance()}",
+            f"MONEY  {self.format_money(displayed_balance)}",
             True,
-            COLORS["accent"],
+            self.get_balance_color(displayed_balance),
         )
         anchor = (status_badge.x - 18, header.y + 23)
         self.screen.blit(balance, balance.get_rect(midright=anchor))
@@ -248,9 +281,9 @@ class ShopMixin:
             credit_mark.get_rect(center=(balance_badge.x + 22, balance_badge.centery)),
         )
         balance = self.small_font.render(
-            f"CREDITS  {self.player.balance}",
+            f"MONEY  {self.format_money(self.player.balance)}",
             True,
-            (232, 211, 242),
+            self.get_balance_color(self.player.balance),
         )
         self.screen.blit(balance, balance.get_rect(center=(balance_badge.centerx + 10, balance_badge.centery)))
 
@@ -310,7 +343,10 @@ class ShopMixin:
         label_text = (
             "RETURN PASSAGE SECURED"
             if secured
-            else f"RETURN PASSAGE  ${self.player.balance} / ${RETURN_PASSAGE_COST}"
+            else (
+                f"RETURN PASSAGE  {self.format_money(self.player.balance)} / "
+                f"{self.format_money(RETURN_PASSAGE_COST)}"
+            )
         )
         label = self.compact_ui_font.render(label_text, True, accent)
         self.screen.blit(label, label.get_rect(center=(badge.centerx, badge.y + 12)))
@@ -406,15 +442,25 @@ class ShopMixin:
             self.daily_evidence_cases,
             self.daily_correct_diagnoses,
         )
-        limited_cases = self.daily_correct_diagnoses - supported_cases
+        partial_cases = min(
+            self.daily_partial_evidence_cases,
+            self.daily_correct_diagnoses - supported_cases,
+        )
+        no_evidence_cases = (
+            self.daily_correct_diagnoses - supported_cases - partial_cases
+        )
         care_parts = []
         if supported_cases:
             care_parts.append(
-                f"{supported_cases} supported × ${DIAGNOSIS_REWARD}"
+                f"{supported_cases} full × ${DIAGNOSIS_REWARD}"
             )
-        if limited_cases:
+        if partial_cases:
             care_parts.append(
-                f"{limited_cases} limited × ${LIMITED_EVIDENCE_REWARD}"
+                f"{partial_cases} partial × ${LIMITED_EVIDENCE_REWARD}"
+            )
+        if no_evidence_cases:
+            care_parts.append(
+                f"{no_evidence_cases} no-clue × ${NO_EVIDENCE_REWARD}"
             )
         care_detail = "  •  ".join(care_parts) or "No confirmed cases"
         if self.daily_patients_lost:
@@ -458,7 +504,7 @@ class ShopMixin:
                     "Every case supported by test evidence"
                     if bonus
                     else (
-                        f"Test evidence recorded for {self.daily_evidence_cases}/"
+                        f"Full evidence recorded for {self.daily_evidence_cases}/"
                         f"{len(self.waiting_room_queue)} cases"
                     )
                 ),
@@ -525,14 +571,14 @@ class ShopMixin:
             current_balance = self.get_live_balance()
             resulting_balance = current_balance + remaining_pay
         current = self.card_font.render(
-            f"LIVE BALANCE  ${current_balance}",
+            f"LIVE BALANCE  {self.format_money(current_balance)}",
             True,
-            COLORS["muted"],
+            self.get_balance_color(current_balance),
         )
         resulting = self.small_font.render(
-            f"AFTER PAY & OVERHEAD  ${resulting_balance}",
+            f"AFTER PAY & OVERHEAD  {self.format_money(resulting_balance)}",
             True,
-            COLORS["accent"],
+            self.get_balance_color(resulting_balance),
         )
         arrow_width = 28
         balance_group_width = current.get_width() + arrow_width + resulting.get_width() + 34
@@ -610,10 +656,17 @@ class ShopMixin:
             self.daily_evidence_cases,
             self.daily_correct_diagnoses,
         )
-        limited_cases = self.daily_correct_diagnoses - supported_cases
+        partial_cases = min(
+            self.daily_partial_evidence_cases,
+            self.daily_correct_diagnoses - supported_cases,
+        )
+        no_evidence_cases = (
+            self.daily_correct_diagnoses - supported_cases - partial_cases
+        )
         base_pay = (
             supported_cases * DIAGNOSIS_REWARD
-            + limited_cases * LIMITED_EVIDENCE_REWARD
+            + partial_cases * LIMITED_EVIDENCE_REWARD
+            + no_evidence_cases * NO_EVIDENCE_REWARD
         )
         penalties = self.daily_wrong_diagnoses * WRONG_DIAGNOSIS_PENALTY
         perfect_day = (
