@@ -24,12 +24,106 @@ from Player import (
 )
 
 class CardMixin:
+    CARD_SORT_MODES = ("type", "rarity", "cost")
+    CARD_RARITY_ORDER = {"Common": 0, "Uncommon": 1, "Rare": 2}
+
     def get_active_hand(self):
         """Return whichever card hand is currently displayed in the center panel."""
 
         if self.showing_diagnosis_hand:
             return self.player.diagnosis_hand
         return self.player.test_hand
+
+
+    def get_card_display_groups(self):
+        """Return visible card groups without changing the physical hand."""
+
+        active_hand = self.get_active_hand()
+        if self.showing_diagnosis_hand:
+            return [
+                {"card": card, "indices": [index], "count": 1}
+                for index, card in enumerate(active_hand)
+            ]
+
+        grouped = {}
+        for index, card in enumerate(active_hand):
+            name = card.value.name
+            group = grouped.setdefault(
+                name,
+                {"card": card, "indices": [], "count": 0},
+            )
+            group["indices"].append(index)
+            group["count"] += 1
+
+        for group in grouped.values():
+            emergency_indices = [
+                index
+                for index in group["indices"]
+                if active_hand[index] is self.emergency_test_card
+            ]
+            if emergency_indices:
+                emergency_index = emergency_indices[0]
+                group["indices"].remove(emergency_index)
+                group["indices"].insert(0, emergency_index)
+                group["card"] = active_hand[emergency_index]
+
+        mode = getattr(self, "card_sort_mode", "type")
+
+        def sort_key(group):
+            test = group["card"].value
+            name = test.name.casefold()
+            rarity = self.CARD_RARITY_ORDER.get(test.rarity, 99)
+            cost = self.player.get_test_cost(test)
+            if mode == "rarity":
+                return rarity, name, cost
+            if mode == "cost":
+                return cost, rarity, name
+            return name, rarity, cost
+
+        return sorted(grouped.values(), key=sort_key)
+
+
+    def get_display_index_for_hand_index(self, hand_index):
+        """Map one physical hand index to its visible stack position."""
+
+        for display_index, group in enumerate(self.card_display_groups):
+            if hand_index in group["indices"]:
+                return display_index
+        return None
+
+
+    def get_card_rect_for_hand_index(self, hand_index):
+        """Return the resting card rectangle for one physical hand card."""
+
+        display_index = self.get_display_index_for_hand_index(hand_index)
+        if display_index is None:
+            self.refresh_hand_layout()
+            display_index = self.get_display_index_for_hand_index(hand_index)
+        if display_index is None or display_index >= len(self.card_rects):
+            return None
+        return self.card_rects[display_index]
+
+
+    def get_card_sort_button(self):
+        """Return the compact sort control inside the Available Tests tray."""
+
+        tray = self.layout["active_hand"].inflate(-8, -8)
+        tray.y += 3
+        return pygame.Rect(tray.right - 104, tray.y + 5, 78, 24)
+
+
+    def cycle_card_sort_mode(self):
+        """Cycle test stacks through type, rarity, and operating-cost order."""
+
+        current = getattr(self, "card_sort_mode", "type")
+        index = self.CARD_SORT_MODES.index(current)
+        self.card_sort_mode = self.CARD_SORT_MODES[
+            (index + 1) % len(self.CARD_SORT_MODES)
+        ]
+        self.selected_card_index = None
+        self.hovered_card_index = None
+        self.refresh_hand_layout()
+        self.play_sfx("button")
 
 
     def switch_active_hand(self, show_diagnoses):
@@ -85,10 +179,11 @@ class CardMixin:
     def refresh_hand_layout(self):
         """Recalculate positions after player.draw, play, discard, or a hand switch."""
 
-        self.card_rects = self.calculate_hand_layout(len(self.get_active_hand()))
+        self.card_display_groups = self.get_card_display_groups()
+        self.card_rects = self.calculate_hand_layout(len(self.card_display_groups))
         if (
             self.selected_card_index is not None
-            and self.selected_card_index >= len(self.card_rects)
+            and self.get_display_index_for_hand_index(self.selected_card_index) is None
         ):
             self.selected_card_index = None
 
@@ -96,7 +191,7 @@ class CardMixin:
     def build_card_rects(self):
         """Return the current hand layout for compatibility with earlier GUI code."""
 
-        return self.calculate_hand_layout(len(self.get_active_hand()))
+        return self.calculate_hand_layout(len(self.get_card_display_groups()))
 
 
     def handle_card_click(self, position):
@@ -130,7 +225,7 @@ class CardMixin:
 
         index = self.get_hovered_card_index(position)
         if index is not None:
-            self.selected_card_index = index
+            self.selected_card_index = self.card_display_groups[index]["indices"][0]
             self.play_sfx("card_select")
             return
 
@@ -286,8 +381,11 @@ class CardMixin:
         """Return the larger rectangle used to display a selected test card."""
 
         preview = pygame.Rect(0, 0, 220, 218)
+        display_index = self.get_display_index_for_hand_index(index)
+        if display_index is None:
+            display_index = index
         preview.midbottom = (
-            self.card_rects[index].centerx,
+            self.card_rects[display_index].centerx,
             self.layout["active_hand"].bottom - 5,
         )
         panel = self.layout["active_hand"]
@@ -457,6 +555,9 @@ class CardMixin:
         )
         self.draw_centered_label(hand_name, name_plate, name_plate.centery)
 
+        if not self.showing_diagnosis_hand:
+            self.draw_card_sort_control()
+
         for light_x, light_color in (
             (tray.x + 18, COLORS["accent"]),
             (tray.x + 29, (79, 151, 235)),
@@ -466,12 +567,20 @@ class CardMixin:
             pygame.draw.circle(self.screen, (8, 14, 21), (light_x, tray.y + 17), 4)
             pygame.draw.circle(self.screen, light_color, (light_x, tray.y + 17), 2)
 
-        active_hand = self.get_active_hand()
-        # Future draw-card code can update the hand data without managing coordinates.
-        if len(self.card_rects) != len(active_hand):
+        current_groups = self.get_card_display_groups()
+        current_signature = [
+            (group["card"].value.name, tuple(group["indices"]))
+            for group in current_groups
+        ]
+        stored_signature = [
+            (group["card"].value.name, tuple(group["indices"]))
+            for group in self.card_display_groups
+        ]
+        if current_signature != stored_signature:
             self.refresh_hand_layout()
+        groups = self.card_display_groups
 
-        if not active_hand:
+        if not groups:
             empty_text = (
                 "NO DIAGNOSIS CARDS"
                 if self.showing_diagnosis_hand
@@ -488,26 +597,97 @@ class CardMixin:
             else self.get_hovered_card_index(mouse_position)
         )
 
-        for index, card in enumerate(active_hand):
-            if index == self.selected_card_index or index == self.hovered_card_index:
+        selected_display_index = (
+            None
+            if self.selected_card_index is None
+            else self.get_display_index_for_hand_index(self.selected_card_index)
+        )
+
+        for index, group in enumerate(groups):
+            if index == selected_display_index or index == self.hovered_card_index:
                 continue
-            self.draw_hand_card(card, self.card_rects[index])
+            self.draw_duplicate_stack_layers(self.card_rects[index], group["count"])
+            self.draw_hand_card(group["card"], self.card_rects[index])
+            self.draw_duplicate_badge(self.card_rects[index], group["count"])
             if self.selected_card_index is not None:
                 self.draw_card_dimming_overlay(self.card_rects[index])
 
         if self.hovered_card_index is not None:
             hovered_rect = self.get_hovered_card_rect(self.card_rects[self.hovered_card_index])
+            hovered_group = groups[self.hovered_card_index]
+            self.draw_duplicate_stack_layers(hovered_rect, hovered_group["count"])
             self.draw_hand_card(
-                active_hand[self.hovered_card_index], hovered_rect, hovered=True
+                hovered_group["card"], hovered_rect, hovered=True
             )
+            self.draw_duplicate_badge(hovered_rect, hovered_group["count"])
 
         if self.selected_card_index is not None:
-            selected_card = active_hand[self.selected_card_index]
+            selected_group = groups[selected_display_index]
+            selected_card = selected_group["card"]
             selected_rect = self.get_selected_card_rect(self.selected_card_index)
+            self.draw_duplicate_stack_layers(selected_rect, selected_group["count"])
             if self.showing_diagnosis_hand:
                 self.draw_diagnosis_card(selected_card, selected_rect, selected=True)
             else:
                 self.draw_test_card(selected_card, selected_rect, selected=True)
+                self.draw_duplicate_badge(
+                    selected_rect,
+                    selected_group["count"],
+                    selected=True,
+                )
+
+
+    def draw_card_sort_control(self):
+        """Draw the test-hand sorting button without competing with card titles."""
+
+        rect = self.get_card_sort_button()
+        hovered = rect.collidepoint(self.get_mouse_position())
+        border = COLORS["accent"] if hovered else (112, 119, 142)
+        fill = (31, 58, 61) if hovered else (26, 35, 48)
+        pygame.draw.rect(self.screen, (3, 8, 13), rect.move(2, 2), border_radius=6)
+        pygame.draw.rect(self.screen, fill, rect, border_radius=6)
+        pygame.draw.rect(self.screen, border, rect, width=1, border_radius=6)
+        label = self.legible_micro_font.render(
+            f"SORT: {self.card_sort_mode.upper()}",
+            True,
+            COLORS["text"],
+        )
+        self.screen.blit(label, label.get_rect(center=rect.center))
+
+
+    def draw_duplicate_stack_layers(self, card_rect, count):
+        """Show up to two offset card edges behind a duplicate stack."""
+
+        for layer in reversed(range(1, min(count, 3))):
+            layer_rect = card_rect.move(layer * 4, -layer * 3)
+            pygame.draw.polygon(
+                self.screen,
+                (35, 27, 47),
+                self.get_card_shape_points(layer_rect, 7),
+            )
+            pygame.draw.polygon(
+                self.screen,
+                (187, 137, 211),
+                self.get_card_shape_points(layer_rect, 7),
+                width=1,
+            )
+
+
+    def draw_duplicate_badge(self, card_rect, count, selected=False):
+        """Label one visible test card with the number of physical copies."""
+
+        if count <= 1:
+            return
+        badge = pygame.Rect(0, 0, 30 if selected else 25, 18 if selected else 16)
+        if selected:
+            badge.topleft = (card_rect.x + 57, card_rect.y + 67)
+        else:
+            badge.topright = (card_rect.right - 4, card_rect.y + 40)
+        pygame.draw.rect(self.screen, (49, 31, 66), badge, border_radius=7)
+        pygame.draw.rect(self.screen, (216, 159, 238), badge, width=2, border_radius=7)
+        font = self.card_font if selected else self.legible_micro_font
+        label = font.render(f"×{count}", True, (244, 225, 250))
+        self.screen.blit(label, label.get_rect(center=badge.center))
 
 
     def get_hovered_card_rect(self, card_rect):

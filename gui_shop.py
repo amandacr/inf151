@@ -84,6 +84,12 @@ for _item in SHOP_UPGRADES:
 
 
 class ShopMixin:
+    def format_count(self, count, singular, plural=None):
+        """Return a count with grammatically correct singular/plural wording."""
+
+        noun = singular if count == 1 else (plural or singular + "s")
+        return f"{count} {noun}"
+
     def format_money(self, amount, include_plus=False):
         """Format currency with the sign before the dollar symbol."""
 
@@ -486,8 +492,9 @@ class ShopMixin:
             (
                 "DIAGNOSTIC & CARD COSTS",
                 (
-                    f"{self.daily_test_count} tests  •  {cards_drawn} random draws  •  "
-                    f"{self.daily_card_shop_purchases} shop cards"
+                    f"{self.format_count(self.daily_test_count, 'test')}  •  "
+                    f"{self.format_count(cards_drawn, 'random draw')}  •  "
+                    f"{self.format_count(self.daily_card_shop_purchases, 'shop card')}"
                 ),
                 f"-${diagnostic_costs}",
                 (117, 190, 255),
@@ -504,8 +511,8 @@ class ShopMixin:
                     "Every case supported by test evidence"
                     if bonus
                     else (
-                        f"Full evidence recorded for {self.daily_evidence_cases}/"
-                        f"{len(self.waiting_room_queue)} cases"
+                        f"Fully supported cases: {self.daily_evidence_cases}/"
+                        f"{len(self.waiting_room_queue)}"
                     )
                 ),
                 f"+${bonus}",

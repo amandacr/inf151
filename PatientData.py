@@ -176,7 +176,7 @@ def create_zorpa():
             "X-RAY": "X-ray imaging found no fractures or visible bone damage.",
             "ULTRASOUND": "Ultrasound imaging found no unusual internal changes.",
             "ALLERGY": "Allergy screening produced no reaction.",
-            "BLOOD CHEMISTRY": "Lava-blood viscosity is elevated and metabolic activity is below the Bloopiter baseline.",
+            "BLOOD CHEMISTRY": "Lava-blood viscosity remains within the safe range, but metabolic activity and thermal-energy production are below baseline.",
             "OXYGEN SCAN": "Thermal-lung exchange is slightly slowed, with no respiratory obstruction detected.",
             "TOXIN SCREEN": "No toxic or foreign compounds were detected in the patient sample.",
             "NEURAL SCAN": "Continuous shivering reflexes are firing, but the neural pathways remain stable.",

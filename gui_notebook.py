@@ -747,15 +747,7 @@ class NotebookMixin:
         """Draw one labeled patient-information card and return its bottom edge."""
 
         body_h = self.notebook_body_font.get_linesize()
-        rows = []
-        for label, value in items:
-            rows.extend(
-                self.wrap_text(
-                    f"{label}: {value}",
-                    self.notebook_body_font,
-                    rect.width - 42,
-                )
-            )
+        rows = self.get_notebook_info_rows(items, rect.width - 42)
         section = pygame.Rect(rect.x, y, rect.width, 36 + len(rows) * body_h + 8)
         pygame.draw.rect(self.screen, (231, 227, 204), section, border_radius=8)
         pygame.draw.rect(self.screen, accent, section, width=2, border_radius=8)
@@ -773,17 +765,18 @@ class NotebookMixin:
         )
 
         row_y = title_bar.bottom + 6
-        for row_index, row in enumerate(rows):
-            pygame.draw.circle(
-                self.screen,
-                accent,
-                (section.x + 15, row_y + body_h // 2),
-                3,
-            )
+        for row_index, (row, starts_item, ends_item) in enumerate(rows):
+            if starts_item:
+                pygame.draw.circle(
+                    self.screen,
+                    accent,
+                    (section.x + 15, row_y + body_h // 2),
+                    3,
+                )
             surface = self.notebook_body_font.render(row, True, (72, 91, 84))
             self.screen.blit(surface, (section.x + 25, row_y))
             row_y += body_h
-            if row_index < len(rows) - 1:
+            if ends_item and row_index < len(rows) - 1:
                 pygame.draw.line(
                     self.screen,
                     (205, 201, 180),
@@ -791,6 +784,26 @@ class NotebookMixin:
                     (section.right - 12, row_y - 2),
                 )
         return section.bottom
+
+    def get_notebook_info_rows(self, items, width):
+        """Wrap ID fields while keeping one bullet and divider per field."""
+
+        rows = []
+        for label, value in items:
+            wrapped = self.wrap_text(
+                f"{label}: {value}",
+                self.notebook_body_font,
+                width,
+            )
+            for line_index, line in enumerate(wrapped):
+                rows.append(
+                    (
+                        line,
+                        line_index == 0,
+                        line_index == len(wrapped) - 1,
+                    )
+                )
+        return rows
 
     def build_notebook_columns(self):
         """Split the patient's test entries into page-sized columns."""
@@ -849,6 +862,12 @@ class NotebookMixin:
         self.notebook_spread = 0
         self.state = GameState.NOTEBOOK
 
+    def close_notebook(self):
+        """Close Patient Notes before Escape is allowed to open the exit menu."""
+
+        self.play_sfx("button")
+        self.state = GameState.PATIENT
+
     def flip_notebook(self, direction):
         """Move one notebook spread left or right when the destination exists."""
 
@@ -860,8 +879,7 @@ class NotebookMixin:
         """Handle notebook close and page-navigation button clicks."""
 
         if self.notebook_layout["close"].collidepoint(position):
-            self.play_sfx("button")
-            self.state = GameState.PATIENT
+            self.close_notebook()
         elif self.notebook_layout["prev"].collidepoint(position):
             self.play_sfx("button")
             self.flip_notebook(-1)

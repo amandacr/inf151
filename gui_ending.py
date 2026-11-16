@@ -548,32 +548,31 @@ class EndingMixin:
         elapsed = 0 if self.ending_started_at is None else pygame.time.get_ticks() - self.ending_started_at
         if progress < 0.32:
             self.draw_space_background(elapsed)
-            planet = pygame.Surface((440, 440), pygame.SRCALPHA)
-            pygame.draw.circle(planet, (65, 132, 169), (220, 220), 207)
-            for points in (((165, 40), (264, 64), (293, 127), (244, 155), (256, 206), (190, 228), (149, 157), (99, 125)),
-                           ((300, 246), (379, 227), (411, 289), (370, 359), (289, 386), (258, 325)),
-                           ((57, 255), (118, 237), (164, 288), (120, 346), (72, 331))):
-                pygame.draw.polygon(planet, (94, 151, 112), points)
-            for rect in ((100, 93, 182, 18), (220, 190, 160, 14), (66, 330, 159, 12)):
-                pygame.draw.ellipse(planet, (208, 220, 208, 170), rect)
-            pygame.draw.circle(planet, (156, 193, 198), (220, 220), 210, width=4)
-            self.screen.blit(planet, (570, 100))
+            self.draw_homecoming_earth((790, 320), elapsed)
             t = progress / 0.32
             self.draw_approaching_ufo((round(120 + 520 * t), round(250 + 30 * t)), 0.28 - 0.17 * t, elapsed)
-            label = self.small_font.render("One last flight.", True, (208, 216, 225))
-            self.screen.blit(label, label.get_rect(center=(550, 600)))
+            self.draw_homecoming_status(
+                "EARTH APPROACH  //  HOME SIGNAL ACQUIRED",
+                (550, 603),
+            )
             return
 
-        # Dusk on the home planet. Broad, quiet shapes match the clinic artwork.
-        self.screen.fill((39, 47, 67))
-        pygame.draw.rect(self.screen, (78, 77, 86), (0, 240, 1100, 200))
-        pygame.draw.circle(self.screen, (194, 190, 164), (949, 125), 32)
-        for x, y in ((97, 88), (245, 132), (480, 63), (772, 79), (1030, 199)):
-            pygame.draw.circle(self.screen, (168, 176, 188), (x, y), 1)
-        for x, y, w in ((0, 337, 150), (140, 315, 125), (930, 325, 180)):
-            pygame.draw.rect(self.screen, (49, 58, 64), (x, y, w, 128))
-            pygame.draw.polygon(self.screen, (37, 46, 54), ((x - 10, y), (x + w // 2, y - 65), (x + w + 10, y)))
+        # The familiar landscape is richer than the clinic windows, but the
+        # neglected house remains the emotional center of the reveal.
+        self.draw_homecoming_night_sky(elapsed)
+        self.draw_homecoming_horizon()
         pygame.draw.rect(self.screen, (54, 64, 57), (0, 429, 1100, 221))
+        for index in range(42):
+            x = (index * 91 + 27) % WINDOW_SIZE[0]
+            y = 447 + (index * 37) % 188
+            color = (62 + index % 3 * 4, 75 + index % 4 * 3, 61)
+            pygame.draw.line(
+                self.screen,
+                color,
+                (x, y),
+                (x + (index % 5) - 2, y - 6 - index % 8),
+                width=1,
+            )
         pygame.draw.ellipse(self.screen, (44, 53, 49), (480, 482, 535, 90))
         # The house: sagging roof, peeling boards, boarded window and dim porch.
         house = pygame.Rect(602, 303, 331, 203)
@@ -620,11 +619,295 @@ class EndingMixin:
         eased = 1 - (1 - t) ** 3
         x = round(-190 + 570 * eased)
         y = round(140 + 302 * eased)
+        if t > 0.42:
+            beam = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+            beam_alpha = round(68 * min(1.0, (t - 0.42) / 0.35))
+            pygame.draw.polygon(
+                beam,
+                (119, 223, 214, beam_alpha),
+                ((x - 34, y + 18), (x + 34, y + 18), (x + 105, 532), (x - 105, 532)),
+            )
+            pygame.draw.ellipse(
+                beam,
+                (132, 233, 208, beam_alpha + 18),
+                pygame.Rect(x - 112, 503, 224, 45),
+            )
+            self.screen.blit(beam, (0, 0))
         pygame.draw.ellipse(self.screen, (39, 49, 45), (x - 130, 521, 260, 29))
         self.draw_approaching_ufo((x, y), 0.32, elapsed if t < 1 else 0)
+        if t > 0.55:
+            for particle_index in range(12):
+                angle = particle_index * 0.82 + elapsed / 850
+                distance = 32 + particle_index * 7
+                particle_x = round(x + math.cos(angle) * distance)
+                particle_y = round(518 - abs(math.sin(angle)) * (9 + particle_index % 4 * 3))
+                pygame.draw.circle(
+                    self.screen,
+                    (132, 145, 116),
+                    (particle_x, particle_y),
+                    1 + particle_index % 2,
+                )
         if progress > 0.82 and not finished:
-            label = self.small_font.render("Home.", True, (220, 211, 186))
-            self.screen.blit(label, label.get_rect(center=(550, 605)))
+            self.draw_homecoming_status("HOME  //  AFTER ALL THIS TIME", (550, 605))
+
+    def draw_homecoming_earth(self, center, elapsed):
+        """Draw a softly lit Earth with layered land, clouds, and atmosphere."""
+
+        radius = 207
+        diameter = radius * 2
+        globe = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        globe_center = (radius, radius)
+
+        # Offset ocean layers provide spherical lighting instead of a flat
+        # blue disc. The final circular mask keeps every layer on the globe.
+        pygame.draw.circle(globe, (22, 65, 108), globe_center, radius)
+        ocean_shadow = (29, 86, 139)
+        ocean_light = (75, 157, 190)
+        for layer_radius in range(radius - 3, 34, -3):
+            light_amount = (radius - layer_radius) / (radius - 34)
+            layer_color = tuple(
+                round(shadow + (highlight - shadow) * light_amount)
+                for shadow, highlight in zip(ocean_shadow, ocean_light)
+            )
+            layer_center = (
+                radius - round(39 * light_amount),
+                radius - round(35 * light_amount),
+            )
+            pygame.draw.circle(globe, layer_color, layer_center, layer_radius)
+
+        land = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        # The home-facing side suggests the Americas, while a sliver of the
+        # opposite coast keeps the world from looking like one giant island.
+        north_america = (
+            (51, 101), (73, 72), (111, 52), (151, 48), (181, 66),
+            (193, 91), (174, 110), (168, 134), (143, 145), (127, 169),
+            (103, 162), (90, 143), (68, 137), (62, 118),
+        )
+        central_america = ((126, 158), (153, 157), (164, 173), (151, 190), (135, 181))
+        south_america = (
+            (143, 181), (172, 191), (191, 215), (185, 240), (170, 260),
+            (164, 291), (142, 335), (125, 313), (128, 282), (112, 251),
+            (119, 220), (132, 203),
+        )
+        greenland = ((166, 39), (195, 24), (219, 38), (207, 67), (180, 73))
+        eastern_coast = (
+            (314, 71), (354, 84), (389, 113), (410, 152), (399, 188),
+            (373, 193), (351, 172), (325, 163), (307, 132),
+        )
+        for points in (north_america, central_america, south_america, greenland, eastern_coast):
+            pygame.draw.polygon(land, (73, 137, 96), points)
+        # Forests, highlands, and sunlit coastlines break up the land masses.
+        pygame.draw.polygon(
+            land,
+            (91, 153, 94),
+            ((65, 103), (101, 70), (145, 62), (171, 81), (142, 112), (105, 131), (76, 125)),
+        )
+        pygame.draw.polygon(
+            land,
+            (64, 119, 83),
+            ((146, 191), (174, 209), (169, 251), (148, 297), (132, 278), (123, 239)),
+        )
+        pygame.draw.lines(land, (112, 158, 104), False, north_america[:8], 2)
+        pygame.draw.lines(land, (104, 149, 98), False, south_america[:6], 2)
+        globe.blit(land, (0, 0))
+
+        # Wide, broken cloud systems curve around the globe and drift just
+        # enough to make the brief approach shot feel alive.
+        cloud_layer = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        drift = round(math.sin(elapsed / 620) * 5)
+        cloud_bands = (
+            ((38 + drift, 92, 151, 21), (228, 241, 239, 182)),
+            ((126 + drift, 119, 179, 17), (221, 238, 238, 151)),
+            ((206 - drift, 180, 165, 18), (230, 242, 239, 164)),
+            ((55 - drift, 263, 174, 19), (219, 237, 237, 143)),
+            ((238 + drift, 311, 130, 15), (227, 240, 237, 130)),
+        )
+        for rect_data, color in cloud_bands:
+            rect = pygame.Rect(rect_data)
+            pygame.draw.ellipse(cloud_layer, color, rect)
+            pygame.draw.ellipse(
+                cloud_layer,
+                (*color[:3], max(45, color[3] // 2)),
+                rect.inflate(-28, 11),
+            )
+        globe.blit(cloud_layer, (0, 0))
+
+        # A soft terminator and a few warm city lights sell the night side
+        # without hiding the recognizable Earth colors.
+        night = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pygame.draw.ellipse(night, (4, 12, 37, 116), (255, -12, 206, diameter + 24))
+        globe.blit(night, (0, 0))
+        for light_x, light_y, light_radius in (
+            (334, 117, 2), (355, 136, 1), (365, 155, 2), (326, 145, 1),
+            (386, 177, 1), (319, 105, 1),
+        ):
+            pygame.draw.circle(globe, (239, 202, 113, 190), (light_x, light_y), light_radius)
+
+        # Mask the layered art to a perfect globe, then add atmosphere and a
+        # small polar sheen on top.
+        mask = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pygame.draw.circle(mask, (255, 255, 255, 255), globe_center, radius)
+        globe.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        polar_sheen = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pygame.draw.ellipse(polar_sheen, (226, 244, 244, 62), (74, 21, 211, 42))
+        pygame.draw.ellipse(polar_sheen, (242, 251, 250, 38), (97, 27, 149, 26))
+        globe.blit(polar_sheen, (0, 0))
+
+        planet = pygame.Surface((diameter + 32, diameter + 32), pygame.SRCALPHA)
+        padded_center = (radius + 16, radius + 16)
+        for glow_radius, alpha in ((radius + 15, 18), (radius + 10, 30), (radius + 5, 55)):
+            pygame.draw.circle(planet, (104, 190, 226, alpha), padded_center, glow_radius)
+        planet.blit(globe, (16, 16))
+        pygame.draw.circle(planet, (166, 220, 234, 220), padded_center, radius + 1, width=3)
+        pygame.draw.arc(
+            planet,
+            (225, 247, 249, 190),
+            pygame.Rect(18, 18, diameter - 4, diameter - 4),
+            math.pi * 0.55,
+            math.pi * 1.55,
+            width=3,
+        )
+        self.screen.blit(planet, planet.get_rect(center=center))
+
+    def draw_homecoming_status(self, text, center):
+        """Draw a quiet cinematic caption used only by the homecoming movie."""
+
+        label = self.small_font.render(text, True, (226, 221, 202))
+        panel = label.get_rect(center=center).inflate(34, 18)
+        backing = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.rect(backing, (9, 16, 29, 178), backing.get_rect(), border_radius=10)
+        pygame.draw.rect(
+            backing,
+            (116, 178, 177, 150),
+            backing.get_rect(),
+            width=1,
+            border_radius=10,
+        )
+        self.screen.blit(backing, panel.topleft)
+        self.screen.blit(label, label.get_rect(center=panel.center))
+
+    def draw_homecoming_night_sky(self, elapsed):
+        """Draw a deep layered Earth sky with stars, moonlight, and thin clouds."""
+
+        top = (9, 15, 37)
+        bottom = (72, 66, 84)
+        band_height = 18
+        for y in range(0, 432, band_height):
+            ratio = y / 432
+            color = tuple(
+                round(top[channel] + (bottom[channel] - top[channel]) * ratio)
+                for channel in range(3)
+            )
+            pygame.draw.rect(
+                self.screen,
+                color,
+                pygame.Rect(0, y, WINDOW_SIZE[0], band_height + 1),
+            )
+
+        haze = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        pygame.draw.ellipse(haze, (91, 88, 145, 22), pygame.Rect(90, 30, 520, 225))
+        pygame.draw.ellipse(haze, (58, 112, 134, 18), pygame.Rect(510, 95, 530, 220))
+        self.screen.blit(haze, (0, 0))
+
+        star_field = list(self.intro_stars)
+        star_field.extend(
+            (
+                (31 + (index * 83) % 1037, 18 + (index * 47) % 270, 1 + int(index % 13 == 0))
+                for index in range(54)
+            )
+        )
+        for index, (star_x, star_y, star_size) in enumerate(star_field):
+            if star_y >= 295:
+                continue
+            twinkle = (elapsed // 185 + index * 3) % 11 == 0
+            color = (
+                (236, 244, 255)
+                if twinkle
+                else (168, 184, 215)
+                if index % 3
+                else (185, 171, 214)
+            )
+            radius = star_size + int(twinkle and star_size == 1)
+            pygame.draw.circle(self.screen, color, (star_x, star_y), radius)
+            if twinkle and star_size > 1:
+                pygame.draw.line(
+                    self.screen,
+                    color,
+                    (star_x - 5, star_y),
+                    (star_x + 5, star_y),
+                    width=1,
+                )
+                pygame.draw.line(
+                    self.screen,
+                    color,
+                    (star_x, star_y - 5),
+                    (star_x, star_y + 5),
+                    width=1,
+                )
+
+        constellation = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        for points in (
+            ((72, 84), (129, 61), (183, 98), (226, 49)),
+            ((560, 78), (620, 119), (681, 72), (735, 103)),
+        ):
+            pygame.draw.lines(constellation, (142, 170, 205, 48), False, points, width=1)
+            for point in points:
+                pygame.draw.circle(constellation, (211, 226, 244, 155), point, 2)
+        self.screen.blit(constellation, (0, 0))
+
+        moon_glow = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        for radius, alpha in ((68, 10), (57, 18), (49, 30)):
+            pygame.draw.circle(moon_glow, (225, 224, 204, alpha), (949, 112), radius)
+        self.screen.blit(moon_glow, (0, 0))
+        pygame.draw.circle(self.screen, (207, 205, 181), (949, 112), 39)
+        pygame.draw.circle(self.screen, (187, 186, 166), (936, 101), 8)
+        pygame.draw.circle(self.screen, (181, 181, 163), (963, 124), 6)
+        pygame.draw.circle(self.screen, (224, 220, 191), (937, 96), 5)
+
+        clouds = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
+        for cloud_x, cloud_y, scale in ((245, 151, 1.0), (760, 205, 0.78), (980, 177, 0.58)):
+            cloud_color = (89, 91, 112, 68)
+            pygame.draw.ellipse(clouds, cloud_color, pygame.Rect(cloud_x, cloud_y, 155 * scale, 24 * scale))
+            pygame.draw.ellipse(clouds, cloud_color, pygame.Rect(cloud_x + 28 * scale, cloud_y - 10 * scale, 83 * scale, 29 * scale))
+        self.screen.blit(clouds, (0, 0))
+
+    def draw_homecoming_horizon(self):
+        """Layer distant hills and neglected rural silhouettes behind the house."""
+
+        pygame.draw.polygon(
+            self.screen,
+            (45, 52, 68),
+            ((0, 310), (135, 238), (287, 306), (430, 221), (603, 316), (750, 244), (922, 303), (1100, 229), (1100, 440), (0, 440)),
+        )
+        pygame.draw.polygon(
+            self.screen,
+            (36, 48, 58),
+            ((0, 367), (102, 299), (241, 358), (363, 287), (508, 363), (685, 301), (846, 352), (989, 287), (1100, 337), (1100, 440), (0, 440)),
+        )
+        for tree_x, tree_y, scale in (
+            (38, 358, 1.0),
+            (117, 370, 0.72),
+            (224, 349, 0.9),
+            (346, 371, 0.7),
+            (487, 346, 0.92),
+            (1003, 351, 0.9),
+            (1060, 369, 0.7),
+        ):
+            trunk = (43, 48, 48)
+            needles = (31, 46, 48)
+            pygame.draw.rect(
+                self.screen,
+                trunk,
+                pygame.Rect(tree_x - 3, tree_y - 14 * scale, 6, 61 * scale),
+            )
+            for tier in range(3):
+                width = (38 - tier * 7) * scale
+                top_y = tree_y - (60 - tier * 18) * scale
+                pygame.draw.polygon(
+                    self.screen,
+                    needles,
+                    ((tree_x, top_y), (tree_x - width, tree_y - tier * 15 * scale), (tree_x + width, tree_y - tier * 15 * scale)),
+                )
 
     def draw_clinic_window_farewell(self, surface, elapsed):
         """Draw tiny colorful patients waving from the departing clinic dome."""
@@ -1138,7 +1421,12 @@ class EndingMixin:
         if self.homecoming_started:
             self.draw_homecoming_ending(finished=True)
             for text, y, font in (("HOME, AT LAST.", 63, self.heading_font),
-                                  (f"You made it home after {self.day_number} shifts.", 96, self.small_font)):
+                                  (
+                                      f"You made it home after {self.day_number} "
+                                      f"{'shift' if self.day_number == 1 else 'shifts'}.",
+                                      96,
+                                      self.small_font,
+                                  )):
                 label = font.render(text, True, (230, 220, 191))
                 self.screen.blit(label, label.get_rect(center=(550, y)))
             self.draw_ending_button(self.final_replay_button, "PLAY AGAIN", False)

@@ -148,8 +148,8 @@ class TutorialMixin:
             return pygame.Rect(card.x + 70, card.y + 92, card.width - 82, 21)
         if step == "temperature_select":
             index = self.get_temperature_card_index()
-            if index is not None and index < len(self.card_rects):
-                resting = self.card_rects[index]
+            resting = None if index is None else self.get_card_rect_for_hand_index(index)
+            if resting is not None:
                 return resting.union(self.get_hovered_card_rect(resting))
         if step == "temperature_run" and self.selected_card_index is not None:
             selected = self.get_selected_card_rect(self.selected_card_index)
@@ -168,8 +168,8 @@ class TutorialMixin:
             return self.card_shop_buy_button
         if step == "blood_select":
             index = self.get_blood_chemistry_card_index()
-            if index is not None and index < len(self.card_rects):
-                resting = self.card_rects[index]
+            resting = None if index is None else self.get_card_rect_for_hand_index(index)
+            if resting is not None:
                 return resting.union(self.get_hovered_card_rect(resting))
         if step == "blood_run" and self.selected_card_index is not None:
             selected = self.get_selected_card_rect(self.selected_card_index)
@@ -430,6 +430,15 @@ class TutorialMixin:
         """Provide keyboard equivalents for tutorial actions and message advances."""
 
         if key == pygame.K_ESCAPE:
+            if self.state == GameState.NOTEBOOK:
+                if self.guided_tutorial_step in (
+                    "review_notebook",
+                    "second_review_notebook",
+                ):
+                    self.handle_guided_tutorial_click((10, 10))
+                else:
+                    self.close_notebook()
+                return
             self.open_exit_confirmation()
             return
         if key not in (pygame.K_RETURN, pygame.K_SPACE):

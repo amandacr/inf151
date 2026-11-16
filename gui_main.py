@@ -138,6 +138,8 @@ class CosmicClinicGUI(
         self.deck.shuffle_cards(self.player.diagnosis_hand)
         self.deal_starting_test_hand(training_hand=True)
         self.hovered_card_index = None
+        self.card_sort_mode = "type"
+        self.card_display_groups = []
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
         self.recycler_used = False
@@ -435,6 +437,8 @@ class CosmicClinicGUI(
                     elif self.state == GameState.PATIENT and self.diagnosis_confirmation_open:
                         self.play_sfx("button")
                         self.diagnosis_confirmation_open = False
+                    elif self.state == GameState.NOTEBOOK:
+                        self.close_notebook()
                     else:
                         self.open_exit_confirmation()
                 elif (
@@ -511,6 +515,12 @@ class CosmicClinicGUI(
             return
         if self.card_shop_button.collidepoint(position):
             self.toggle_card_shop()
+            return
+        if (
+            not self.showing_diagnosis_hand
+            and self.get_card_sort_button().collidepoint(position)
+        ):
+            self.cycle_card_sort_mode()
             return
         if self.layout["draw_deck"].collidepoint(position):
             card_drawn = self.draw_card_from_pile()

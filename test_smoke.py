@@ -14,6 +14,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame
 
 import main as game_launcher
+from Card import Card
 from Deck import Deck
 from Diagnosis import DIAGNOSES
 from Notebook import Notebook
@@ -105,6 +106,11 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertEqual(result, "Current temperature: 1700°F")
         self.assertEqual(patient.medical_info["Normal temperature"], "2,000°F")
         self.assertEqual(notebook.get_entries(patient), {"TEMPERATURE": result})
+
+        blood_result = patient.test_results["BLOOD CHEMISTRY"]
+        self.assertIn("viscosity remains within the safe range", blood_result)
+        self.assertIn("thermal-energy production", blood_result)
+        self.assertNotIn("viscosity is elevated", blood_result)
 
     def test_route_controller_tracks_destinations_and_campaign_performance(self):
         """Route state should advance, aggregate shifts, and reset cleanly."""
@@ -1448,7 +1454,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_guided_tutorial_click((1090, 680))
 
         temperature_index = self.game.get_temperature_card_index()
-        self.game.handle_guided_tutorial_click(self.game.card_rects[temperature_index].center)
+        self.game.handle_guided_tutorial_click(
+            self.game.get_card_rect_for_hand_index(temperature_index).center
+        )
         self.assertEqual(self.game.guided_tutorial_step, "temperature_run")
         selected = self.game.get_selected_card_rect(self.game.selected_card_index)
         self.game.handle_guided_tutorial_click(self.game.get_run_test_button(selected).center)
@@ -1498,7 +1506,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.guided_tutorial_step, "blood_select")
 
         blood_index = self.game.get_blood_chemistry_card_index()
-        self.game.handle_guided_tutorial_click(self.game.card_rects[blood_index].center)
+        self.game.handle_guided_tutorial_click(
+            self.game.get_card_rect_for_hand_index(blood_index).center
+        )
         self.assertEqual(self.game.guided_tutorial_step, "blood_run")
         selected = self.game.get_selected_card_rect(self.game.selected_card_index)
         self.game.handle_guided_tutorial_click(
@@ -1692,7 +1702,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
         temperature_target = self.game.get_guided_tutorial_target()
         temperature_index = self.game.get_temperature_card_index()
         self.assertTrue(
-            temperature_target.contains(self.game.card_rects[temperature_index])
+            temperature_target.contains(
+                self.game.get_card_rect_for_hand_index(temperature_index)
+            )
         )
         self.game.handle_guided_tutorial_click(
             (temperature_target.x + 1, temperature_target.y + 1)
@@ -1711,7 +1723,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.open_notebook()
         self.game.guided_tutorial_active = True
         self.game.set_guided_tutorial_step("review_notebook")
-        self.game.handle_guided_tutorial_click((1090, 680))
+        self.game.handle_guided_tutorial_key(pygame.K_ESCAPE)
+        self.assertEqual(self.game.state, GameState.PATIENT)
+        self.assertFalse(self.game.exit_confirmation_open)
         self.assertIn(
             self.game.guided_tutorial_step,
             ("blood_select", "card_shop_open"),
@@ -1962,6 +1976,25 @@ class GuiFlowSmokeTests(unittest.TestCase):
                     len(wrapped_lines) * self.game.id_detail_font.get_linesize(),
                     available_height,
                 )
+
+    def test_notebook_wrapped_id_fields_keep_one_bullet_per_field(self):
+        """Continuation lines should remain attached to one Health ID bullet."""
+
+        rows = self.game.get_notebook_info_rows(
+            [
+                (
+                    "Medical alert",
+                    "Avoid prolonged exposure to concentrated magnetic resonance fields",
+                ),
+                ("Normal temperature", "72°F"),
+            ],
+            150,
+        )
+        self.assertGreater(len(rows), 2)
+        self.assertEqual(sum(starts_item for _, starts_item, _ in rows), 2)
+        self.assertEqual(sum(ends_item for _, _, ends_item in rows), 2)
+        self.assertTrue(rows[0][1])
+        self.assertFalse(rows[1][1])
 
     def test_gameplay_help_pauses_timers_and_works_on_ending_screens(self):
         """Help should freeze transitions and remain visible through the finale."""
@@ -2316,6 +2349,71 @@ class GuiFlowSmokeTests(unittest.TestCase):
             starting_balance - DRAW_COST,
         )
 
+    def test_duplicate_test_cards_stack_but_consume_one_physical_copy(self):
+        """Duplicate displays should stay compact without changing card inventory."""
+
+        temperature = next(
+            test for test in self.game.card_shop_catalog if test.name == "TEMPERATURE"
+        )
+        self.game.player.draw(Card("Test", temperature))
+        physical_before = sum(
+            card.value.name == "TEMPERATURE"
+            for card in self.game.player.test_hand
+        )
+        self.assertGreaterEqual(physical_before, 2)
+
+        self.game.refresh_hand_layout()
+        group = next(
+            group
+            for group in self.game.card_display_groups
+            if group["card"].value.name == "TEMPERATURE"
+        )
+        self.assertEqual(group["count"], physical_before)
+        self.assertEqual(len(group["indices"]), physical_before)
+        self.assertEqual(
+            len(self.game.card_rects),
+            len({card.value.name for card in self.game.player.test_hand}),
+        )
+
+        self.game.selected_card_index = group["indices"][0]
+        self.assertTrue(self.game.run_selected_test())
+        self.assertEqual(
+            sum(
+                card.value.name == "TEMPERATURE"
+                for card in self.game.player.test_hand
+            ),
+            physical_before - 1,
+        )
+
+    def test_test_card_sorting_cycles_type_rarity_and_cost(self):
+        """The sort control should reorder visible stacks without reordering inventory."""
+
+        original_hand = list(self.game.player.test_hand)
+        self.game.card_sort_mode = "type"
+        self.game.refresh_hand_layout()
+        names = [group["card"].value.name for group in self.game.card_display_groups]
+        self.assertEqual(names, sorted(names))
+
+        self.game.cycle_card_sort_mode()
+        self.assertEqual(self.game.card_sort_mode, "rarity")
+        rarity_order = [
+            self.game.CARD_RARITY_ORDER[group["card"].value.rarity]
+            for group in self.game.card_display_groups
+        ]
+        self.assertEqual(rarity_order, sorted(rarity_order))
+
+        self.game.cycle_card_sort_mode()
+        self.assertEqual(self.game.card_sort_mode, "cost")
+        costs = [
+            self.game.player.get_test_cost(group["card"].value)
+            for group in self.game.card_display_groups
+        ]
+        self.assertEqual(costs, sorted(costs))
+        self.assertEqual(self.game.player.test_hand, original_hand)
+
+        sort_button = self.game.get_card_sort_button()
+        self.assertTrue(self.game.layout["active_hand"].contains(sort_button))
+
     def test_money_formatting_and_clinic_credit_limit(self):
         """Debt uses -$ formatting, warning color, and a -$50 spending floor."""
 
@@ -2323,6 +2421,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.format_money(5), "$5")
         self.assertEqual(self.game.get_balance_color(-5), (245, 130, 115))
         self.assertEqual(self.game.get_balance_color(0), COLORS["accent"])
+        self.assertEqual(self.game.format_count(1, "random draw"), "1 random draw")
+        self.assertEqual(self.game.format_count(2, "random draw"), "2 random draws")
 
         self.game.player.balance = DEBT_LIMIT + DRAW_COST
         self.assertTrue(self.game.can_spend_clinic_funds(DRAW_COST))
@@ -2956,6 +3056,17 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.handle_exit_confirmation_click(self.game.exit_continue_button.center)
         self.assertFalse(self.game.exit_confirmation_open)
         self.assertEqual(self.game.state, original_state)
+
+        self.game.open_notebook()
+        self.assertEqual(self.game.state, GameState.NOTEBOOK)
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+        self.game.handle_events()
+        self.assertEqual(self.game.state, GameState.PATIENT)
+        self.assertFalse(self.game.exit_confirmation_open)
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+        self.game.handle_events()
+        self.assertTrue(self.game.exit_confirmation_open)
+        self.game.close_exit_confirmation()
 
         self.game.state = GameState.SHOP
         self.game.open_exit_confirmation()
