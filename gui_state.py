@@ -15,6 +15,8 @@ class GameState(Enum):
     SHOP = auto()
     DAY_COMPLETE = auto()
     ROUTE_BRIEFING = auto()
+    ROUTE_MAP = auto()
+    BLACKGLASS_CONTRACT = auto()
     ENDING = auto()
     ARRIVAL = auto()
     FINAL = auto()

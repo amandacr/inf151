@@ -1,6 +1,7 @@
 """Destination and daily-roster data for The Cosmic Clinic campaign."""
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Callable, Optional
 
 from Patient import Patient
@@ -18,11 +19,66 @@ from PatientData import (
     create_zoogy,
     create_zorpa,
 )
+from Player import RETURN_PASSAGE_COST
 
 
 Color = tuple[int, int, int]
 PortraitPalette = tuple[Color, Color, Color, Color]
 PatientFactory = Callable[[], Patient]
+
+
+# Route fares are tuned against a fully supported shift: the first three
+# destinations currently net about $75, $65, and $70 before travel.  A careful
+# player can therefore keep moving without visiting a fallback clinic, while
+# unnecessary tests, mistakes, and optional upgrades still make money matter.
+TRISKA_TICKET_COST = 100
+LUMORA_TICKET_COST = 125
+
+
+class DestinationType(str, Enum):
+    """Kinds of locations that can appear on the Galactic Route Map."""
+
+    CLINIC = "clinic"
+    EARTH = "earth"
+    BLACKGLASS = "blackglass"
+
+
+@dataclass(frozen=True)
+class PlanetMapIcon:
+    """Code-drawn planet icon instructions for the future route map."""
+
+    style: str
+    base_color: Color
+    accent_color: Color
+    detail_color: Color
+    ring_color: Optional[Color] = None
+    size_scale: float = 1.0
+
+
+@dataclass(frozen=True)
+class DestinationMapData:
+    """Travel, display, and availability data for one map destination."""
+
+    position: tuple[float, float]
+    icon: PlanetMapIcon
+    ticket_price: int
+    unlock_requirement: Optional[str]
+    previous_destination: Optional[str]
+    description: str
+    has_patients: bool
+    destination_type: DestinationType
+    content_ready: bool = True
+
+
+@dataclass(frozen=True)
+class MapDestination:
+    """A unified route-map entry, including locations without clinic days."""
+
+    key: str
+    planet_name: str
+    subtitle: str
+    map_data: DestinationMapData
+    day_number: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -70,6 +126,7 @@ class Destination:
     arrival_message: str
     patient_roster: tuple[PatientSlot, ...]
     theme: PlanetTheme
+    map_data: DestinationMapData
     additional_population: tuple[PatientSlot, ...] = ()
     music_track: Optional[str] = None
     ambience: Optional[str] = None
@@ -213,6 +270,26 @@ DESTINATIONS = (
             alien_render_style="pixel",
             window_details=("small_planets", "distant_stars", "clinic_satellites"),
         ),
+        map_data=DestinationMapData(
+            position=(0.29, 0.66),
+            icon=PlanetMapIcon(
+                style="training_orbit",
+                base_color=(65, 126, 174),
+                accent_color=(100, 242, 185),
+                detail_color=(148, 92, 194),
+                ring_color=(142, 210, 219),
+                size_scale=0.92,
+            ),
+            ticket_price=0,
+            unlock_requirement=None,
+            previous_destination=None,
+            description=(
+                "The Cosmic Clinic's supervised orientation route and the "
+                "starting point of the doctor's journey."
+            ),
+            has_patients=True,
+            destination_type=DestinationType.CLINIC,
+        ),
         ambience="clinic_hum",
     ),
     Destination(
@@ -240,6 +317,26 @@ DESTINATIONS = (
             particle_style="desert_dust",
             alien_render_style="smooth",
             window_details=("triska", "paired_moons", "orbital_traffic"),
+        ),
+        map_data=DestinationMapData(
+            position=(0.49, 0.41),
+            icon=PlanetMapIcon(
+                style="triska_desert",
+                base_color=(225, 150, 78),
+                accent_color=(242, 186, 111),
+                detail_color=(88, 48, 76),
+                ring_color=(104, 189, 216),
+                size_scale=1.08,
+            ),
+            ticket_price=TRISKA_TICKET_COST,
+            unlock_requirement="training_orbit",
+            previous_destination="training_orbit",
+            description=(
+                "A crowded desert-world station serving three neighboring "
+                "systems and their unusual anatomy."
+            ),
+            has_patients=True,
+            destination_type=DestinationType.CLINIC,
         ),
         ambience="station_hum",
     ),
@@ -271,8 +368,104 @@ DESTINATIONS = (
             alien_render_style="smooth",
             window_details=("lumora", "glowing_canopy", "floating_spores"),
         ),
+        map_data=DestinationMapData(
+            position=(0.72, 0.63),
+            icon=PlanetMapIcon(
+                style="lumora_jungle",
+                base_color=(39, 121, 92),
+                accent_color=(142, 255, 174),
+                detail_color=(199, 126, 235),
+                ring_color=(103, 224, 193),
+                size_scale=1.03,
+            ),
+            ticket_price=LUMORA_TICKET_COST,
+            unlock_requirement="triska_station",
+            previous_destination="triska_station",
+            description=(
+                "A rain-soaked bioluminescent world whose canopy clinics "
+                "serve plantlike and fungal species."
+            ),
+            has_patients=True,
+            destination_type=DestinationType.CLINIC,
+        ),
         ambience="lumora_canopy_hum",
     ),
+)
+
+
+EARTH_MAP_DESTINATION = MapDestination(
+    key="earth",
+    planet_name="Earth",
+    subtitle="Return Passage Home",
+    map_data=DestinationMapData(
+        position=(0.10, 0.20),
+        icon=PlanetMapIcon(
+            style="earth",
+            base_color=(48, 126, 174),
+            accent_color=(83, 151, 99),
+            detail_color=(224, 240, 239),
+            ring_color=(142, 211, 232),
+            size_scale=1.0,
+        ),
+        ticket_price=RETURN_PASSAGE_COST,
+        unlock_requirement="lumora_canopy",
+        previous_destination="lumora_canopy",
+        description=(
+            "The doctor's home world and final destination once a one-way "
+            "return passage has been funded."
+        ),
+        has_patients=False,
+        destination_type=DestinationType.EARTH,
+    ),
+)
+
+
+BLACKGLASS_MAP_DESTINATION = MapDestination(
+    key="blackglass_outpost",
+    planet_name="Blackglass Outpost",
+    subtitle="Emergency Clinic Contract",
+    map_data=DestinationMapData(
+        position=(0.50, 0.84),
+        icon=PlanetMapIcon(
+            style="blackglass_industrial",
+            base_color=(42, 45, 51),
+            accent_color=(126, 161, 86),
+            detail_color=(151, 65, 70),
+            ring_color=(92, 80, 70),
+            size_scale=0.9,
+        ),
+        ticket_price=0,
+        unlock_requirement="training_orbit",
+        previous_destination=None,
+        description=(
+            "A polluted industrial outpost offering transportation in "
+            "exchange for emergency medical labor."
+        ),
+        # Blackglass is always overwhelmed in the story, but its playable
+        # patient pool deliberately remains disabled until that content exists.
+        has_patients=True,
+        destination_type=DestinationType.BLACKGLASS,
+        content_ready=False,
+    ),
+)
+
+
+def _clinic_map_destination(destination):
+    """Return the map-facing identity for a playable clinic destination."""
+
+    return MapDestination(
+        key=destination.key,
+        planet_name=destination.planet_name,
+        subtitle=destination.subtitle,
+        map_data=destination.map_data,
+        day_number=destination.day_number,
+    )
+
+
+MAP_DESTINATIONS = (
+    *(_clinic_map_destination(destination) for destination in DESTINATIONS),
+    EARTH_MAP_DESTINATION,
+    BLACKGLASS_MAP_DESTINATION,
 )
 
 
@@ -280,12 +473,67 @@ DESTINATIONS_BY_DAY = {
     destination.day_number: destination for destination in DESTINATIONS
 }
 DESTINATIONS_BY_KEY = {destination.key: destination for destination in DESTINATIONS}
+MAP_DESTINATIONS_BY_KEY = {
+    destination.key: destination for destination in MAP_DESTINATIONS
+}
 
 
 def get_destination(day_number):
     """Return the configured destination for a campaign day, if available."""
 
     return DESTINATIONS_BY_DAY.get(day_number)
+
+
+def get_map_destination(key):
+    """Return any clinic, home, or fallback location shown on the route map."""
+
+    return MAP_DESTINATIONS_BY_KEY.get(key)
+
+
+def _validate_map_color(color, field_name):
+    """Reject malformed RGB values before a route-map renderer uses them."""
+
+    if (
+        not isinstance(color, tuple)
+        or len(color) != 3
+        or any(not isinstance(channel, int) or not 0 <= channel <= 255 for channel in color)
+    ):
+        raise ValueError(f"{field_name} must be an RGB color tuple.")
+
+
+def _validate_map_data(map_data, destination_key):
+    """Validate the shared visual and ticket contract for one map node."""
+
+    if not isinstance(map_data, DestinationMapData):
+        raise ValueError(f"{destination_key} needs destination map data.")
+    if (
+        len(map_data.position) != 2
+        or any(not isinstance(value, (int, float)) for value in map_data.position)
+        or any(not 0.0 <= value <= 1.0 for value in map_data.position)
+    ):
+        raise ValueError("Map positions must use normalized coordinates from 0 to 1.")
+    if not isinstance(map_data.ticket_price, int) or map_data.ticket_price < 0:
+        raise ValueError("Destination ticket prices must be non-negative integers.")
+    if not map_data.description.strip():
+        raise ValueError("Every map destination needs a short description.")
+    if not isinstance(map_data.destination_type, DestinationType):
+        raise ValueError("Every map destination needs a valid destination type.")
+    if not isinstance(map_data.has_patients, bool) or not isinstance(
+        map_data.content_ready, bool
+    ):
+        raise ValueError("Map availability flags must be booleans.")
+    if not map_data.icon.style:
+        raise ValueError("Every map destination needs a planet icon style.")
+    if not 0.65 <= map_data.icon.size_scale <= 1.35:
+        raise ValueError("Map planet icon scales must remain visually consistent.")
+    for field_name, color in (
+        ("Map base color", map_data.icon.base_color),
+        ("Map accent color", map_data.icon.accent_color),
+        ("Map detail color", map_data.icon.detail_color),
+    ):
+        _validate_map_color(color, field_name)
+    if map_data.icon.ring_color is not None:
+        _validate_map_color(map_data.icon.ring_color, "Map ring color")
 
 
 def validate_destinations(destinations=DESTINATIONS):
@@ -297,7 +545,7 @@ def validate_destinations(destinations=DESTINATIONS):
     seen_days = set()
     seen_keys = set()
     seen_serials = set()
-    for destination in destinations:
+    for index, destination in enumerate(destinations):
         if destination.day_number < 1 or destination.day_number in seen_days:
             raise ValueError("Destination day numbers must be unique positive integers.")
         if not destination.key or destination.key in seen_keys:
@@ -314,6 +562,18 @@ def validate_destinations(destinations=DESTINATIONS):
             raise ValueError("Alien rendering must use the pixel or smooth style.")
         if len(destination.patient_roster) != 4:
             raise ValueError("Each destination currently requires four patients.")
+        _validate_map_data(destination.map_data, destination.key)
+        if destination.map_data.destination_type is not DestinationType.CLINIC:
+            raise ValueError("Playable campaign days must use the clinic map type.")
+        if not destination.map_data.has_patients or not destination.map_data.content_ready:
+            raise ValueError("Playable clinic destinations need ready patient content.")
+        expected_previous = None if index == 0 else destinations[index - 1].key
+        if destination.map_data.previous_destination != expected_previous:
+            raise ValueError("Clinic map destinations must follow the campaign route order.")
+        if destination.map_data.unlock_requirement != expected_previous:
+            raise ValueError("Clinic unlock requirements must match the previous route stop.")
+        if index == 0 and destination.map_data.ticket_price != 0:
+            raise ValueError("The starting clinic destination cannot require a ticket.")
 
         patient_assets = set()
         for patient_slot in destination.alien_population:
@@ -358,4 +618,70 @@ def validate_destinations(destinations=DESTINATIONS):
     return True
 
 
+def validate_map_destinations(
+    map_destinations=MAP_DESTINATIONS,
+    clinic_destinations=DESTINATIONS,
+):
+    """Validate the unified map catalog, including Earth and Blackglass."""
+
+    validate_destinations(tuple(clinic_destinations))
+    if not map_destinations:
+        raise ValueError("The Galactic Route Map requires destination entries.")
+
+    seen_keys = set()
+    seen_positions = set()
+    for destination in map_destinations:
+        if not destination.key or destination.key in seen_keys:
+            raise ValueError("Map destination keys must be present and unique.")
+        if not destination.planet_name or not destination.subtitle:
+            raise ValueError("Each map destination needs a name and subtitle.")
+        _validate_map_data(destination.map_data, destination.key)
+        if destination.map_data.position in seen_positions:
+            raise ValueError("Map destinations cannot occupy the same position.")
+        seen_keys.add(destination.key)
+        seen_positions.add(destination.map_data.position)
+
+    for destination in map_destinations:
+        for linked_key in (
+            destination.map_data.unlock_requirement,
+            destination.map_data.previous_destination,
+        ):
+            if linked_key is not None and linked_key not in seen_keys:
+                raise ValueError("Map destination links must reference configured locations.")
+            if linked_key == destination.key:
+                raise ValueError("A map destination cannot link to itself.")
+
+    clinic_keys = {destination.key for destination in clinic_destinations}
+    map_clinic_keys = {
+        destination.key
+        for destination in map_destinations
+        if destination.map_data.destination_type is DestinationType.CLINIC
+    }
+    if map_clinic_keys != clinic_keys:
+        raise ValueError("Every playable clinic must have exactly one map entry.")
+
+    earth_entries = [
+        destination
+        for destination in map_destinations
+        if destination.map_data.destination_type is DestinationType.EARTH
+    ]
+    blackglass_entries = [
+        destination
+        for destination in map_destinations
+        if destination.map_data.destination_type is DestinationType.BLACKGLASS
+    ]
+    if len(earth_entries) != 1 or len(blackglass_entries) != 1:
+        raise ValueError("The map requires exactly one Earth and one Blackglass entry.")
+
+    earth = earth_entries[0].map_data
+    if earth.has_patients or earth.ticket_price <= 0:
+        raise ValueError("Earth must be a patient-free, ticketed home destination.")
+    blackglass = blackglass_entries[0].map_data
+    if not blackglass.has_patients or blackglass.ticket_price != 0:
+        raise ValueError("Blackglass must offer patients without a ticket cost.")
+
+    return True
+
+
 validate_destinations()
+validate_map_destinations()

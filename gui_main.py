@@ -21,6 +21,7 @@ from gui_intro import IntroMixin
 from gui_notebook import NotebookMixin
 from gui_reception import ReceptionMixin
 from gui_results import ResultsMixin
+from gui_route_map import RouteMapMixin
 from gui_shop import ShopMixin
 from gui_state import GameState
 from gui_tutorial import TutorialMixin
@@ -30,7 +31,7 @@ from gui_theme import (
     WINDOW_SIZE,
 )
 from PlanetData import DESTINATIONS
-from Player import Player, STARTING_TEST_HAND_SIZE
+from Player import Player, STARTING_BALANCE, STARTING_TEST_HAND_SIZE
 from RouteController import RouteController
 from Notebook import Notebook
 from Deck import Deck
@@ -50,6 +51,7 @@ class CosmicClinicGUI(
     NotebookMixin,
     ReceptionMixin,
     ResultsMixin,
+    RouteMapMixin,
     ShopMixin,
     TutorialMixin,
 ):
@@ -105,7 +107,10 @@ class CosmicClinicGUI(
         ]
 
         self.patient_sprite_cache = {}
-        self.route = RouteController(DESTINATIONS)
+        self.route = RouteController(
+            DESTINATIONS,
+            starting_credits=STARTING_BALANCE,
+        )
         self.waiting_room_queue = self.roster_for_destination(
             self.route.current_destination
         )
@@ -306,6 +311,7 @@ class CosmicClinicGUI(
         )
         self.intro_ufo_surface.blit(cropped_ufo, (ufo_padding, ufo_padding))
         self.intro_wake_active = False
+        self.setup_route_map()
         self.setup_developer_navigator()
 
     def run(self):
@@ -344,6 +350,8 @@ class CosmicClinicGUI(
                     self.advance_intro_dialogue()
                 elif self.guided_tutorial_active:
                     self.handle_guided_tutorial_click(position)
+                elif self.route_map_tutorial_active:
+                    self.handle_route_map_tutorial_click(position)
                 elif self.state != GameState.INTRO and self.tutorial_open:
                     self.handle_tutorial_click(position)
                 elif self.state != GameState.INTRO and self.audio_button.collidepoint(position):
@@ -372,6 +380,10 @@ class CosmicClinicGUI(
                 elif self.state == GameState.ROUTE_BRIEFING:
                     self.play_sfx("button")
                     self.advance_route_briefing()
+                elif self.state == GameState.ROUTE_MAP:
+                    self.handle_route_map_click(position)
+                elif self.state == GameState.BLACKGLASS_CONTRACT:
+                    self.handle_blackglass_contract_click(position)
                 elif self.state == GameState.ENDING and self.can_skip_ending():
                     self.play_sfx("button")
                     self.finish_ending_sequence()
@@ -419,6 +431,9 @@ class CosmicClinicGUI(
                     continue
                 if self.guided_tutorial_active:
                     self.handle_guided_tutorial_key(event.key)
+                    continue
+                if self.route_map_tutorial_active:
+                    self.handle_route_map_tutorial_key(event.key)
                     continue
                 if event.key == pygame.K_h and self.state != GameState.INTRO:
                     if self.tutorial_open:
@@ -673,7 +688,7 @@ class CosmicClinicGUI(
             if self.should_show_route_briefing():
                 self.start_route_briefing()
             else:
-                self.begin_ending_sequence()
+                self.open_route_map()
             return
         self.handle_shop_upgrade_click(position)
 
@@ -839,6 +854,32 @@ class CosmicClinicGUI(
 
         if self.state == GameState.ROUTE_BRIEFING:
             self.draw_route_briefing_screen()
+            self.draw_help_button()
+            self.draw_audio_button()
+            if self.tutorial_open:
+                self.draw_tutorial_overlay()
+            if self.exit_confirmation_open:
+                self.draw_exit_confirmation()
+            if self.developer_navigator_open:
+                self.draw_developer_navigator()
+            return
+
+        if self.state == GameState.ROUTE_MAP:
+            self.draw_route_map_screen()
+            self.draw_help_button()
+            self.draw_audio_button()
+            if self.route_map_tutorial_active:
+                self.draw_route_map_tutorial()
+            if self.tutorial_open:
+                self.draw_tutorial_overlay()
+            if self.exit_confirmation_open:
+                self.draw_exit_confirmation()
+            if self.developer_navigator_open:
+                self.draw_developer_navigator()
+            return
+
+        if self.state == GameState.BLACKGLASS_CONTRACT:
+            self.draw_blackglass_contract_screen()
             self.draw_help_button()
             self.draw_audio_button()
             if self.tutorial_open:

@@ -15,12 +15,12 @@ ROUTE_COMPLETE_MESSAGE = "The next clinic destination is being prepared."
 ROUTE_BRIEFING_DIALOGUE = (
     (
         "CLINIC SYSTEM",
-        "Training shift complete. The Cosmic Clinic travels to a new destination after every shift.",
+        "Training shift complete. The Galactic Route Map handles every clinic departure.",
     ),
-    ("YOU", "And when do I get to go home?"),
+    ("YOU", "So I choose where the clinic goes next?"),
     (
         "CLINIC SYSTEM",
-        "Earn enough credits to purchase return passage to Earth.",
+        "Select a destination and secure its ticket before departure.",
     ),
 )
 
@@ -28,13 +28,38 @@ ROUTE_BRIEFING_DIALOGUE = (
 class EndingMixin:
     """Supply the closing sequence and safe exit controls to the main GUI."""
 
-    def begin_ending_sequence(self):
-        """Leave the Shop and begin the clinic departure animation."""
+    def open_route_map(self):
+        """File the completed shift and wait for an explicit travel choice."""
 
-        self.record_current_route_performance()
-        if self.has_return_passage() and not self.route.arrival_pending:
-            self.finish_ending_sequence()
+        existing_selection = self.route.selected_map_destination
+        if not self.route.current_is_complete:
+            self.record_current_route_performance()
+        self.route.sync_available_credits(self.player.balance)
+        suggested = self.route.next_destination
+        if existing_selection is not None and self.route.current_is_complete:
+            selected = self.route.select_map_destination(existing_selection.key)
+            self.route_map_message = self.get_route_map_selection_message(selected)
+        elif suggested is not None:
+            self.route.select_map_destination(suggested.key)
+            self.route_map_message = self.get_route_map_selection_message(suggested)
+        elif self.route.route_is_complete:
+            earth = self.route.select_map_destination("earth")
+            self.route_map_message = self.get_route_map_selection_message(earth)
+        else:
+            self.route.select_map_destination(None)
+            self.route_map_message = "Select a destination to inspect its ticket."
+        self.route_map_started_at = pygame.time.get_ticks()
+        self.exit_confirmation_open = False
+        self.ending_started_at = None
+        self.state = GameState.ROUTE_MAP
+
+    def begin_ending_sequence(self, destination_key=None):
+        """Begin departure only after a purchased ticket authorizes travel."""
+
+        if destination_key is None:
+            self.open_route_map()
             return
+        self.route.begin_travel(destination_key)
         self.exit_confirmation_open = False
         self.ending_duration = 4200
         self.ending_started_at = pygame.time.get_ticks()
@@ -56,13 +81,14 @@ class EndingMixin:
         self.state = GameState.ROUTE_BRIEFING
 
     def advance_route_briefing(self):
-        """Advance the short route conversation, then depart for the next stop."""
+        """Advance the short route conversation, then open navigation."""
 
         if self.route_briefing_index < len(ROUTE_BRIEFING_DIALOGUE) - 1:
             self.route_briefing_index += 1
             return
         self.route_briefing_seen = True
-        self.begin_ending_sequence()
+        self.open_route_map()
+        self.start_route_map_tutorial()
 
     def draw_route_briefing_screen(self):
         """Draw the Supply Shop behind a compact post-training conversation."""
@@ -115,10 +141,9 @@ class EndingMixin:
             )
 
         final_line = self.route_briefing_index == len(ROUTE_BRIEFING_DIALOGUE) - 1
-        next_destination = self.route.next_destination
         prompt_text = (
-            f"DEPART FOR {next_destination.planet_name.upper()}"
-            if final_line and next_destination is not None
+            "OPEN GALACTIC ROUTE MAP"
+            if final_line
             else "CLICK OR PRESS ENTER TO CONTINUE"
         )
         prompt = self.tutorial_label_font.render(prompt_text, True, accent)
@@ -146,6 +171,8 @@ class EndingMixin:
 
     def begin_homecoming_sequence(self):
         """Start the final flight after the player chooses to go home."""
+        if "earth" in self.route.purchased_ticket_keys:
+            self.route.use_ticket("earth")
         self.homecoming_started = True
         self.exit_confirmation_open = False
         self.ending_duration = 14000
@@ -1576,6 +1603,7 @@ class EndingMixin:
             "end_day_shutdown_started_at",
             "ending_started_at",
             "arrival_started_at",
+            "route_map_started_at",
             "card_draw_notice_started_at",
             "card_shop_notice_started_at",
             "guided_tutorial_step_started_at",
@@ -1605,7 +1633,17 @@ class EndingMixin:
             self.close_exit_confirmation()
         elif self.exit_reception_button.collidepoint(position):
             self.play_sfx("button")
-            self.restart_current_shift()
+            if self.state == GameState.BLACKGLASS_CONTRACT:
+                self.state = GameState.ROUTE_MAP
+                self.close_exit_confirmation()
+            elif self.state == GameState.ROUTE_MAP:
+                if self.route_map_tutorial_active:
+                    self.close_exit_confirmation()
+                else:
+                    self.state = GameState.SHOP
+                    self.close_exit_confirmation()
+            else:
+                self.restart_current_shift()
         elif self.exit_quit_button.collidepoint(position):
             self.play_sfx("button")
             self.running = False
@@ -1637,6 +1675,8 @@ class EndingMixin:
         """Return to the active destination without erasing campaign progress."""
 
         self.homecoming_started = False
+        self.route_map_tutorial_active = False
+        self.route_map_tutorial_step = None
         restart_training = self.guided_tutorial_active and self.is_training_destination()
         # If payroll has already been collected for this exact destination,
         # remember that fact so replaying it cannot award the same pay twice.
@@ -1674,10 +1714,14 @@ class EndingMixin:
         self.homecoming_started = False
         self.route_briefing_seen = False
         self.route_briefing_index = 0
+        self.route_map_tutorial_active = False
+        self.route_map_tutorial_seen = False
+        self.route_map_tutorial_step = None
+        self.route_map_tutorial_nudge = ""
         self.ending_started_at = None
         self.exit_confirmation_open = False
         self.exit_confirmation_opened_at = None
-        self.route.reset()
+        self.route.reset(starting_credits=STARTING_BALANCE)
         self.load_current_destination()
         if restart_training:
             self.start_guided_tutorial()
@@ -1699,10 +1743,20 @@ class EndingMixin:
             border_radius=18,
         )
 
-        heading = self.heading_font.render("LEAVE YOUR SHIFT?", True, COLORS["text"])
+        route_map_context = self.state in (
+            GameState.ROUTE_MAP,
+            GameState.BLACKGLASS_CONTRACT,
+        )
+        heading_text = "LEAVE NAVIGATION?" if route_map_context else "LEAVE YOUR SHIFT?"
+        heading = self.heading_font.render(heading_text, True, COLORS["text"])
         self.screen.blit(heading, heading.get_rect(center=(panel.centerx, 190)))
+        detail_text = (
+            "Your selected destination, tickets, money, and completed shift will be preserved."
+            if route_map_context
+            else "Return to reception restarts the current clinic shift."
+        )
         detail = self.small_font.render(
-            "Return to reception restarts the current clinic shift.",
+            detail_text,
             True,
             COLORS["muted"],
         )
@@ -1715,7 +1769,13 @@ class EndingMixin:
         )
         self.draw_ending_button(
             self.exit_reception_button,
-            "RETURN TO RECEPTION",
+            (
+                "RETURN TO ROUTE MAP"
+                if self.state == GameState.BLACKGLASS_CONTRACT or self.route_map_tutorial_active
+                else "RETURN TO SUPPLY SHOP"
+                if self.state == GameState.ROUTE_MAP
+                else "RETURN TO RECEPTION"
+            ),
             False,
         )
         self.draw_ending_button(self.exit_quit_button, "QUIT GAME", True)

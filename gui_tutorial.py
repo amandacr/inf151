@@ -528,6 +528,8 @@ class TutorialMixin:
             GameState.DAY_COMPLETE: "RETURN TO SHIFT RECAP",
             GameState.SHOP: "RETURN TO SHOP",
             GameState.ROUTE_BRIEFING: "RETURN TO ROUTE BRIEFING",
+            GameState.ROUTE_MAP: "RETURN TO ROUTE MAP",
+            GameState.BLACKGLASS_CONTRACT: "RETURN TO CONTRACT",
             GameState.ENDING: "CONTINUE ENDING",
             GameState.ARRIVAL: "RETURN TO ARRIVAL",
             GameState.FINAL: "RETURN TO SUMMARY",
@@ -578,11 +580,19 @@ class TutorialMixin:
             ),
             GameState.SHOP: (
                 "SUPPLY SHOP",
-                "Buy upgrades or secure Return Passage after the final shift. You choose when to go home.",
+                "Buy permanent clinic upgrades, then open the Route Map for destination tickets and Return Passage.",
             ),
             GameState.ROUTE_BRIEFING: (
                 "ROUTE BRIEFING",
-                "The clinic visits a new destination after every shift. Earn credits while traveling toward passage home.",
+                "After each shift, use the Galactic Route Map to inspect destinations and their travel requirements.",
+            ),
+            GameState.ROUTE_MAP: (
+                "GALACTIC ROUTE MAP",
+                "Selecting a planet only previews it. Purchase its ticket, then use Confirm Travel to consume the ticket and depart.",
+            ),
+            GameState.BLACKGLASS_CONTRACT: (
+                "BLACKGLASS CONTRACT",
+                "Emergency clinic work will cover the travel shortfall, and transportation is provided without a ticket.",
             ),
             GameState.ENDING: (
                 "DESTINATION TRAVEL" if self.route.arrival_pending else "FINAL DEPARTURE",
@@ -633,10 +643,10 @@ class TutorialMixin:
                 ),
             ),
             (
-                "CARRYOVER",
+                "CARRYOVER & TICKETS",
                 (
-                    "Money and permanent upgrades carry between planets. "
-                    f"Save ${RETURN_PASSAGE_COST} for passage home."
+                    "Tickets cannot create debt and belong to one destination. "
+                    f"Earth Return Passage costs ${RETURN_PASSAGE_COST}."
                 ),
             ),
             ("EVIDENCE", "Patient Notes tracks progress toward a hidden two-card clue path."),
@@ -656,10 +666,10 @@ class TutorialMixin:
                 ),
             ),
             (
-                "PLANET ROUTE",
+                "PLANET ROUTE & BLACKGLASS",
                 (
-                    "Day 1 Training > Day 2 Triska > Day 3 Lumora. "
-                    "Each new destination has different aliens and conditions."
+                    "Day 3 Lumora is a new destination with different aliens and conditions. "
+                    "Money and upgrades carry between planets."
                 ),
             ),
         )

@@ -13,7 +13,6 @@ from Player import (
     LIMITED_EVIDENCE_REWARD,
     NO_EVIDENCE_REWARD,
     PERFECT_DAY_BONUS,
-    RETURN_PASSAGE_COST,
     WRONG_DIAGNOSIS_PENALTY,
 )
 
@@ -39,9 +38,6 @@ SHOP_UPGRADES = (
      "description": "Every test costs $2 less. Stacks with calibrations.", "discount": 2},
     {"id": "smart_cards", "name": "SMART TEST CARDS", "category": "CARD UPGRADE", "cost": 25,
      "description": "Every test costs $1 less. Stacks with upgrades.", "discount": 1},
-    {"id": "return_passage", "name": "RETURN PASSAGE", "category": "EARTH TRANSIT", "cost": RETURN_PASSAGE_COST,
-     "description": "Secure a ticket, then keep working or take the UFO home.", "passage": True},
-
     {"id": "recycler", "name": "CARD RECYCLER", "category": "CARD MANAGEMENT", "cost": 50,
      "description": "Once per patient, swap a test card for a random one free."},
 )
@@ -75,7 +71,6 @@ SHOP_PRODUCT_COLORS = {
     "neural": (195, 132, 245),
     "power": (112, 255, 181),
     "smart_cards": (190, 143, 229),
-    "return_passage": (255, 198, 75),
 }
 
 for _item in SHOP_UPGRADES:
@@ -119,24 +114,6 @@ class ShopMixin:
         if test.rarity == "Common" and not self.emergency_test_used:
             return True, 0, True
         return False, normal_cost, False
-
-    def has_return_passage(self):
-        """Return whether the campaign has purchased transport back to Earth."""
-
-        return "return_passage" in self.purchased_shop_upgrades
-
-    def get_return_passage_progress(self):
-        """Return the persistent fraction of the Earth-ticket goal funded."""
-
-        if self.has_return_passage():
-            return 1.0
-        return min(
-            1.0,
-            max(0.0, self.player.balance / RETURN_PASSAGE_COST),
-        )
-
-    def is_shop_day_locked(self, upgrade):
-        return bool(upgrade.get("passage") and self.route.next_destination is not None)
 
     def is_shop_path_locked(self, upgrade):
         if "machine" not in upgrade:
@@ -263,8 +240,6 @@ class ShopMixin:
         )
         self.screen.blit(hint, (110, 158))
 
-        self.draw_return_passage_progress()
-
         balance_badge = pygame.Rect(814, 132, 176, 38)
         pygame.draw.rect(self.screen, (50, 37, 68), balance_badge, border_radius=19)
         pygame.draw.rect(
@@ -292,6 +267,7 @@ class ShopMixin:
             self.get_balance_color(self.player.balance),
         )
         self.screen.blit(balance, balance.get_rect(center=(balance_badge.centerx + 10, balance_badge.centery)))
+        self.draw_shop_ticket_badge()
 
         for upgrade, rect in zip(
             self.get_visible_shop_upgrades(),
@@ -302,15 +278,14 @@ class ShopMixin:
         selected = self.get_selected_shop_upgrade()
         owned = selected and selected["id"] in self.purchased_shop_upgrades
         path_locked = selected and not owned and self.is_shop_path_locked(selected)
-        day_locked = selected and self.is_shop_day_locked(selected)
-        can_buy = selected and not owned and not path_locked and not day_locked and self.player.balance >= selected["cost"]
+        can_buy = selected and not owned and not path_locked and self.player.balance >= selected["cost"]
         label = "SELECT AN UPGRADE"
         if selected:
-            label = "UNLOCKS AT FINAL STOP" if day_locked else "OTHER PATH CHOSEN" if path_locked else "INSTALLED" if owned else (f"BUY & INSTALL  ${selected['cost']}" if can_buy else f"NEED ${selected['cost'] - self.player.balance} MORE")
+            label = "OTHER PATH CHOSEN" if path_locked else "INSTALLED" if owned else (f"BUY & INSTALL  ${selected['cost']}" if can_buy else f"NEED ${selected['cost'] - self.player.balance} MORE")
         mouse_position = self.get_mouse_position()
         for rect, text, enabled, accent in (
             (self.shop_purchase_button, label, can_buy, (112, 255, 181)),
-            (self.shop_button, "DEPART PLANET", True, (206, 158, 233)),
+            (self.shop_button, "OPEN ROUTE MAP", True, (206, 158, 233)),
         ):
             hovered = rect.collidepoint(mouse_position)
             border = accent if enabled else (71, 83, 91)
@@ -338,30 +313,51 @@ class ShopMixin:
         message = self.card_font.render(self.shop_message, True, COLORS["text"])
         self.screen.blit(message, message.get_rect(center=(550, 588)))
 
-    def draw_return_passage_progress(self):
-        """Keep the campaign's Earth-ticket goal visible in every Supply Shop."""
+    def draw_shop_ticket_badge(self):
+        """Keep the next route fare visible while players consider upgrades."""
 
-        badge = pygame.Rect(548, 136, 250, 37)
-        secured = self.has_return_passage()
-        accent = (112, 255, 181) if secured else SHOP_PRODUCT_COLORS["return_passage"]
-        pygame.draw.rect(self.screen, (21, 27, 41), badge, border_radius=8)
+        destination = self.get_intended_route_destination()
+        if destination is None:
+            return
+        badge = pygame.Rect(548, 132, 250, 38)
+        price = destination.map_data.ticket_price
+        owned = destination.key in self.route.purchased_ticket_keys
+        shortfall = 0 if owned else max(0, price - self.player.balance)
+        accent = (112, 255, 181) if owned else (117, 190, 255)
+        pygame.draw.rect(self.screen, (20, 29, 43), badge, border_radius=8)
         pygame.draw.rect(self.screen, accent, badge, width=1, border_radius=8)
-        label_text = (
-            "RETURN PASSAGE SECURED"
-            if secured
-            else (
-                f"RETURN PASSAGE  {self.format_money(self.player.balance)} / "
-                f"{self.format_money(RETURN_PASSAGE_COST)}"
-            )
+        destination_label = (
+            "RETURN PASSAGE"
+            if destination.map_data.destination_type.value == "earth"
+            else destination.planet_name.split()[0].upper()
         )
-        label = self.compact_ui_font.render(label_text, True, accent)
-        self.screen.blit(label, label.get_rect(center=(badge.centerx, badge.y + 12)))
-        track = pygame.Rect(badge.x + 10, badge.bottom - 10, badge.width - 20, 5)
-        pygame.draw.rect(self.screen, (7, 12, 22), track, border_radius=3)
-        progress = self.get_return_passage_progress()
+        title = self.card_font.render(
+            f"NEXT TICKET  •  {destination_label}  {self.format_money(price)}",
+            True,
+            accent,
+        )
+        detail = self.card_font.render(
+            "TICKET OWNED"
+            if owned
+            else (
+                f"{self.format_money(self.player.balance)} SAVED  •  "
+                f"{self.format_money(shortfall)} NEEDED"
+            ),
+            True,
+            COLORS["text"],
+        )
+        self.screen.blit(title, title.get_rect(center=(badge.centerx, badge.y + 11)))
+        self.screen.blit(detail, detail.get_rect(center=(badge.centerx, badge.y + 26)))
+        track = pygame.Rect(badge.x + 8, badge.bottom - 5, badge.width - 16, 3)
+        pygame.draw.rect(self.screen, (6, 11, 20), track, border_radius=2)
+        progress = 1.0 if owned else min(1.0, max(0.0, self.player.balance / max(1, price)))
         if progress > 0:
-            fill = pygame.Rect(track.x, track.y, max(2, round(track.width * progress)), track.height)
-            pygame.draw.rect(self.screen, accent, fill, border_radius=3)
+            pygame.draw.rect(
+                self.screen,
+                accent,
+                pygame.Rect(track.x, track.y, max(2, round(track.width * progress)), track.height),
+                border_radius=2,
+            )
 
     def draw_day_complete_screen(self):
         """Draw the end-of-day recap as a polished clinic payroll terminal."""
@@ -618,6 +614,8 @@ class ShopMixin:
             ),
         )
 
+        self.draw_payroll_travel_fund(resulting_balance, panel)
+
         hovered = self.day_complete_button.collidepoint(self.get_mouse_position())
         button_fill = (23, 49, 54) if hovered else (21, 27, 39)
         pygame.draw.rect(
@@ -655,6 +653,50 @@ class ShopMixin:
             button_text,
             button_text.get_rect(center=self.day_complete_button.center),
         )
+
+    def draw_payroll_travel_fund(self, projected_balance, panel):
+        """Show how the completed shift funds the next required ticket."""
+
+        destination = self.get_intended_route_destination()
+        if destination is None:
+            return
+        price = destination.map_data.ticket_price
+        shortfall = max(0, price - projected_balance)
+        fund = pygame.Rect(panel.x + 130, panel.y + 386, panel.width - 260, 36)
+        accent = (112, 255, 181) if shortfall == 0 else (117, 190, 255)
+        pygame.draw.rect(self.screen, (8, 20, 29), fund, border_radius=9)
+        pygame.draw.rect(self.screen, accent, fund, width=1, border_radius=9)
+        destination_label = (
+            "RETURN PASSAGE"
+            if destination.map_data.destination_type.value == "earth"
+            else destination.planet_name.upper()
+        )
+        title = self.card_font.render(
+            f"TRAVEL FUND  •  {destination_label} TICKET {self.format_money(price)}",
+            True,
+            accent,
+        )
+        detail = self.card_font.render(
+            (
+                "TICKET FULLY FUNDED"
+                if shortfall == 0
+                else f"AFTER PAY: {self.format_money(projected_balance)}  •  STILL NEEDED: {self.format_money(shortfall)}"
+            ),
+            True,
+            COLORS["text"],
+        )
+        self.screen.blit(title, title.get_rect(center=(fund.centerx, fund.y + 10)))
+        self.screen.blit(detail, detail.get_rect(center=(fund.centerx, fund.y + 23)))
+        track = pygame.Rect(fund.x + 12, fund.bottom - 5, fund.width - 24, 3)
+        pygame.draw.rect(self.screen, (4, 10, 17), track, border_radius=2)
+        progress = min(1.0, max(0.0, projected_balance / max(1, price)))
+        if progress > 0:
+            pygame.draw.rect(
+                self.screen,
+                accent,
+                pygame.Rect(track.x, track.y, max(2, round(track.width * progress)), track.height),
+                border_radius=2,
+            )
 
     def get_daily_pay_breakdown(self):
         """Return earnings, diagnosis penalties, bonus, and net shift payout."""
@@ -699,6 +741,7 @@ class ShopMixin:
         if self.daily_payout_applied:
             return
         self.player.earn(self.get_daily_pay_breakdown()[3])
+        self.route.sync_available_credits(self.player.balance)
         self.daily_payout_applied = True
         self.money_deduction_animation = None
 
@@ -808,8 +851,7 @@ class ShopMixin:
             True,
             COLORS["muted"],
         )
-        # Keep the page count between the header copy and the return-passage
-        # meter. The former right-aligned position sat on top of the meter.
+        # Keep the page count beside the header copy and clear of the balance.
         self.screen.blit(count, count.get_rect(midright=(530, 162)))
 
     def get_selected_shop_upgrade(self):
@@ -839,14 +881,13 @@ class ShopMixin:
             self.shop_message = "Select an upgrade first."
         elif upgrade["id"] in self.purchased_shop_upgrades:
             self.shop_message = f"{upgrade['name']} is already installed."
-        elif self.is_shop_day_locked(upgrade):
-            self.shop_message = "Complete the route to purchase return passage."
         elif self.is_shop_path_locked(upgrade):
             self.shop_message = "This machine already has a permanent path. Choose another machine."
         elif self.player.balance < upgrade["cost"]:
             self.shop_message = f"Not enough money for {upgrade['name']} — need ${upgrade['cost']}."
         else:
             self.player.pay(upgrade["cost"])
+            self.route.sync_available_credits(self.player.balance)
             if upgrade.get("path") == "free_use":
                 self.player.free_test_machines.add(upgrade["machine"])
             elif "machine" in upgrade:
@@ -854,9 +895,6 @@ class ShopMixin:
             elif "discount" in upgrade:
                 self.player.test_discount += upgrade["discount"]
             self.purchased_shop_upgrades.add(upgrade["id"])
-            if upgrade.get("passage"):
-                self.begin_ending_sequence()
-                return
             self.shop_message = ("Recycler installed! Select a test card to recycle once per patient."
                                  if upgrade["id"] == "recycler" else
                                  f"Installed {upgrade['name']}. Test costs updated!")
@@ -1017,9 +1055,6 @@ class ShopMixin:
         if owned:
             status_text = "INSTALLED"
             status_color = COLORS["accent"]
-        elif self.is_shop_day_locked(upgrade):
-            status_text = "FINAL STOP ONLY"
-            status_color = COLORS["muted"]
         elif self.is_shop_path_locked(upgrade):
             status_text = "OTHER PATH CHOSEN"
             status_color = COLORS["muted"]
@@ -1078,18 +1113,6 @@ class ShopMixin:
             )
         elif item_id == "power":
             pygame.draw.polygon(self.screen, color, ((center[0] + 2, center[1] - 10), (center[0] - 6, center[1] + 1), (center[0], center[1] + 1), (center[0] - 2, center[1] + 10), (center[0] + 7, center[1] - 2), (center[0] + 1, center[1] - 2)))
-        elif item_id == "return_passage":
-            ticket = pygame.Rect(center[0] - 9, center[1] - 6, 18, 12)
-            pygame.draw.rect(self.screen, color, ticket, width=2, border_radius=2)
-            pygame.draw.circle(self.screen, color, (ticket.x, ticket.centery), 2)
-            pygame.draw.circle(self.screen, color, (ticket.right, ticket.centery), 2)
-            pygame.draw.line(
-                self.screen,
-                color,
-                (center[0], ticket.y + 2),
-                (center[0], ticket.bottom - 2),
-                width=1,
-            )
         else:
             pygame.draw.rect(self.screen, color, pygame.Rect(center[0] - 7, center[1] - 8, 12, 15), width=2, border_radius=2)
             pygame.draw.line(self.screen, color, (center[0] - 3, center[1] - 4), (center[0] + 8, center[1] - 4), width=2)
@@ -1250,30 +1273,6 @@ class ShopMixin:
                 (cx + 3, cy - 6),
             )
             pygame.draw.polygon(self.screen, (222, 255, 234), bolt)
-        elif item_id == "return_passage":
-            ticket = pygame.Rect(cx - 34, cy - 21, 68, 42)
-            pygame.draw.rect(self.screen, (45, 35, 31), ticket, border_radius=7)
-            pygame.draw.rect(self.screen, color, ticket, width=3, border_radius=7)
-            pygame.draw.circle(self.screen, (5, 12, 20), (ticket.x, ticket.centery), 7)
-            pygame.draw.circle(self.screen, (5, 12, 20), (ticket.right, ticket.centery), 7)
-            pygame.draw.line(
-                self.screen,
-                color,
-                (cx + 9, ticket.y + 5),
-                (cx + 9, ticket.bottom - 5),
-                width=2,
-            )
-            pygame.draw.circle(self.screen, (117, 190, 255), (cx - 10, cy - 3), 7)
-            pygame.draw.arc(
-                self.screen,
-                (117, 190, 255),
-                pygame.Rect(cx - 21, cy - 8, 22, 17),
-                0,
-                math.pi * 2,
-                width=2,
-            )
-            earth = self.legible_micro_font.render("EARTH", True, color)
-            self.screen.blit(earth, earth.get_rect(center=(cx - 10, cy + 14)))
         else:
             card_colors = ((93, 72, 119), (49, 86, 105), (72, 122, 158))
             for index, offset in enumerate((-10, 0, 10)):

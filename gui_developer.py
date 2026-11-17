@@ -19,6 +19,7 @@ DEVELOPER_SCREENS = (
     ("C", "recap", "PAYROLL RECAP", GameState.DAY_COMPLETE),
     ("S", "shop", "SHOP", GameState.SHOP),
     ("B", "route_briefing", "ROUTE BRIEFING", GameState.ROUTE_BRIEFING),
+    ("M", "route_map", "ROUTE MAP", GameState.ROUTE_MAP),
     ("D", "ending", "DEPART PLANET", GameState.ENDING),
     ("A", "arrival", "PLANET ARRIVAL", GameState.ARRIVAL),
     ("F", "final", "ROUTE COMPLETE", GameState.FINAL),
@@ -35,6 +36,7 @@ DEVELOPER_KEY_MAP = {
     pygame.K_c: "recap",
     pygame.K_s: "shop",
     pygame.K_b: "route_briefing",
+    pygame.K_m: "route_map",
     pygame.K_d: "ending",
     pygame.K_a: "arrival",
     pygame.K_f: "final",
@@ -70,6 +72,10 @@ DEVELOPER_SNAPSHOT_FIELDS = (
     "shop_message",
     "route_briefing_seen",
     "route_briefing_index",
+    "route_map_tutorial_active",
+    "route_map_tutorial_seen",
+    "route_map_tutorial_step",
+    "route_map_tutorial_nudge",
     "showing_health_id",
     "showing_diagnosis_hand",
     "hovered_card_index",
@@ -218,6 +224,7 @@ class DeveloperMixin:
             tuple(item.key for item in self.route.completed_destinations),
             self.route.shift_history,
             self.route.arrival_pending,
+            self.route.travel_state,
             self.player.balance,
             tuple(sorted(self.player.machine_levels.items())),
             self.player.test_discount,
@@ -247,6 +254,9 @@ class DeveloperMixin:
             self.homecoming_started,
             self.guided_tutorial_active,
             self.guided_tutorial_step,
+            self.route_map_tutorial_active,
+            self.route_map_tutorial_seen,
+            self.route_map_tutorial_step,
         )
 
     def toggle_developer_navigator(self):
@@ -285,6 +295,8 @@ class DeveloperMixin:
             GameState.DAY_COMPLETE: "recap",
             GameState.SHOP: "shop",
             GameState.ROUTE_BRIEFING: "route_briefing",
+            GameState.ROUTE_MAP: "route_map",
+            GameState.BLACKGLASS_CONTRACT: "route_map",
             GameState.ENDING: "ending",
             GameState.ARRIVAL: "arrival",
             GameState.FINAL: "final",
@@ -334,11 +346,12 @@ class DeveloperMixin:
             "patient_4",
             "recap",
             "shop",
+            "route_map",
             "ending",
         ]
         if destination_index == 0:
             scene_ids.insert(0, "intro")
-            scene_ids.insert(scene_ids.index("ending"), "route_briefing")
+            scene_ids.insert(scene_ids.index("route_map"), "route_briefing")
         else:
             scene_ids.insert(0, "arrival")
         if destination_index == len(self.destinations) - 1:
@@ -501,7 +514,7 @@ class DeveloperMixin:
         elif scene_id.startswith("patient_"):
             patient_index = int(scene_id.rsplit("_", 1)[-1]) - 1
             self.prepare_developer_patient_checkpoint(patient_index)
-        elif scene_id in ("recap", "shop", "route_briefing", "ending"):
+        elif scene_id in ("recap", "shop", "route_briefing", "route_map", "ending"):
             self.prepare_developer_shift_checkpoint()
         elif scene_id == "arrival":
             self.prepare_developer_arrival_checkpoint()
@@ -510,13 +523,18 @@ class DeveloperMixin:
         elif scene_id == "homecoming":
             self.prepare_developer_homecoming_checkpoint()
 
-        if scene_id in ("shop", "route_briefing", "ending"):
+        if scene_id in ("shop", "route_briefing", "route_map", "ending"):
             self.settle_daily_pay()
         if scene_id == "route_briefing":
             self.route_briefing_seen = False
             self.route_briefing_index = 0
         if scene_id == "ending":
             self.record_current_route_performance()
+        if scene_id == "route_map":
+            self.route_briefing_seen = True
+            self.route_map_tutorial_active = False
+            self.route_map_tutorial_seen = True
+            self.open_route_map()
         if scene_id == "ending":
             self.ending_started_at = pygame.time.get_ticks()
         elif scene_id == "arrival":
@@ -587,6 +605,9 @@ class DeveloperMixin:
             self.populate_developer_shift_metrics()
             self.settle_daily_pay()
             reached_destination = self.record_current_route_performance()
+            if reached_destination is not None:
+                self.route.record_ticket_purchase(reached_destination.key)
+                self.route.begin_travel(reached_destination.key)
 
         self.developer_selected_day = selected_day
         if (
@@ -617,7 +638,7 @@ class DeveloperMixin:
         """Preview the real ticket-funded flight home from the final stop."""
 
         self.prepare_developer_final_checkpoint()
-        self.purchased_shop_upgrades.add("return_passage")
+        self.route.record_return_passage_purchase()
         self.begin_homecoming_sequence()
 
     def prepare_developer_campaign_day(self):

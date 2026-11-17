@@ -140,6 +140,10 @@ class SharedModelSmokeTests(unittest.TestCase):
         self.assertEqual(route.overall_performance["correct_diagnoses"], 3)
 
         self.assertEqual(route.complete_current_shift(day_one), get_destination(2))
+        self.assertFalse(route.arrival_pending)
+        self.assertEqual(route.current_destination, get_destination(1))
+        route.record_ticket_purchase("triska_station")
+        self.assertEqual(route.begin_travel("triska_station"), get_destination(2))
         self.assertTrue(route.arrival_pending)
         self.assertEqual(route.begin_current_shift(), get_destination(2))
         self.assertFalse(route.arrival_pending)
@@ -158,6 +162,8 @@ class SharedModelSmokeTests(unittest.TestCase):
             ending_balance=210,
         )
         self.assertEqual(route.complete_current_shift(day_two), get_destination(3))
+        route.record_ticket_purchase("lumora_canopy")
+        self.assertEqual(route.begin_travel("lumora_canopy"), get_destination(3))
         self.assertEqual(route.begin_current_shift(), get_destination(3))
         self.assertIsNone(route.next_destination)
         day_three = ShiftPerformance(
@@ -1034,33 +1040,44 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.patients_called = 1
         self.game.state = GameState.PATIENT
 
+    def authorize_next_route_stop(self):
+        """Use a test-owned ticket to continue beyond the new Route Map."""
+
+        if self.game.state != GameState.ROUTE_MAP:
+            self.game.begin_ending_sequence()
+        destination = self.game.route.next_destination
+        self.assertIsNotNone(destination)
+        self.game.route.record_ticket_purchase(destination.key)
+        self.game.begin_ending_sequence(destination.key)
+        return destination
+
     def test_departure_requires_final_stop_and_full_price_then_ends_campaign(self):
         g = self.game
+        self.assertNotIn(
+            "return_passage",
+            {upgrade["id"] for upgrade in SHOP_UPGRADES},
+        )
+        g.developer_selected_day = g.destinations[-1].day_number
+        g.prepare_developer_final_checkpoint()
         g.state = GameState.SHOP
-        g.player.balance = 500
-        g.selected_shop_upgrade = "return_passage"
-        g.handle_shop_upgrade_click(g.shop_purchase_button.center)
-        self.assertEqual(g.player.balance, 500)
         self.assertNotIn("return_passage", g.purchased_shop_upgrades)
-        g.route.select_day(3)
         g.player.balance = 399
-        g.handle_shop_upgrade_click(g.shop_purchase_button.center)
+        g.open_route_map()
+        self.assertEqual(g.route.selected_map_destination.key, "earth")
+        g.handle_route_map_click(g.route_map_purchase_button.center)
         self.assertEqual(g.player.balance, 399)
+        self.assertFalse(g.has_return_passage())
         g.player.balance = 400
-        g.handle_shop_upgrade_click(g.shop_purchase_button.center)
+        g.handle_route_map_click(g.route_map_purchase_button.center)
         self.assertEqual(g.player.balance, 0)
-        self.assertIn("return_passage", g.purchased_shop_upgrades)
-        self.assertEqual(g.state, GameState.FINAL)
+        self.assertNotIn("return_passage", g.purchased_shop_upgrades)
+        self.assertEqual(g.state, GameState.ROUTE_MAP)
         self.assertFalse(g.homecoming_started)
-        g.handle_final_screen_click(g.final_replay_button.center)
-        self.assertEqual(g.state, GameState.TITLE)
-        self.assertEqual(g.day_number, 3)
+        self.assertTrue(g.route.route_is_complete)
+        self.assertEqual(g.route.selected_map_destination.key, "earth")
         self.assertEqual(g.player.balance, 0)
         self.assertTrue(g.has_return_passage())
-        g.state = GameState.SHOP
-        g.handle_shop_click(g.shop_button.center)
-        self.assertEqual(g.state, GameState.FINAL)
-        g.handle_final_screen_click(g.final_quit_button.center)
+        g.handle_route_map_click(g.route_map_travel_button.center)
         self.assertEqual(g.state, GameState.ENDING)
         self.assertTrue(g.homecoming_started)
         pygame.event.post(pygame.event.Event(
@@ -1655,6 +1672,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertTrue(self.game.guided_tutorial_active)
         self.game.finish_guided_tutorial()
         self.game.begin_ending_sequence()
+        self.authorize_next_route_stop()
         self.game.finish_ending_sequence()
         self.game.handle_arrival_click(self.game.arrival_begin_button.center)
 
@@ -2201,6 +2219,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
                 "patient_4",
                 "recap",
                 "shop",
+                "route_map",
                 "ending",
             ],
         )
@@ -3019,6 +3038,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(len(ROUTE_BRIEFING_DIALOGUE), 3)
         for _ in ROUTE_BRIEFING_DIALOGUE:
             self.game.advance_route_briefing()
+        self.assertEqual(self.game.state, GameState.ROUTE_MAP)
+        self.authorize_next_route_stop()
         self.assertEqual(self.game.state, GameState.ENDING)
         self.game.draw()
         self.game.ending_started_at = (
@@ -3079,6 +3100,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertFalse(self.game.exit_confirmation_open)
 
         self.game.begin_ending_sequence()
+        self.authorize_next_route_stop()
         original_ending_start = self.game.ending_started_at
         self.game.open_exit_confirmation()
         self.game.exit_confirmation_opened_at -= 1000
@@ -3658,6 +3680,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             {'flersch', 'dooski', 'flump', 'roldi'},
         )
         self.game.begin_ending_sequence()
+        self.authorize_next_route_stop()
         self.game.finish_ending_sequence()
         self.assertEqual(self.game.state, GameState.ARRIVAL)
         self.game.handle_arrival_click(self.game.arrival_begin_button.center)
@@ -3689,6 +3712,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         """Automatically play all four Day 2 cases to guard the full shift loop."""
 
         self.game.begin_ending_sequence()
+        self.authorize_next_route_stop()
         self.game.start_next_shift()
         expected_names = ['Flersch', 'Dooski', 'Flump', 'Roldi']
         self.assertEqual(self.game.day_number, 2)
@@ -3755,6 +3779,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.route.overall_performance["patients_seen"], 4)
         self.assertEqual(self.game.route.overall_performance["wrong_diagnoses"], 1)
 
+        self.authorize_next_route_stop()
         self.game.start_next_shift()
         self.assertEqual(self.game.state, GameState.TITLE)
         self.assertEqual(self.game.current_destination, get_destination(2))
@@ -3778,6 +3803,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game.player.balance = 175
         self.game.begin_ending_sequence()
+        self.authorize_next_route_stop()
         self.game.finish_ending_sequence()
         self.assertEqual(self.game.state, GameState.ARRIVAL)
         self.assertEqual(self.game.get_tutorial_action_label(), "RETURN TO ARRIVAL")
@@ -3835,6 +3861,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.state, GameState.ROUTE_BRIEFING)
         for _ in ROUTE_BRIEFING_DIALOGUE:
             self.game.advance_route_briefing()
+        self.assertEqual(self.game.state, GameState.ROUTE_MAP)
+        self.game.draw()
+        self.authorize_next_route_stop()
         self.assertEqual(self.game.state, GameState.ENDING)
         self.assertTrue(self.game.route.arrival_pending)
 
@@ -3851,19 +3880,20 @@ class GuiFlowSmokeTests(unittest.TestCase):
         """Completing Lumora should show Route Complete rather than another stop."""
 
         self.game.begin_ending_sequence()
+        self.authorize_next_route_stop()
         self.game.finish_ending_sequence()
         self.game.handle_arrival_click(self.game.arrival_begin_button.center)
         self.assertEqual(self.game.current_destination, get_destination(2))
 
         self.game.begin_ending_sequence()
+        self.authorize_next_route_stop()
         self.game.finish_ending_sequence()
         self.assertEqual(self.game.state, GameState.ARRIVAL)
         self.game.handle_arrival_click(self.game.arrival_begin_button.center)
         self.assertEqual(self.game.current_destination, get_destination(3))
 
         self.game.begin_ending_sequence()
-        self.game.finish_ending_sequence()
-        self.assertEqual(self.game.state, GameState.FINAL)
+        self.assertEqual(self.game.state, GameState.ROUTE_MAP)
         self.assertTrue(self.game.route.route_is_complete)
         self.assertFalse(self.game.route.arrival_pending)
         self.assertIsNone(self.game.route.next_destination)
@@ -3874,11 +3904,6 @@ class GuiFlowSmokeTests(unittest.TestCase):
             "The next clinic destination is being prepared.",
         )
         self.game.draw()
-
-        self.game.handle_final_screen_click(self.game.final_replay_button.center)
-        self.assertEqual(self.game.state, GameState.TITLE)
-        self.assertEqual(self.game.day_number, 1)
-        self.assertEqual(self.game.patient.name, "Zorpa Voidwalker")
 
     def test_shop_blocks_an_unaffordable_upgrade_purchase(self):
         """A selected upgrade should not charge or unlock when money is too low."""
@@ -3897,33 +3922,26 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertNotIn(upgrade["id"], self.game.purchased_shop_upgrades)
         self.assertIn("Not enough money", self.game.shop_message)
 
-    def test_return_passage_is_a_real_persistent_shop_purchase(self):
-        """The Earth-ticket objective should show progress and be purchasable."""
+    def test_return_passage_is_exclusive_to_the_route_map(self):
+        """The Supply Shop should sell upgrades, never the Earth ticket."""
 
-        passage = next(
-            upgrade
-            for upgrade in SHOP_UPGRADES
-            if upgrade["id"] == "return_passage"
+        self.assertNotIn(
+            "return_passage",
+            {upgrade["id"] for upgrade in SHOP_UPGRADES},
         )
-        self.assertEqual(passage["cost"], RETURN_PASSAGE_COST)
-        self.game.route.select_day(3)
+        self.game.developer_selected_day = self.game.destinations[-1].day_number
+        self.game.prepare_developer_final_checkpoint()
         self.game.state = GameState.SHOP
         self.game.player.balance = RETURN_PASSAGE_COST
-        passage_index = SHOP_UPGRADES.index(passage)
-        self.game.shop_scroll_row = min(
-            passage_index // 3,
-            self.game.get_shop_max_scroll_row(),
+        self.game.handle_shop_click(self.game.shop_button.center)
+        self.assertEqual(self.game.state, GameState.ROUTE_MAP)
+        self.assertEqual(self.game.route.selected_map_destination.key, "earth")
+        self.assertFalse(self.game.has_return_passage())
+        self.game.handle_route_map_click(
+            self.game.route_map_purchase_button.center
         )
-        visible_index = self.game.get_visible_shop_upgrades().index(passage)
-
-        self.game.handle_shop_click(
-            self.game.get_shop_upgrade_rects()[visible_index].center
-        )
-        self.game.handle_shop_click(self.game.shop_purchase_button.center)
-
         self.assertTrue(self.game.has_return_passage())
         self.assertEqual(self.game.player.balance, 0)
-        self.assertEqual(self.game.state, GameState.FINAL)
         self.game.draw()
 
     def test_workspace_tools_use_the_swapped_non_overlapping_layout(self):
