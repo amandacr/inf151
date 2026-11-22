@@ -259,14 +259,15 @@ class CosmicClinicGUI(
         self.layout = {
             "status_bar": pygame.Rect(30, 100, 1040, 50),
             "draw_deck": pygame.Rect(45, 180, 150, 175),
-            "alien": pygame.Rect(233, 165, 230, 195),
-            # Keep the ID fully inside the panoramic examination window.
-            # Its previous 200px height crossed the lower window frame.
-            "id_card": pygame.Rect(493, 170, 304, 188),
+            # Share the panoramic workspace according to information density:
+            # the patient and ID need room to read, while the diagnosis folder
+            # only needs to remain an obvious, clickable file station.
+            "alien": pygame.Rect(205, 165, 280, 195),
+            "id_card": pygame.Rect(500, 165, 385, 195),
             "throwaway": pygame.Rect(923, 423, 100, 125),
             "notebook": pygame.Rect(35, 395, 180, 165),
             "active_hand": pygame.Rect(225, 390, 625, 170),
-            "diagnosis": pygame.Rect(840, 175, 185, 180),
+            "diagnosis": pygame.Rect(890, 185, 160, 165),
         }
         self.refresh_hand_layout()
         self.notebook_layout = self.build_notebook_rects()
@@ -279,13 +280,22 @@ class CosmicClinicGUI(
         self.pile_font = pygame.font.Font(None, 14)
         self.tiny_font = pygame.font.Font(None, 10)
         self.compact_ui_font = pygame.font.SysFont("Arial", 12, bold=True)
-        self.compact_card_title_font = pygame.font.SysFont("Arial", 11, bold=True)
-        self.interview_tiny_font = pygame.font.SysFont("Arial", 10, bold=True)
+        self.compact_card_title_font = pygame.font.SysFont("Arial Narrow", 13, bold=True)
+        self.interview_tiny_font = pygame.font.SysFont("Arial", 12, bold=True)
         self.legible_micro_font = pygame.font.SysFont("Arial", 9, bold=True)
-        self.id_detail_font = pygame.font.SysFont("Arial", 12, bold=True)
+        self.readable_detail_font = pygame.font.SysFont("Arial", 13, bold=True)
+        self.id_detail_large_font = pygame.font.SysFont("Arial Narrow", 15, bold=True)
+        self.id_detail_font = pygame.font.SysFont("Arial Narrow", 14, bold=True)
+        self.id_detail_small_font = pygame.font.SysFont("Arial Narrow", 13, bold=True)
+        self.id_value_large_font = pygame.font.SysFont("Arial Narrow", 15)
+        self.id_value_font = pygame.font.SysFont("Arial Narrow", 14)
+        self.id_value_small_font = pygame.font.SysFont("Arial Narrow", 13)
+        self.shop_detail_font = pygame.font.SysFont("Arial", 14, bold=True)
+        self.shop_label_font = pygame.font.SysFont("Arial", 15, bold=True)
+        self.route_detail_font = pygame.font.SysFont("Arial", 13, bold=True)
         self.notebook_preview_font = pygame.font.Font(None, 15)
         self.diagnosis_name_font = pygame.font.SysFont("Arial", 21, bold=True)
-        self.diagnosis_card_font = pygame.font.SysFont("Arial", 13, bold=True)
+        self.diagnosis_card_font = pygame.font.SysFont("Arial", 14, bold=True)
         self.notebook_title_font = pygame.font.Font(None, 28)
         self.notebook_body_font = pygame.font.Font(None, 22)
         self.logo_font = pygame.font.SysFont("Arial", 54, bold=True)
@@ -293,8 +303,8 @@ class CosmicClinicGUI(
         self.tutorial_title_font = pygame.font.SysFont("Arial", 32, bold=True)
         self.tutorial_subtitle_font = pygame.font.SysFont("Arial", 16, bold=True)
         self.tutorial_step_font = pygame.font.SysFont("Arial", 17, bold=True)
-        self.tutorial_body_font = pygame.font.SysFont("Arial", 15)
-        self.tutorial_label_font = pygame.font.SysFont("Arial", 13, bold=True)
+        self.tutorial_body_font = pygame.font.SysFont("Arial", 16)
+        self.tutorial_label_font = pygame.font.SysFont("Arial", 14, bold=True)
         self.dialogue_speaker_font = pygame.font.SysFont("Arial", 16, bold=True)
         self.dialogue_body_font = pygame.font.SysFont("Arial", 23)
         self.game_logo = self.create_game_logo_surface()

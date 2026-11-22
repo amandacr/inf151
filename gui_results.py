@@ -70,7 +70,7 @@ class ResultsMixin:
         )
         heading = self.heading_font.render(heading_label, True, COLORS["text"])
         self.screen.blit(heading, heading.get_rect(midleft=(icon.right + 15, header.y + 25)))
-        patient = self.card_font.render(
+        patient = self.readable_detail_font.render(
             "PATIENT: " + self.patient.name.upper(),
             True,
             COLORS["muted"],
@@ -81,7 +81,7 @@ class ResultsMixin:
         badge_color = status_color if revealed else (83, 128, 151)
         pygame.draw.rect(self.screen, (11, 28, 34), badge, border_radius=17)
         pygame.draw.rect(self.screen, badge_color, badge, width=2, border_radius=17)
-        badge_text = self.card_font.render(
+        badge_text = self.readable_detail_font.render(
             "COMPLETE" if revealed else "SCANNING",
             True,
             badge_color,
@@ -101,7 +101,7 @@ class ResultsMixin:
             width=2,
             border_radius=10,
         )
-        report_title = self.card_font.render("DIAGNOSTIC RESULT", True, COLORS["muted"])
+        report_title = self.tutorial_label_font.render("DIAGNOSTIC RESULT", True, COLORS["muted"])
         self.screen.blit(report_title, (report.x + 20, report.y + 17))
         pygame.draw.line(
             self.screen,
@@ -152,7 +152,7 @@ class ResultsMixin:
                 (note_icon[0] + 4, note_icon[1] - 3),
                 width=2,
             )
-            notebook_note = self.card_font.render(
+            notebook_note = self.readable_detail_font.render(
                 "RESULT READY FOR PATIENT NOTES",
                 True,
                 COLORS["accent"],
@@ -265,12 +265,12 @@ class ResultsMixin:
         )
 
         subtitle = TEST_SUBTITLES.get(test_name, "MEDICAL SCAN")
-        machine_label = self.card_font.render(subtitle, True, scan_color)
+        machine_label = self.readable_detail_font.render(subtitle, True, scan_color)
         self.screen.blit(
             machine_label,
             machine_label.get_rect(center=(visual.centerx, visual.bottom - 30)),
         )
-        percentage = self.card_font.render(
+        percentage = self.readable_detail_font.render(
             f"SCAN {round(progress * 100):03d}%",
             True,
             COLORS["muted"],
@@ -356,7 +356,7 @@ class ResultsMixin:
         reading = "CORE READING"
         if self.last_test_result and ":" in self.last_test_result:
             reading = self.last_test_result.rsplit(":", 1)[-1].strip()
-        title = self.compact_ui_font.render("THERMAL CORE", True, COLORS["muted"])
+        title = self.readable_detail_font.render("THERMAL CORE", True, COLORS["muted"])
         value = self.heading_font.render(reading, True, scan_color)
         status = self.card_font.render("LIVE PATIENT SAMPLE", True, COLORS["text"])
         self.screen.blit(title, (display.x + 91, display.y + 33))
@@ -406,7 +406,7 @@ class ResultsMixin:
             (wave_right, display.bottom - 25),
             width=1,
         )
-        label = self.compact_ui_font.render("ECHO RETURN", True, COLORS["text"])
+        label = self.readable_detail_font.render("ECHO RETURN", True, COLORS["text"])
         self.screen.blit(label, label.get_rect(midright=(display.right - 12, display.y + 17)))
 
 
@@ -451,7 +451,7 @@ class ResultsMixin:
             pygame.draw.line(skeleton, bone, hip, knee, width=3)
             pygame.draw.line(skeleton, bone, knee, foot, width=3)
         self.screen.blit(skeleton, plate.topleft)
-        label = self.compact_ui_font.render("STRUCTURAL PLATE", True, COLORS["text"])
+        label = self.readable_detail_font.render("STRUCTURAL PLATE", True, COLORS["text"])
         self.screen.blit(label, label.get_rect(center=(display.centerx, display.bottom - 10)))
 
 
@@ -459,7 +459,7 @@ class ResultsMixin:
         """Draw a four-sample reaction tray with patient-specific activity."""
 
         reaction_detected = "no reaction" not in (self.last_test_result or "").lower()
-        title = self.compact_ui_font.render("REACTION SAMPLE ARRAY", True, COLORS["text"])
+        title = self.readable_detail_font.render("REACTION SAMPLE ARRAY", True, COLORS["text"])
         self.screen.blit(title, title.get_rect(center=(display.centerx, display.y + 17)))
         tray = pygame.Rect(display.x + 18, display.y + 41, display.width - 36, 84)
         pygame.draw.rect(self.screen, (20, 37, 48), tray, border_radius=9)
@@ -482,7 +482,7 @@ class ResultsMixin:
                 (well_center[0] - 2, well_center[1]),
                 2,
             )
-            sample_label = self.legible_micro_font.render(
+            sample_label = self.readable_detail_font.render(
                 chr(ord("A") + index),
                 True,
                 COLORS["muted"],
@@ -496,7 +496,7 @@ class ResultsMixin:
     def draw_blood_chemistry_readout(self, display, scan_color, progress):
         """Draw an animated fluid vial beside its developing marker panel."""
 
-        title = self.compact_ui_font.render("FLUID CHEMISTRY", True, COLORS["text"])
+        title = self.readable_detail_font.render("FLUID CHEMISTRY", True, COLORS["text"])
         self.screen.blit(title, title.get_rect(center=(display.centerx, display.y + 16)))
 
         vial = pygame.Rect(display.x + 20, display.y + 38, 48, 91)
@@ -542,7 +542,7 @@ class ResultsMixin:
         marker_levels = (0.82, 0.58, 0.70)
         for index, (label_text, marker_level) in enumerate(zip(labels, marker_levels)):
             y = display.y + 48 + index * 30
-            label = self.legible_micro_font.render(label_text, True, COLORS["muted"])
+            label = self.readable_detail_font.render(label_text, True, COLORS["muted"])
             self.screen.blit(label, (bar_x, y))
             bar = pygame.Rect(bar_x + 36, y + 2, 79, 8)
             pygame.draw.rect(self.screen, (19, 48, 54), bar, border_radius=4)
@@ -557,14 +557,14 @@ class ResultsMixin:
                 width=1,
             )
 
-        status = self.compact_ui_font.render("SAMPLE ANALYSIS", True, scan_color)
+        status = self.readable_detail_font.render("SAMPLE ANALYSIS", True, scan_color)
         self.screen.blit(status, status.get_rect(center=(display.x + 140, display.bottom - 14)))
 
 
     def draw_oxygen_readout(self, display, scan_color, progress):
         """Draw breathing organs, rising gas bubbles, and an exchange waveform."""
 
-        title = self.compact_ui_font.render("RESPIRATORY EXCHANGE", True, COLORS["text"])
+        title = self.readable_detail_font.render("RESPIRATORY EXCHANGE", True, COLORS["text"])
         self.screen.blit(title, title.get_rect(center=(display.centerx, display.y + 16)))
 
         phase = pygame.time.get_ticks() / 330
@@ -617,14 +617,14 @@ class ResultsMixin:
             wave_points.append((wave_x, wave_y))
         if len(wave_points) > 1:
             pygame.draw.lines(self.screen, scan_color, False, wave_points, width=2)
-        label = self.legible_micro_font.render("GAS FLOW", True, COLORS["muted"])
+        label = self.readable_detail_font.render("GAS FLOW", True, COLORS["muted"])
         self.screen.blit(label, label.get_rect(center=(display.x + 61, display.bottom - 18)))
 
 
     def draw_toxin_readout(self, display, scan_color, progress):
         """Draw a bubbling sample flask and three contaminant channels."""
 
-        title = self.compact_ui_font.render("COMPOUND SCREEN", True, COLORS["text"])
+        title = self.readable_detail_font.render("COMPOUND SCREEN", True, COLORS["text"])
         self.screen.blit(title, title.get_rect(center=(display.centerx, display.y + 16)))
 
         neck = pygame.Rect(display.x + 29, display.y + 37, 28, 28)
@@ -667,17 +667,20 @@ class ResultsMixin:
             )
             if fill.height > 0:
                 pygame.draw.rect(self.screen, scan_color, fill, border_radius=3)
-            marker = self.legible_micro_font.render(label_text, True, COLORS["text"])
+            marker = self.readable_detail_font.render(label_text, True, COLORS["text"])
             self.screen.blit(marker, marker.get_rect(center=(channel.centerx, channel.bottom + 12)))
 
-        status = self.compact_ui_font.render("TOXIN FILTER", True, scan_color)
-        self.screen.blit(status, status.get_rect(midbottom=(display.right - 12, display.bottom - 5)))
+        status = self.readable_detail_font.render("TOXIN FILTER", True, scan_color)
+        self.screen.blit(
+            status,
+            status.get_rect(midbottom=(display.right - 58, display.bottom - 5)),
+        )
 
 
     def draw_neural_readout(self, display, scan_color, progress):
         """Draw a pulsing nervous-system map with a live signal trace."""
 
-        title = self.compact_ui_font.render("NEURAL SIGNAL MAP", True, COLORS["text"])
+        title = self.readable_detail_font.render("NEURAL SIGNAL MAP", True, COLORS["text"])
         self.screen.blit(title, title.get_rect(center=(display.centerx, display.y + 16)))
 
         nodes = (
@@ -732,8 +735,8 @@ class ResultsMixin:
         )
         warning = self.card_font.render("!", True, (245, 126, 112))
         self.screen.blit(warning, warning.get_rect(center=bin_rect.center))
-        waste_title = self.card_font.render("CARD READY FOR MED-WASTE", True, COLORS["text"])
-        waste_detail = self.card_font.render(
+        waste_title = self.readable_detail_font.render("CARD READY FOR MED-WASTE", True, COLORS["text"])
+        waste_detail = self.readable_detail_font.render(
             "EMERGENCY CLINIC TEST  •  NO CHARGE"
             if self.last_test_was_emergency
             else f"TEST COST ${self.last_test_cost} DEDUCTED  •  INCLUDED IN SHIFT RECAP",

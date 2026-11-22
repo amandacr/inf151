@@ -72,10 +72,10 @@ class RouteMapMixin:
             )
             for _ in range(92)
         )
-        self.route_map_area = pygame.Rect(35, 132, 690, 410)
-        self.route_map_ticket_panel = pygame.Rect(750, 132, 315, 426)
-        self.route_map_purchase_button = pygame.Rect(775, 488, 265, 42)
-        self.route_map_travel_button = pygame.Rect(775, 488, 265, 42)
+        self.route_map_area = pygame.Rect(35, 132, 680, 410)
+        self.route_map_ticket_panel = pygame.Rect(730, 132, 345, 426)
+        self.route_map_purchase_button = pygame.Rect(755, 488, 295, 42)
+        self.route_map_travel_button = pygame.Rect(755, 488, 295, 42)
         self.route_map_tutorial_skip_button = pygame.Rect(930, 54, 138, 27)
         self.blackglass_contract_return_button = pygame.Rect(385, 523, 330, 46)
         self.route_map_message = "Select a destination to inspect its ticket."
@@ -192,8 +192,8 @@ class RouteMapMixin:
         self.draw_route_map_legend()
         self.draw_route_map_ticket_panel()
 
-        footer = self.small_font.render(
-            f"Select a planet to inspect  •  Esc for exit options  •  {self.get_fullscreen_hint()}",
+        footer = self.route_detail_font.render(
+            "SELECT A PLANET  •  ESC MENU  •  F11 FULLSCREEN",
             True,
             (104, 132, 145),
         )
@@ -361,13 +361,20 @@ class RouteMapMixin:
         if selected:
             pygame.draw.circle(self.screen, (237, 222, 167), center, radius + 8, width=2)
 
-        name = self.tutorial_label_font.render(
-            destination.planet_name.upper(),
+        short_names = {
+            "earth": "EARTH",
+            "training_orbit": "TRAINING ORBIT",
+            "triska_station": "TRISKA STATION",
+            "lumora_canopy": "LUMORA HAVEN",
+            "blackglass": "BLACKGLASS",
+        }
+        name = self.tutorial_subtitle_font.render(
+            short_names.get(destination.key, destination.planet_name.upper()),
             True,
             (218, 228, 226) if unlocked else (130, 137, 149),
         )
         self.screen.blit(name, name.get_rect(center=(center[0], center[1] + radius + 18)))
-        status = self.pile_font.render(status_text, True, status_color)
+        status = self.route_detail_font.render(status_text, True, status_color)
         status_panel = status.get_rect(center=(center[0], center[1] + radius + 36)).inflate(14, 5)
         pygame.draw.rect(self.screen, (8, 15, 26), status_panel, border_radius=6)
         pygame.draw.rect(self.screen, status_color, status_panel, width=1, border_radius=6)
@@ -466,20 +473,19 @@ class RouteMapMixin:
         state = self.route.get_destination_state(destination.key, selected=True)
         if state is DestinationState.EMERGENCY_CONTRACT:
             if self.get_blackglass_credit_shortfall() <= 0:
-                return "Intended ticket funded; no contract needed."
+                return "Ticket funded; no emergency contract needed."
             return (
-                f"Contract covers the {self.format_money(self.get_blackglass_credit_shortfall())} "
-                "travel shortfall."
+                f"Contract covers the {self.format_money(self.get_blackglass_credit_shortfall())} shortfall."
             )
         return {
             DestinationState.CURRENT_LOCATION: "The Cosmic Clinic is stationed here.",
-            DestinationState.TICKET_REQUIRED: "Purchase this ticket to authorize travel.",
+            DestinationState.TICKET_REQUIRED: "Purchase a ticket to travel here.",
             DestinationState.TICKET_OWNED: "Ticket secured for this destination.",
-            DestinationState.READY_TO_TRAVEL: "Ticket verified. Confirm to depart.",
+            DestinationState.READY_TO_TRAVEL: "Ticket ready. Confirm travel.",
             DestinationState.SHIFT_COMPLETE: "Shift complete. Choose the next stop.",
-            DestinationState.NO_NEW_PATIENTS: "No new patients are currently available.",
+            DestinationState.NO_NEW_PATIENTS: "No new patients at this clinic.",
             DestinationState.LOCKED: "Complete the previous clinic first.",
-            DestinationState.UNKNOWN_DESTINATION: "Clinic records are not available yet.",
+            DestinationState.UNKNOWN_DESTINATION: "Destination records unavailable.",
         }[state]
 
     def get_route_map_patient_text(self, destination):
@@ -525,7 +531,7 @@ class RouteMapMixin:
         badge = pygame.Rect(panel.x + 20, panel.y + 15, panel.width - 40, 28)
         pygame.draw.rect(self.screen, (17, 32, 44), badge, border_radius=7)
         pygame.draw.rect(self.screen, status_color, badge, width=1, border_radius=7)
-        badge_label = self.compact_ui_font.render(status_text, True, status_color)
+        badge_label = self.route_detail_font.render(status_text, True, status_color)
         self.screen.blit(badge_label, badge_label.get_rect(center=badge.center))
 
         name = self.tutorial_subtitle_font.render(
@@ -534,7 +540,7 @@ class RouteMapMixin:
             (229, 235, 228),
         )
         self.screen.blit(name, name.get_rect(center=(panel.centerx, panel.y + 65)))
-        subtitle = self.compact_ui_font.render(
+        subtitle = self.route_detail_font.render(
             selected.subtitle.upper(),
             True,
             (128, 166, 178),
@@ -544,7 +550,7 @@ class RouteMapMixin:
         description_box = pygame.Rect(panel.x + 22, panel.y + 105, panel.width - 44, 64)
         self.draw_wrapped_text(
             selected.map_data.description,
-            self.small_font,
+            self.tutorial_body_font,
             (187, 204, 204),
             description_box,
             line_spacing=2,
@@ -593,7 +599,7 @@ class RouteMapMixin:
         )
         for row_index, (label_text, value_text) in enumerate(details):
             row_y = panel.y + 197 + row_index * 25
-            label = self.compact_ui_font.render(label_text, True, (113, 146, 157))
+            label = self.route_detail_font.render(label_text, True, (113, 146, 157))
             value_color = (
                 self.get_balance_color(self.route.available_credits)
                 if label_text in ("CURRENT CREDITS", "CURRENT SAVINGS")
@@ -601,7 +607,7 @@ class RouteMapMixin:
                 if label_text == "ROUTE ACCESS"
                 else (229, 233, 221)
             )
-            value = self.compact_ui_font.render(value_text, True, value_color)
+            value = self.route_detail_font.render(value_text, True, value_color)
             self.screen.blit(label, label.get_rect(midleft=(panel.x + 25, row_y)))
             self.screen.blit(value, value.get_rect(midright=(panel.right - 25, row_y)))
 
@@ -622,11 +628,7 @@ class RouteMapMixin:
             panel.width - 36,
             23,
         )
-        fonts = (
-            self.compact_ui_font,
-            self.legible_micro_font,
-            self.tiny_font,
-        )
+        fonts = (self.route_detail_font, self.compact_ui_font)
         for font in fonts:
             lines = self.wrap_text(self.route_map_message, font, message_box.width)
             line_height = font.get_linesize()
@@ -670,8 +672,8 @@ class RouteMapMixin:
         )
         for row_index, (label_text, value_text) in enumerate(details):
             row_y = panel.y + 197 + row_index * 25
-            label = self.compact_ui_font.render(label_text, True, (139, 126, 129))
-            value = self.compact_ui_font.render(
+            label = self.route_detail_font.render(label_text, True, (139, 126, 129))
+            value = self.route_detail_font.render(
                 value_text,
                 True,
                 status_color if row_index in (1, 3) else (229, 233, 221),
@@ -684,7 +686,7 @@ class RouteMapMixin:
         pygame.draw.rect(self.screen, status_color, contract, width=2, border_radius=7)
         pygame.draw.circle(self.screen, (10, 22, 35), (contract.x, contract.centery), 7)
         pygame.draw.circle(self.screen, (10, 22, 35), (contract.right, contract.centery), 7)
-        heading = self.compact_ui_font.render(
+        heading = self.route_detail_font.render(
             "EMERGENCY CLINIC CONTRACT",
             True,
             (244, 197, 184),
@@ -759,7 +761,7 @@ class RouteMapMixin:
             "lumora_canopy": "LUMORA CANOPY",
         }
         ticket_text_color = (205, 211, 214) if unavailable else (31, 39, 43)
-        ticket_name = self.compact_ui_font.render(
+        ticket_name = self.route_detail_font.render(
             "RETURN PASSAGE"
             if is_earth
             else ticket_labels.get(destination.key, destination.planet_name.upper()),

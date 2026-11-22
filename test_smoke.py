@@ -707,9 +707,9 @@ class SharedModelSmokeTests(unittest.TestCase):
         for slot in LUMORA_PATIENTS:
             patient = slot.create()
             for statement in patient.dialogue:
-                font, lines = game.fit_interview_statement(statement, 89, 54)
+                font, lines = game.fit_interview_statement(statement, 114, 58)
                 self.assertEqual(" ".join(lines), " ".join(statement.split()))
-                self.assertLessEqual(len(lines) * font.get_linesize(), 54)
+                self.assertLessEqual(len(lines) * font.get_linesize(), 58)
 
             for result in patient.test_results.values():
                 assert_complete_and_fitted(result, report_fonts, result_box, 7)
@@ -1731,7 +1731,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game.set_guided_tutorial_step("symptom")
         symptom_target = self.game.get_guided_tutorial_target()
-        self.assertEqual(symptom_target.size, (105, 84))
+        self.assertEqual(symptom_target.size, (145, 92))
         self.assertEqual(self.game.patient_dialogue_index, 0)
         for expected_dialogue_index in range(1, len(self.game.patient.dialogue)):
             self.game.handle_guided_tutorial_click(self.game.layout["alien"].center)
@@ -2138,6 +2138,28 @@ class GuiFlowSmokeTests(unittest.TestCase):
                     len(wrapped_lines) * self.game.id_detail_font.get_linesize(),
                     available_height,
                 )
+                label_font, value_font, fitted_rows = (
+                    self.game.get_fitted_id_details(rows, detail_area)
+                )
+                fitted_height = sum(
+                    max(
+                        label_font.get_linesize(),
+                        len(value_lines) * value_font.get_linesize(),
+                    ) + 1
+                    for _label, _label_width, value_lines in fitted_rows
+                )
+                self.assertLessEqual(fitted_height, available_height)
+                for label_text, label_width, value_lines in fitted_rows:
+                    self.assertLessEqual(label_font.size(label_text)[0], available_width)
+                    if value_lines and value_lines[0]:
+                        self.assertLessEqual(
+                            label_width + value_font.size(value_lines[0])[0],
+                            available_width,
+                        )
+                    self.assertTrue(all(
+                        value_font.size(line)[0] <= available_width - 10
+                        for line in value_lines[1:]
+                    ))
 
     def test_notebook_wrapped_id_fields_keep_one_bullet_per_field(self):
         """Continuation lines should remain attached to one Health ID bullet."""
@@ -3398,7 +3420,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             category_upgrades = self.game.get_shop_category_upgrades()
             upgrade_index = category_upgrades.index(upgrade)
             self.game.shop_scroll_row = min(
-                upgrade_index // 6,
+                upgrade_index // 4,
                 self.game.get_shop_max_scroll_row(),
             )
             visible_index = self.game.get_visible_shop_upgrades().index(upgrade)
@@ -3415,7 +3437,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.game.reset_round()
         self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 3)
         rects = self.game.get_shop_upgrade_rects()
-        self.assertEqual(len(rects), 6)
+        self.assertEqual(len(rects), 4)
         for index, rect in enumerate(rects):
             self.assertFalse(rect.colliderect(self.game.shop_purchase_button))
             self.assertFalse(rect.colliderect(self.game.shop_button))
@@ -3430,7 +3452,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
 
         self.game.state = GameState.SHOP
         self.assertEqual(self.game.shop_scroll_row, 0)
-        self.assertEqual(len(self.game.get_visible_shop_upgrades()), 6)
+        self.assertEqual(len(self.game.get_visible_shop_upgrades()), 4)
 
         pygame.event.post(pygame.event.Event(pygame.MOUSEWHEEL, {"y": -1}))
         self.game.handle_events()
@@ -3441,7 +3463,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         final_page_ids = {
             upgrade["id"] for upgrade in self.game.get_visible_shop_upgrades()
         }
-        self.assertEqual(final_page_ids, {"toxin", "neural"})
+        self.assertEqual(final_page_ids, {"blood", "oxygen", "toxin", "neural"})
 
         new_machine_tests = {
             "blood": BloodChemistryTest,
@@ -3466,7 +3488,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
             category_upgrades = self.game.get_shop_category_upgrades()
             upgrade_index = category_upgrades.index(upgrade)
             self.game.shop_scroll_row = min(
-                upgrade_index // 6,
+                upgrade_index // 4,
                 self.game.get_shop_max_scroll_row(),
             )
             visible_index = self.game.get_visible_shop_upgrades().index(upgrade)
@@ -4212,7 +4234,9 @@ class GuiFlowSmokeTests(unittest.TestCase):
         right_window = pygame.Rect(794, 157, 277, 210)
 
         self.assertLess(diagnosis.centery, throwaway.centery)
-        self.assertLessEqual(abs(diagnosis.centerx - right_window.centerx), 1)
+        self.assertGreater(diagnosis.centerx, right_window.centerx)
+        self.assertLessEqual(diagnosis.right, right_window.right)
+        self.assertLess(diagnosis.width, 185)
         self.assertGreaterEqual(notebook.width, 180)
         self.assertLess(throwaway.width, notebook.width)
         self.assertLess(throwaway.height, notebook.height)
@@ -4233,10 +4257,10 @@ class GuiFlowSmokeTests(unittest.TestCase):
     def test_long_test_card_title_renders_without_tiny_fallback(self):
         """Every card title and description should remain inside its text area."""
 
-        compact_test_header = pygame.Rect(0, 0, 96, 31)
-        compact_diagnosis_header = pygame.Rect(0, 0, 96, 44)
-        selected_header = pygame.Rect(0, 0, 202, 39)
-        description_area = pygame.Rect(0, 0, 130, 108)
+        compact_test_header = pygame.Rect(0, 0, 96, 36)
+        compact_diagnosis_header = pygame.Rect(0, 0, 98, 58)
+        selected_header = pygame.Rect(0, 0, 242, 39)
+        description_area = pygame.Rect(0, 0, 152, 99)
 
         for test in create_test_catalog():
             font, lines = self.game.get_fitted_card_title_layout(

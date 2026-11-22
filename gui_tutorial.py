@@ -777,21 +777,21 @@ class TutorialMixin:
         dim = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
         dim.fill((2, 6, 12, 218))
         self.screen.blit(dim, (0, 0))
-        panel = pygame.Rect(150, 28, 800, 584)
+        panel = pygame.Rect(100, 15, 900, 620)
         pygame.draw.rect(self.screen, (3, 8, 13), panel.move(8, 9), border_radius=16)
         pygame.draw.rect(self.screen, (23, 29, 42), panel, border_radius=16)
         pygame.draw.rect(self.screen, (187, 137, 211), panel, width=3, border_radius=16)
         title = self.heading_font.render("CLINIC QUICK GUIDE", True, (232, 211, 242))
-        self.screen.blit(title, title.get_rect(center=(panel.centerx, panel.y + 33)))
-        subtitle = self.card_font.render(
+        self.screen.blit(title, title.get_rect(center=(panel.centerx, panel.y + 30)))
+        subtitle = self.tutorial_label_font.render(
             "CONTEXT HELP  •  ECONOMY RULES  •  CONTROLS",
             True,
             COLORS["muted"],
         )
-        self.screen.blit(subtitle, subtitle.get_rect(center=(panel.centerx, panel.y + 58)))
+        self.screen.blit(subtitle, subtitle.get_rect(center=(panel.centerx, panel.y + 55)))
 
         context_name, context_detail = self.get_help_context()
-        context = pygame.Rect(panel.x + 28, panel.y + 76, panel.width - 56, 82)
+        context = pygame.Rect(panel.x + 24, panel.y + 70, panel.width - 48, 88)
         pygame.draw.rect(self.screen, (25, 49, 55), context, border_radius=10)
         pygame.draw.rect(self.screen, COLORS["accent"], context, width=2, border_radius=10)
         current_label = self.tutorial_label_font.render(
@@ -811,13 +811,13 @@ class TutorialMixin:
         )
         context_text_box = pygame.Rect(
             context.x + 18,
-            context.y + 38,
+            context.y + 39,
             context.width - 36,
-            38,
+            43,
         )
         self.draw_wrapped_text(
             context_detail,
-            self.card_font,
+            self.tutorial_body_font,
             COLORS["text"],
             context_text_box,
             line_spacing=2,
@@ -828,16 +828,16 @@ class TutorialMixin:
             True,
             (216, 159, 238),
         )
-        self.screen.blit(rules_heading, (panel.x + 29, panel.y + 174))
+        self.screen.blit(rules_heading, (panel.x + 25, panel.y + 168))
         rules = self.get_help_rules()
         for index, (heading, detail) in enumerate(rules):
             column = index % 2
             row_index = index // 2
             rule = pygame.Rect(
-                panel.x + 28 + column * 382,
-                panel.y + 194 + row_index * 68,
-                370,
-                62,
+                panel.x + 24 + column * 434,
+                panel.y + 188 + row_index * 75,
+                418,
+                70,
             )
             pygame.draw.rect(self.screen, (35, 42, 55), rule, border_radius=8)
             pygame.draw.rect(self.screen, (92, 72, 111), rule, width=1, border_radius=8)
@@ -847,15 +847,15 @@ class TutorialMixin:
                 (216, 159, 238),
             )
             self.screen.blit(heading_label, (rule.x + 14, rule.y + 8))
-            detail_box = pygame.Rect(rule.x + 14, rule.y + 27, rule.width - 28, 31)
+            detail_box = pygame.Rect(rule.x + 14, rule.y + 28, rule.width - 28, 38)
             self.draw_wrapped_text(
                 detail,
-                self.card_font,
+                self.tutorial_body_font,
                 COLORS["text"],
                 detail_box,
                 line_spacing=1,
             )
-        controls = pygame.Rect(panel.x + 28, panel.y + 472, panel.width - 56, 34)
+        controls = pygame.Rect(panel.x + 24, panel.y + 497, panel.width - 48, 38)
         pygame.draw.rect(self.screen, (14, 22, 34), controls, border_radius=8)
         pygame.draw.rect(self.screen, (92, 72, 111), controls, width=1, border_radius=8)
         controls_label = self.tutorial_label_font.render(
@@ -863,7 +863,7 @@ class TutorialMixin:
             True,
             (216, 159, 238),
         )
-        controls_text = self.card_font.render(
+        controls_text = self.tutorial_body_font.render(
             self.get_help_controls(),
             True,
             COLORS["text"],
@@ -876,7 +876,7 @@ class TutorialMixin:
             controls_text,
             controls_text.get_rect(midright=(controls.right - 14, controls.centery)),
         )
-        self.tutorial_begin_button = pygame.Rect(panel.centerx - 145, panel.bottom - 55, 290, 38)
+        self.tutorial_begin_button = pygame.Rect(panel.centerx - 160, panel.bottom - 52, 320, 40)
         hovered = self.tutorial_begin_button.collidepoint(self.get_mouse_position())
         color = COLORS["accent"] if hovered else (151, 101, 180)
         pygame.draw.rect(self.screen, color, self.tutorial_begin_button, border_radius=8)

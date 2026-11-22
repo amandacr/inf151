@@ -70,7 +70,7 @@ SHOP_UPGRADES += tuple(
 
 SHOP_SHELVES = tuple(item for item in SHOP_UPGRADES if item.get("path") != "free_use")
 
-SHOP_COLUMNS = 3
+SHOP_COLUMNS = 2
 SHOP_VISIBLE_ROWS = 2
 SHOP_CATEGORY_KEYS = ("machines", "cards", "clinic", "installed")
 SHOP_CATEGORY_LABELS = {
@@ -820,12 +820,12 @@ class ShopMixin:
         self.money_deduction_animation = None
 
     def get_shop_upgrade_rects(self):
-        """Return the six fixed shelf positions inside the scrolling viewport."""
+        """Return four roomy shelf positions inside the scrolling viewport."""
 
         return [
-            pygame.Rect(x, y, 280, 154)
+            pygame.Rect(x, y, 420, 154)
             for y in (198, 367)
-            for x in (92, 392, 692)
+            for x in (92, 532)
         ]
 
     def get_shop_category_rects(self):
@@ -1004,7 +1004,7 @@ class ShopMixin:
         )
         page = self.shop_scroll_row + 1
         page_count = max_scroll + 1
-        count = self.small_font.render(
+        count = self.shop_label_font.render(
             f"{category_label}  —  PAGE {page}/{page_count}",
             True,
             (232, 211, 242),
@@ -1169,9 +1169,9 @@ class ShopMixin:
         pygame.draw.rect(self.screen, (25, 23, 39), shelf, border_radius=11)
         pygame.draw.rect(self.screen, accent, shelf, width=2, border_radius=11)
 
-        title = self.small_font.render("INSTALLED LOADOUT", True, accent)
+        title = self.shop_label_font.render("INSTALLED LOADOUT", True, accent)
         self.screen.blit(title, (shelf.x + 13, shelf.y + 10))
-        subtitle = self.card_font.render(
+        subtitle = self.shop_detail_font.render(
             "CAMPAIGN-WIDE PERMANENT EFFECTS",
             True,
             COLORS["muted"],
@@ -1196,8 +1196,8 @@ class ShopMixin:
         )
         for index, (label_text, value_text) in enumerate(summary_rows):
             y = shelf.y + 58 + index * 17
-            label = self.card_font.render(label_text, True, COLORS["muted"])
-            value = self.card_font.render(value_text, True, COLORS["accent"])
+            label = self.shop_detail_font.render(label_text, True, COLORS["muted"])
+            value = self.shop_detail_font.render(value_text, True, COLORS["accent"])
             self.screen.blit(label, (shelf.x + 13, y))
             self.screen.blit(value, value.get_rect(topright=(shelf.right - 13, y)))
 
@@ -1206,9 +1206,9 @@ class ShopMixin:
         color = SHOP_PRODUCT_COLORS[upgrade["id"]]
         pygame.draw.rect(self.screen, (3, 8, 13), shelf.move(3, 4), border_radius=11)
         pygame.draw.rect(self.screen, (18, 27, 40), shelf, border_radius=11)
-        title = self.small_font.render(upgrade["machine"], True, color)
+        title = self.tutorial_subtitle_font.render(upgrade["machine"], True, color)
         self.screen.blit(title, (shelf.x + 12, shelf.y + 7))
-        hint = self.card_font.render("CHOOSE ONE PERMANENT PATH", True, COLORS["muted"])
+        hint = self.shop_detail_font.render("CHOOSE ONE PERMANENT PATH", True, COLORS["muted"])
         self.screen.blit(hint, (shelf.x + 12, shelf.y + 26))
         self.draw_shop_purchase_icon(upgrade, (shelf.right - 24, shelf.y + 23))
 
@@ -1258,10 +1258,10 @@ class ShopMixin:
                 if available or selected
                 else COLORS["muted"]
             )
-            title = self.card_font.render(label, True, label_color)
+            title = self.shop_label_font.render(label, True, label_color)
             self.screen.blit(title, title.get_rect(midtop=(rect.centerx, rect.top + 10)))
             for index, detail in enumerate(details):
-                line = self.card_font.render(detail, True, COLORS["muted"])
+                line = self.shop_detail_font.render(detail, True, COLORS["muted"])
                 self.screen.blit(line, line.get_rect(midtop=(rect.centerx, rect.top + 29 + 14 * index)))
 
             footer = pygame.Rect(rect.x + 8, rect.bottom - 30, rect.width - 16, 24)
@@ -1277,7 +1277,7 @@ class ShopMixin:
                 if selected
                 else f"${upgrade['cost']}"
             )
-            font = self.card_font if owned or locked or selected else self.small_font
+            font = self.shop_label_font
             price = font.render(status, True, label_color)
             self.screen.blit(price, price.get_rect(center=footer.center))
 
@@ -1355,25 +1355,25 @@ class ShopMixin:
         category_text = upgrade["category"]
         if owned and "machine" in upgrade:
             category_text += " / " + ("FREE" if upgrade.get("path") == "free_use" else "LV.2")
-        category = self.card_font.render(category_text, True, product_color)
+        category = self.shop_detail_font.render(category_text, True, product_color)
         self.screen.blit(category, (text_x, display.y + 12))
 
-        name = self.small_font.render(upgrade["name"], True, COLORS["text"])
+        name = self.tutorial_subtitle_font.render(upgrade["name"], True, COLORS["text"])
         self.screen.blit(name, (text_x, display.y + 32))
 
         description_lines = self.wrap_text(
             upgrade["description"],
-            self.small_font,
+            self.shop_detail_font,
             text_width,
         )
         if len(description_lines) > 3:
             description_lines = description_lines[:3]
             final_line = description_lines[-1]
-            while final_line and self.small_font.size(final_line + "...")[0] > text_width:
+            while final_line and self.shop_detail_font.size(final_line + "...")[0] > text_width:
                 final_line = final_line[:-1]
             description_lines[-1] = final_line.rstrip() + "..."
         for line_index, line in enumerate(description_lines):
-            rendered = self.small_font.render(line, True, COLORS["muted"])
+            rendered = self.shop_detail_font.render(line, True, COLORS["muted"])
             self.screen.blit(rendered, (text_x, display.y + 56 + line_index * 18))
 
         footer = pygame.Rect(display.x + 5, display.bottom - 34, display.width - 10, 29)
@@ -1385,7 +1385,7 @@ class ShopMixin:
             (footer.right - 4, footer.y),
             width=2,
         )
-        price = self.small_font.render(f"${upgrade['cost']}", True, product_color)
+        price = self.shop_label_font.render(f"${upgrade['cost']}", True, product_color)
         self.screen.blit(price, price.get_rect(midleft=(footer.x + 10, footer.centery)))
         if owned:
             status_text = "INSTALLED"
@@ -1402,7 +1402,7 @@ class ShopMixin:
         else:
             status_text = "LOCKED"
             status_color = (224, 126, 126)
-        status = self.card_font.render(status_text, True, status_color)
+        status = self.shop_detail_font.render(status_text, True, status_color)
         status_rect = status.get_rect(midright=(footer.right - 10, footer.centery))
         if owned:
             installed_icon = (status_rect.x - 9, footer.centery)

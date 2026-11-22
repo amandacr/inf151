@@ -231,9 +231,9 @@ class CardShopMixin:
                 "TOXIN SCREEN": "TOXIN SCREEN",
             }.get(test.name, test.name)
             name_color = (117, 116, 127) if sold_out else (231, 237, 235)
-            name = self.compact_ui_font.render(display_name, True, name_color)
+            name = self.readable_detail_font.render(display_name, True, name_color)
             self.screen.blit(name, (slot.x + 46, slot.y + 8))
-            stock = self.compact_ui_font.render(
+            stock = self.readable_detail_font.render(
                 "SOLD OUT" if sold_out else f"STOCK: {inventory}",
                 True,
                 (106, 102, 113) if sold_out else rarity_color,
@@ -251,7 +251,7 @@ class CardShopMixin:
         )
         purpose, details = self.get_card_shop_information()
         purpose_text = self.tutorial_body_font.render(purpose, True, COLORS["text"])
-        details_text = self.compact_ui_font.render(
+        details_text = self.readable_detail_font.render(
             details,
             True,
             COLORS["muted"],

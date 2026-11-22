@@ -143,7 +143,7 @@ class CardMixin:
 
         tray = self.layout["active_hand"].inflate(-8, -8)
         tray.y += 3
-        return pygame.Rect(tray.right - 104, tray.y + 5, 78, 24)
+        return pygame.Rect(tray.right - 128, tray.y + 5, 108, 24)
 
 
     def cycle_card_sort_mode(self):
@@ -182,7 +182,7 @@ class CardMixin:
         # Give a normal five-card hand enough width for condition names such as
         # "Thermal-Lung Exchange Failure." Larger hands retain the narrower
         # overlapping layout so eight cards still fit inside the same tray.
-        card_width = 108 if card_count <= 5 else 96
+        card_width = 116 if card_count <= 5 else 96
         card_height = 118
 
         if card_count == 0:
@@ -194,7 +194,10 @@ class CardMixin:
             total_width = card_width
         else:
             available_step = (usable_width - card_width) / (card_count - 1)
-            card_step = min(card_width - 4, available_step)
+            # Normal five-card hands fit with a narrow breathing gap. Dense
+            # six-to-nine-card hands still overlap so they remain contained.
+            maximum_step = card_width + 2 if card_count <= 5 else card_width - 4
+            card_step = min(maximum_step, available_step)
             total_width = card_width + card_step * (card_count - 1)
         start_x = panel.centerx - total_width // 2
         hand_center = (card_count - 1) / 2
@@ -419,7 +422,7 @@ class CardMixin:
     def get_selected_card_rect(self, index):
         """Return the larger rectangle used to display a selected test card."""
 
-        preview = pygame.Rect(0, 0, 220, 218)
+        preview = pygame.Rect(0, 0, 260, 218)
         display_index = self.get_display_index_for_hand_index(index)
         if display_index is None:
             display_index = index
@@ -438,7 +441,7 @@ class CardMixin:
         return pygame.Rect(
             selected_rect.x + 16,
             selected_rect.bottom - 38,
-            90,
+            (selected_rect.width - 42) // 2,
             28,
         )
 
@@ -447,9 +450,9 @@ class CardMixin:
         """Return the Discard button rectangle for an enlarged test card."""
 
         return pygame.Rect(
-            selected_rect.right - 106,
+            selected_rect.centerx + 5,
             selected_rect.bottom - 38,
-            90,
+            (selected_rect.width - 42) // 2,
             28,
         )
 
@@ -686,7 +689,7 @@ class CardMixin:
         pygame.draw.rect(self.screen, (3, 8, 13), rect.move(2, 2), border_radius=6)
         pygame.draw.rect(self.screen, fill, rect, border_radius=6)
         pygame.draw.rect(self.screen, border, rect, width=1, border_radius=6)
-        label = self.legible_micro_font.render(
+        label = self.readable_detail_font.render(
             f"SORT: {self.card_sort_mode.upper()}",
             True,
             COLORS["text"],
@@ -717,14 +720,16 @@ class CardMixin:
 
         if count <= 1:
             return
-        badge = pygame.Rect(0, 0, 30 if selected else 25, 18 if selected else 16)
+        badge = pygame.Rect(0, 0, 32 if selected else 29, 20 if selected else 18)
         if selected:
-            badge.topleft = (card_rect.x + 57, card_rect.y + 67)
+            # Pin the count to the artwork corner. It remains visible without
+            # obscuring the icon label or the test description.
+            badge.topright = (card_rect.x + 90, card_rect.y + 72)
         else:
-            badge.topright = (card_rect.right - 4, card_rect.y + 40)
+            badge.topright = (card_rect.right - 4, card_rect.y + 47)
         pygame.draw.rect(self.screen, (49, 31, 66), badge, border_radius=7)
         pygame.draw.rect(self.screen, (216, 159, 238), badge, width=2, border_radius=7)
-        font = self.card_font if selected else self.legible_micro_font
+        font = self.card_font if selected else self.readable_detail_font
         label = font.render(f"×{count}", True, (244, 225, 250))
         self.screen.blit(label, label.get_rect(center=badge.center))
 
@@ -944,8 +949,6 @@ class CardMixin:
             else (
                 self.diagnosis_card_font,
                 self.compact_card_title_font,
-                self.legible_micro_font,
-                self.tiny_font,
             )
         )
         usable_width = max(1, area.width - 8)
@@ -1041,7 +1044,14 @@ class CardMixin:
             border_radius=6,
         )
 
-        rarity_text = self.legible_micro_font.render(
+        rarity_font = (
+            self.readable_detail_font
+            if self.readable_detail_font.size(
+                f"{rarity.upper()}  ${self.player.get_test_cost(test)}"
+            )[0] <= badge.width - 6
+            else self.compact_card_title_font
+        )
+        rarity_text = rarity_font.render(
             f"{rarity.upper()}  ${self.player.get_test_cost(test)}",
             True,
             rarity_color,
@@ -1085,7 +1095,17 @@ class CardMixin:
     def draw_compact_diagnosis_card(self, diagnosis, card_rect, diagnosis_color):
         """Draw a diagnosis option with the same hierarchy as a compact test card."""
 
-        header = pygame.Rect(card_rect.x + 6, card_rect.y + 6, card_rect.width - 12, 44)
+        # Present each option as a compact case file rather than a plain test
+        # card. The tab and spine add hierarchy without consuming the space
+        # needed by long condition names.
+        spine = pygame.Rect(card_rect.x + 4, card_rect.y + 9, 4, card_rect.height - 18)
+        pygame.draw.rect(self.screen, diagnosis_color, spine, border_radius=2)
+        tab = pygame.Rect(card_rect.x + 10, card_rect.y + 3, 64, 16)
+        pygame.draw.rect(self.screen, diagnosis_color, tab, border_radius=4)
+        tab_label = self.pile_font.render("CASE FILE", True, (250, 239, 252))
+        self.screen.blit(tab_label, tab_label.get_rect(center=tab.center))
+
+        header = pygame.Rect(card_rect.x + 9, card_rect.y + 16, card_rect.width - 18, 58)
         pygame.draw.rect(self.screen, (218, 199, 226), header, border_radius=5)
         pygame.draw.line(
             self.screen,
@@ -1097,11 +1117,18 @@ class CardMixin:
         # so hovering never changes the title font or clips new cards.
         self.draw_fitted_card_title(diagnosis.name, header, max_lines=3)
 
-        icon = pygame.Rect(card_rect.centerx - 25, card_rect.y + 53, 50, 39)
+        icon = pygame.Rect(card_rect.centerx - 28, card_rect.y + 79, 56, 31)
         pygame.draw.rect(self.screen, (210, 211, 216), icon, border_radius=6)
         pygame.draw.rect(self.screen, diagnosis_color, icon, width=2, border_radius=6)
         self.draw_diagnosis_file_icon(icon, diagnosis_color)
-        self.draw_diagnosis_badge(card_rect, diagnosis_color)
+
+        for rivet_x in (card_rect.x + 13, card_rect.right - 13):
+            pygame.draw.circle(
+                self.screen,
+                (205, 145, 226),
+                (rivet_x, card_rect.bottom - 8),
+                2,
+            )
 
 
     def draw_selected_diagnosis_details(self, diagnosis, card_rect, diagnosis_color):
@@ -1250,7 +1277,7 @@ class CardMixin:
 
         # Two-line names such as Blood Chemistry need enough vertical space to
         # remain legible instead of falling back to the smallest UI font.
-        header = pygame.Rect(card_rect.x + 6, card_rect.y + 6, card_rect.width - 12, 31)
+        header = pygame.Rect(card_rect.x + 3, card_rect.y + 5, card_rect.width - 6, 36)
         header_color = tuple(max(0, channel - 18) for channel in RARITY_CARD_COLORS.get(
             test.rarity,
             COLORS["card"],
@@ -1265,13 +1292,19 @@ class CardMixin:
         )
         self.draw_fitted_card_title(test.name, header)
 
-        icon = pygame.Rect(card_rect.centerx - 24, card_rect.y + 41, 48, 41)
+        icon = pygame.Rect(card_rect.centerx - 23, card_rect.y + 44, 46, 38)
         pygame.draw.rect(self.screen, (201, 214, 205), icon, border_radius=6)
         pygame.draw.rect(self.screen, rarity_color, icon, width=2, border_radius=6)
         self.draw_test_icon(test.name, icon, rarity_color)
 
-        subtitle = self.legible_micro_font.render(
-            TEST_SUBTITLES.get(test.name.upper(), "MEDICAL TEST"),
+        subtitle_text = TEST_SUBTITLES.get(test.name.upper(), "MEDICAL TEST")
+        subtitle_font = (
+            self.readable_detail_font
+            if self.readable_detail_font.size(subtitle_text)[0] <= card_rect.width - 8
+            else self.compact_card_title_font
+        )
+        subtitle = subtitle_font.render(
+            subtitle_text,
             True,
             COLORS["card_text"],
         )
@@ -1302,29 +1335,26 @@ class CardMixin:
         )
         self.screen.blit(rarity, rarity.get_rect(center=(card_rect.centerx, card_rect.y + 55)))
 
-        icon = pygame.Rect(card_rect.x + 16, card_rect.y + 65, 58, 58)
+        icon = pygame.Rect(card_rect.x + 18, card_rect.y + 74, 64, 58)
         pygame.draw.rect(self.screen, (201, 214, 205), icon, border_radius=7)
         pygame.draw.rect(self.screen, rarity_color, icon, width=2, border_radius=7)
         self.draw_test_icon(test.name, icon, rarity_color)
 
-        subtitle = self.legible_micro_font.render(
+        subtitle_area = pygame.Rect(card_rect.x + 12, icon.bottom + 3, 76, 30)
+        self.draw_fitted_card_title(
             TEST_SUBTITLES.get(test.name.upper(), "MEDICAL TEST"),
-            True,
-            COLORS["card_text"],
-        )
-        self.screen.blit(
-            subtitle,
-            subtitle.get_rect(center=(icon.centerx, icon.bottom + 9)),
+            subtitle_area,
+            max_lines=2,
         )
 
-        description_y = card_rect.y + 67
+        description_y = card_rect.y + 76
         action_top = (self.get_recycler_button(card_rect).y
                       if "recycler" in self.purchased_shop_upgrades
                       else self.get_run_test_button(card_rect).y)
         description_box = pygame.Rect(
-            card_rect.x + 80,
+            card_rect.x + 96,
             description_y,
-            card_rect.width - 90,
+            card_rect.width - 108,
             action_top - description_y - 3,
         )
         self.draw_fitted_card_description(

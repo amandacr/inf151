@@ -322,11 +322,11 @@ class ExaminationMixin:
                 width=1,
                 border_radius=6,
             )
-            stage_text = self.compact_ui_font.render(stage, True, text_color)
+            stage_text = self.readable_detail_font.render(stage, True, text_color)
             self.screen.blit(stage_text, stage_text.get_rect(center=stage_rect.center))
 
             if index < len(stages) - 1:
-                arrow = self.compact_ui_font.render(">", True, COLORS["muted"])
+                arrow = self.readable_detail_font.render(">", True, COLORS["muted"])
                 arrow_x = stage_rect.right + stage_gap // 2
                 self.screen.blit(
                     arrow,
@@ -513,7 +513,7 @@ class ExaminationMixin:
             if draw_cost == 0
             else f"${draw_cost} PER DRAW"
         )
-        plaque_detail = self.compact_ui_font.render(
+        plaque_detail = self.readable_detail_font.render(
             plaque_status,
             True,
             warning_color if deck_empty or hand_full else COLORS["muted"],
@@ -546,14 +546,14 @@ class ExaminationMixin:
                 if deck_low
                 else COLORS["accent"]
             )
-            tip = self.compact_ui_font.render(tip_text, True, tip_color)
+            tip = self.readable_detail_font.render(tip_text, True, tip_color)
             tip_rect = tip.get_rect(midbottom=(panel.centerx, panel.y - 4))
             pygame.draw.rect(self.screen, (7, 22, 28), tip_rect.inflate(12, 6), border_radius=6)
             pygame.draw.rect(self.screen, tip_color, tip_rect.inflate(12, 6), width=1, border_radius=6)
             self.screen.blit(tip, tip_rect)
 
         if deck_empty:
-            count = self.compact_ui_font.render("0 LEFT", True, warning_color)
+            count = self.readable_detail_font.render("0 LEFT", True, warning_color)
             self.screen.blit(count, count.get_rect(center=(tray.centerx, tray.y + 10)))
             slot = pygame.Rect(0, 0, 54, 60)
             slot.center = (tray.centerx, tray.y + 53)
@@ -564,7 +564,7 @@ class ExaminationMixin:
             return
 
         # Thicker stack when the deck is full, thinner as it runs down.
-        count = self.compact_ui_font.render(
+        count = self.readable_detail_font.render(
             f"{remaining} LEFT",
             True,
             low_color if deck_low else COLORS["text"],
@@ -591,7 +591,7 @@ class ExaminationMixin:
                 "TOXIN SCREEN": "TOXIN",
                 "OXYGEN SCAN": "OXYGEN",
             }.get(scanner_preview, scanner_preview)
-            scanner = self.compact_ui_font.render(
+            scanner = self.readable_detail_font.render(
                 f"NEXT: {short_preview}",
                 True,
                 (93, 219, 208),
@@ -831,7 +831,9 @@ class ExaminationMixin:
         blinking = idle_time % 3600 >= 3480
         chest_pulse = (math.sin(idle_time / 310) + 1) / 2
 
-        base_alien_center_x = bay.centerx - 38
+        # Anchor the patient on the left half of the expanded bay so dialogue
+        # can sit beside them instead of covering their face and body.
+        base_alien_center_x = bay.x + 68
         platform = pygame.Rect(base_alien_center_x - 67, bay.bottom - 20, 134, 17)
         pygame.draw.ellipse(self.screen, (56, 91, 83), platform)
         pygame.draw.arc(
@@ -1070,16 +1072,16 @@ class ExaminationMixin:
                 panel.width - 24,
                 panel.height - 62,
             )
-        return pygame.Rect(bay.right - 114, bay.y + 11, 105, 84)
+        return pygame.Rect(bay.right - 154, bay.y + 8, 145, 92)
 
     def fit_interview_statement(self, statement, width, max_height):
         """Return the largest interview font that shows the complete statement."""
 
         fonts = (
+            self.tutorial_body_font,
+            self.tutorial_label_font,
             self.compact_ui_font,
-            self.compact_card_title_font,
             self.interview_tiny_font,
-            self.legible_micro_font,
         )
         for font in fonts:
             lines = self.wrap_text(statement, font, width)
@@ -1144,11 +1146,11 @@ class ExaminationMixin:
         symptom_font, symptom_lines = self.fit_interview_statement(
             statement,
             bubble.width - 16,
-            bubble.height - 30,
+            bubble.height - 34,
         )
         line_height = symptom_font.get_linesize()
         text_height = len(symptom_lines) * line_height
-        first_y = bubble.y + 5 + max(0, (bubble.height - 30 - text_height) // 2)
+        first_y = bubble.y + 5 + max(0, (bubble.height - 34 - text_height) // 2)
         for line_index, line_text in enumerate(symptom_lines):
             # Hovering should call attention to the interaction without
             # sacrificing the dark-on-cream dialogue contrast.
@@ -1162,7 +1164,7 @@ class ExaminationMixin:
             and self.patient_dialogue_index == len(self.patient.dialogue) - 1
         )
         footer_action = "CONTINUE" if interview_complete else "ASK MORE"
-        footer = self.legible_micro_font.render(
+        footer = self.readable_detail_font.render(
             f"{footer_action}  {self.patient_dialogue_index + 1}/{len(self.patient.dialogue)}",
             True,
             (102, 86, 112),
@@ -1261,37 +1263,137 @@ class ExaminationMixin:
 
         self.draw_id_portrait(portrait, self.showing_health_id)
 
-        detail_x = detail_area.x
+        label_font, value_font, detail_rows = self.get_fitted_id_details(
+            details,
+            detail_area,
+        )
         detail_y = detail_area.y
-        available_width = detail_area.width
-        detail_line_height = self.id_detail_font.get_linesize()
-        for label, value in details:
-            detail_text = f"{label}: {value}"
-            for detail_line in self.wrap_text(
-                detail_text,
-                self.id_detail_font,
-                available_width,
-            ):
-                detail = self.id_detail_font.render(
-                    detail_line,
+        row_spacing = 1
+        for label_text, label_width, value_lines in detail_rows:
+            label_surface = label_font.render(
+                label_text,
+                True,
+                (44, 70, 63),
+            )
+            self.screen.blit(label_surface, (detail_area.x, detail_y))
+            for line_index, value_line in enumerate(value_lines):
+                if not value_line:
+                    continue
+                value_surface = value_font.render(
+                    value_line,
                     True,
-                    (72, 101, 91),
+                    (77, 102, 94),
                 )
-                self.screen.blit(detail, (detail_x, detail_y))
-                detail_y += detail_line_height
+                value_x = (
+                    detail_area.x + label_width
+                    if line_index == 0
+                    else detail_area.x + 10
+                )
+                self.screen.blit(
+                    value_surface,
+                    (
+                        value_x,
+                        detail_y + line_index * value_font.get_linesize(),
+                    ),
+                )
+            detail_y += max(
+                label_font.get_linesize(),
+                len(value_lines) * value_font.get_linesize(),
+            ) + row_spacing
 
-        serial = self.legible_micro_font.render(
+        serial = self.shop_detail_font.render(
             self.get_current_entry()["serial"],
             True,
             (72, 101, 91),
         )
-        self.screen.blit(serial, serial.get_rect(center=(portrait.centerx, portrait.bottom + 9)))
+        self.screen.blit(
+            serial,
+            serial.get_rect(center=(portrait.centerx, portrait.bottom + 10)),
+        )
 
         flip_hint = self.card_font.render(next_side, True, COLORS["card_text"])
         self.screen.blit(
             flip_hint,
-            flip_hint.get_rect(center=(card.centerx + 31, card.bottom - 9)),
+            flip_hint.get_rect(center=(card.centerx + 31, card.bottom - 14)),
         )
+
+
+    def get_fitted_id_details(self, details, detail_area):
+        """Return bold labels and regular values fitted to either ID side."""
+
+        font_pairs = (
+            (self.id_detail_large_font, self.id_value_large_font),
+            (self.id_detail_font, self.id_value_font),
+            (self.id_detail_small_font, self.id_value_small_font),
+        )
+        for label_font, value_font in font_pairs:
+            rows = self.build_id_detail_rows(
+                details,
+                detail_area.width,
+                label_font,
+                value_font,
+            )
+            total_height = sum(
+                max(
+                    label_font.get_linesize(),
+                    len(value_lines) * value_font.get_linesize(),
+                ) + 1
+                for _label_text, _label_width, value_lines in rows
+            )
+            if rows and total_height <= detail_area.height:
+                return label_font, value_font, rows
+
+        # Validation keeps current records inside the smallest supported pair.
+        # Returning it intact also gives future records predictable wrapping.
+        label_font, value_font = font_pairs[-1]
+        return (
+            label_font,
+            value_font,
+            self.build_id_detail_rows(
+                details,
+                detail_area.width,
+                label_font,
+                value_font,
+            ),
+        )
+
+
+    def build_id_detail_rows(self, details, width, label_font, value_font):
+        """Lay out each ID label in bold with indented value continuations."""
+
+        rows = []
+        continuation_width = max(1, width - 10)
+        for label, value in details:
+            label_text = f"{label}:"
+            label_width = label_font.size(label_text)[0] + 5
+            first_width = max(1, width - label_width)
+            words = str(value).split()
+            value_lines = []
+            current_words = []
+            line_limit = first_width
+
+            for word in words:
+                candidate = " ".join(current_words + [word])
+                if current_words and value_font.size(candidate)[0] > line_limit:
+                    value_lines.append(" ".join(current_words))
+                    current_words = [word]
+                    line_limit = continuation_width
+                elif not current_words and value_font.size(word)[0] > line_limit:
+                    # A long value may begin beneath its label, where the full
+                    # continuation width is available.
+                    if not value_lines:
+                        value_lines.append("")
+                    current_words = [word]
+                    line_limit = continuation_width
+                else:
+                    current_words.append(word)
+
+            if current_words:
+                value_lines.append(" ".join(current_words))
+            if not value_lines:
+                value_lines = [""]
+            rows.append((label_text, label_width, value_lines))
+        return rows
 
 
     def get_id_card_layout(self):
@@ -1304,12 +1406,12 @@ class ExaminationMixin:
             panel.width - 16,
             panel.height - 14,
         )
-        portrait = pygame.Rect(card.x + 10, card.y + 38, 48, 60)
+        portrait = pygame.Rect(card.x + 20, card.y + 38, 58, 68)
         detail_area = pygame.Rect(
-            card.x + 64,
+            card.x + 112,
             card.y + 38,
-            card.width - 74,
-            card.height - 58,
+            card.width - 122,
+            card.height - 55,
         )
         return card, portrait, detail_area
 
@@ -1560,7 +1662,7 @@ class ExaminationMixin:
             if self.discard_pile
             else "EMPTY"
         )
-        count = self.compact_ui_font.render(count_text, True, COLORS["text"])
+        count = self.readable_detail_font.render(count_text, True, COLORS["text"])
         self.screen.blit(
             count,
             count.get_rect(center=(panel.centerx, panel.bottom - 12)),
