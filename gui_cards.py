@@ -27,6 +27,40 @@ class CardMixin:
     CARD_SORT_MODES = ("type", "rarity", "cost")
     CARD_RARITY_ORDER = {"Common": 0, "Uncommon": 1, "Rare": 2}
 
+    def get_max_test_hand_size(self):
+        """Return the permanent card-case capacity for this campaign."""
+
+        return MAX_TEST_HAND_SIZE + (
+            1 if "expanded_case" in self.purchased_shop_upgrades else 0
+        )
+
+
+    def get_random_draw_cost(self):
+        """Return the next draw fee after permanent card upgrades."""
+
+        if (
+            "diagnostic_grant" in self.purchased_shop_upgrades
+            and not self.diagnostic_grant_used
+        ):
+            return 0
+        if "smart_cards" in self.purchased_shop_upgrades:
+            return max(0, DRAW_COST - 2)
+        return DRAW_COST
+
+
+    def get_recycler_limit(self):
+        """Return how many free swaps are available during one patient case."""
+
+        return 2 if "recycler_mk2" in self.purchased_shop_upgrades else 1
+
+
+    def get_deck_scanner_preview(self):
+        """Return the next random card name when the scanner is installed."""
+
+        if "deck_scanner" not in self.purchased_shop_upgrades or not self.deck.contents:
+            return None
+        return getattr(self.deck.contents[-1].value, "name", None)
+
     def get_active_hand(self):
         """Return whichever card hand is currently displayed in the center panel."""
 
@@ -284,7 +318,8 @@ class CardMixin:
 
     def recycle_selected_test(self):
         """Exchange one card per patient without charging or returning waste."""
-        if ("recycler" not in self.purchased_shop_upgrades or self.recycler_used
+        if ("recycler" not in self.purchased_shop_upgrades
+                or self.recycler_used >= self.get_recycler_limit()
                 or self.showing_diagnosis_hand or self.selected_card_index is None
                 or self.discard_animation is not None):
             return False
@@ -301,11 +336,15 @@ class CardMixin:
         old_card = self.player.test_hand[index]
         self.player.test_hand[index] = replacement
         self.discard_pile.append(old_card)
-        self.recycler_used = True
+        self.recycler_used += 1
         self.selected_card_index = None
         self.refresh_hand_layout()
         self.play_sfx("card_select")
-        self.set_card_draw_notice("RECYCLED FREE  •  RECHARGES NEXT PATIENT")
+        remaining_uses = self.get_recycler_limit() - self.recycler_used
+        self.set_card_draw_notice(
+            f"RECYCLED FREE  •  {remaining_uses} SWAP"
+            f"{'S' if remaining_uses != 1 else ''} LEFT"
+        )
         return True
 
 
@@ -750,11 +789,11 @@ class CardMixin:
         )
 
     def draw_card_from_pile(self):
-        """Move the top card of the deck into the player's hand for DRAW_COST."""
+        """Move the top card of the deck into the player's hand for its current fee."""
         if self.discard_animation is not None:
             self.set_card_draw_notice("MED-WASTE IN USE  •  PLEASE WAIT")
             return False
-        if len(self.player.test_hand) >= MAX_TEST_HAND_SIZE:
+        if len(self.player.test_hand) >= self.get_max_test_hand_size():
             self.set_card_draw_notice("HAND FULL  •  DISCARD FIRST")
             return False
 
@@ -762,7 +801,8 @@ class CardMixin:
         # the player never pays for a card hidden behind Diagnosis Options.
         if self.showing_diagnosis_hand:
             self.switch_active_hand(False)
-        emergency_draw = not self.can_spend_clinic_funds(DRAW_COST)
+        draw_cost = self.get_random_draw_cost()
+        emergency_draw = draw_cost > 0 and not self.can_spend_clinic_funds(draw_cost)
         if emergency_draw:
             has_common_card = any(
                 getattr(card.value, "rarity", None) == "Common"
@@ -806,13 +846,22 @@ class CardMixin:
             return False
         self.player.draw(card)
         if not emergency_draw:
-            self.start_live_money_deduction(DRAW_COST, "CARD DRAW")
-            self.daily_draw_expenses += DRAW_COST
+            if draw_cost:
+                self.start_live_money_deduction(draw_cost, "CARD DRAW")
+                self.daily_draw_expenses += draw_cost
+            if (
+                draw_cost == 0
+                and "diagnostic_grant" in self.purchased_shop_upgrades
+            ):
+                self.diagnostic_grant_used = True
+            self.daily_random_draw_count += 1
         self.selected_card_index = None
         self.refresh_hand_layout()
         remaining = len(self.deck.contents)
         if emergency_draw:
             self.set_card_draw_notice("EMERGENCY BASIC CARD  •  NO DRAW FEE")
+        elif draw_cost == 0:
+            self.set_card_draw_notice("DIAGNOSTIC GRANT  •  FREE DRAW USED")
         elif remaining == 0:
             self.set_card_draw_notice("LAST CARD DRAWN  •  DECK EMPTY")
         elif remaining <= 5:
@@ -1300,11 +1349,18 @@ class CardMixin:
 
         if "recycler" in self.purchased_shop_upgrades:
             recycler_rect = self.get_recycler_button(card_rect)
-            available = not self.recycler_used and bool(self.deck.contents)
+            recycler_limit = self.get_recycler_limit()
+            remaining_recycles = recycler_limit - self.recycler_used
+            available = remaining_recycles > 0 and bool(self.deck.contents)
             pygame.draw.rect(self.screen, (105, 230, 180) if available else (150, 155, 150),
                              recycler_rect, border_radius=5)
-            label = ("RECYCLE FREE (1/1)" if available else
-                     "RECYCLE USED (0/1)" if self.recycler_used else "RECYCLER: DECK EMPTY")
+            label = (
+                f"RECYCLE FREE ({remaining_recycles}/{recycler_limit})"
+                if available
+                else f"RECYCLE USED (0/{recycler_limit})"
+                if self.recycler_used >= recycler_limit
+                else "RECYCLER: DECK EMPTY"
+            )
             text = self.card_font.render(label, True, COLORS["background"])
             self.screen.blit(text, text.get_rect(center=recycler_rect.center))
 

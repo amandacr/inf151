@@ -5,7 +5,6 @@ import math
 import pygame
 
 from gui_theme import COLORS, WINDOW_SIZE
-from Player import DRAW_COST, MAX_TEST_HAND_SIZE
 
 
 class ExaminationMixin:
@@ -466,7 +465,10 @@ class ExaminationMixin:
         remaining = len(self.deck.contents)
         deck_empty = remaining == 0
         deck_low = 0 < remaining <= 5
-        hand_full = len(self.player.test_hand) >= MAX_TEST_HAND_SIZE
+        hand_limit = self.get_max_test_hand_size()
+        hand_full = len(self.player.test_hand) >= hand_limit
+        draw_cost = self.get_random_draw_cost()
+        scanner_preview = self.get_deck_scanner_preview()
         notice_active = (
             self.card_draw_notice_started_at is not None
             and pygame.time.get_ticks() - self.card_draw_notice_started_at < 1800
@@ -505,9 +507,11 @@ class ExaminationMixin:
             "EMPTY"
             if deck_empty
             else
-            f"HAND FULL  {MAX_TEST_HAND_SIZE}/{MAX_TEST_HAND_SIZE}"
+            f"HAND FULL  {hand_limit}/{hand_limit}"
             if hand_full
-            else f"${DRAW_COST} PER DRAW"
+            else "FREE DRAW READY"
+            if draw_cost == 0
+            else f"${draw_cost} PER DRAW"
         )
         plaque_detail = self.compact_ui_font.render(
             plaque_status,
@@ -527,9 +531,13 @@ class ExaminationMixin:
                 if deck_empty
                 else "HAND FULL  •  DISCARD FIRST"
                 if hand_full
+                else f"NEXT: {scanner_preview}  •  DRAW ${draw_cost}"
+                if scanner_preview
                 else f"LOW DECK  •  {remaining} CARDS LEFT"
                 if deck_low
-                else f"-${DRAW_COST} PER DRAW"
+                else "FREE DRAW READY"
+                if draw_cost == 0
+                else f"-${draw_cost} PER DRAW"
             )
             tip_color = (
                 warning_color
@@ -576,6 +584,30 @@ class ExaminationMixin:
                 pygame.draw.rect(self.screen, (22, 44, 50), rect, border_radius=7)
                 pygame.draw.rect(self.screen, (63, 120, 110), rect, width=2, border_radius=7)
         self.screen.set_clip(previous_clip)
+
+        if scanner_preview:
+            short_preview = {
+                "BLOOD CHEMISTRY": "BLOOD CHEM.",
+                "TOXIN SCREEN": "TOXIN",
+                "OXYGEN SCAN": "OXYGEN",
+            }.get(scanner_preview, scanner_preview)
+            scanner = self.compact_ui_font.render(
+                f"NEXT: {short_preview}",
+                True,
+                (93, 219, 208),
+            )
+            scanner_back = scanner.get_rect(
+                center=(tray.centerx, tray.bottom - 9)
+            ).inflate(8, 3)
+            pygame.draw.rect(self.screen, (8, 30, 34), scanner_back, border_radius=4)
+            pygame.draw.rect(
+                self.screen,
+                (93, 219, 208),
+                scanner_back,
+                width=1,
+                border_radius=4,
+            )
+            self.screen.blit(scanner, scanner.get_rect(center=scanner_back.center))
 
 
     def draw_card_back(self, rect, hovered=False):

@@ -147,7 +147,8 @@ class CosmicClinicGUI(
         self.card_display_groups = []
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
-        self.recycler_used = False
+        self.recycler_used = 0
+        self.diagnostic_grant_used = False
         self.selected_card_index = None
         self.run_test_button = None
         self.discard_button = None
@@ -187,9 +188,11 @@ class CosmicClinicGUI(
         self.card_draw_notice_started_at = None
         self.card_shop_open = False
         self.card_shop_button = pygame.Rect(53, 323, 134, 27)
-        self.card_shop_panel = pygame.Rect(215, 370, 660, 205)
-        self.card_shop_close_button = pygame.Rect(839, 382, 24, 24)
-        self.card_shop_buy_button = pygame.Rect(614, 532, 239, 31)
+        # Give the modal enough room for readable stock, purpose, and pricing
+        # copy even when the logical canvas is scaled to the minimum window.
+        self.card_shop_panel = pygame.Rect(180, 342, 740, 240)
+        self.card_shop_close_button = pygame.Rect(881, 354, 24, 24)
+        self.card_shop_buy_button = pygame.Rect(636, 524, 262, 44)
         self.selected_card_shop_test = None
         self.card_shop_message = "Choose one card type from the live deck."
         self.card_shop_notice = ""
@@ -199,6 +202,7 @@ class CosmicClinicGUI(
         self.daily_card_shop_purchases = 0
         self.daily_patients_lost = 0
         self.daily_draw_expenses = 0
+        self.daily_random_draw_count = 0
         self.reception_transition_started_at = None
         self.reception_transition_duration = 3350
         self.reception_fade_duration = 650
@@ -216,6 +220,7 @@ class CosmicClinicGUI(
         self.day_complete_button = pygame.Rect(370, 541, 360, 42)
         self.selected_shop_upgrade = None
         self.purchased_shop_upgrades = set()
+        self.shop_category = "machines"
         self.shop_scroll_row = 0
         self.shop_message = "Select an upgrade to inspect it."
         self.route_briefing_seen = False
@@ -681,6 +686,8 @@ class CosmicClinicGUI(
     def handle_shop_click(self, position):
         """Handle upgrade purchases or finish the current shift."""
 
+        if self.handle_shop_category_click(position):
+            return
         if self.handle_shop_scroll_click(position):
             return
         if self.shop_button.collidepoint(position):
@@ -727,11 +734,13 @@ class CosmicClinicGUI(
         self.daily_payout_applied = False
         self.money_deduction_animation = None
         self.selected_shop_upgrade = None
+        self.shop_category = "machines"
         self.shop_scroll_row = 0
         self.shop_message = "Select an upgrade to inspect it."
         self.deck.populate(create_test_catalog())
         self.daily_patients_lost = 0
         self.daily_draw_expenses = 0
+        self.daily_random_draw_count = 0
         self.reset_round(recycle_unused_cards=False)
 
     def deal_starting_test_hand(self, training_hand=False):
@@ -787,7 +796,8 @@ class CosmicClinicGUI(
         self.notebook_preview_last_tick = pygame.time.get_ticks()
         self.showing_health_id = False
         self.showing_diagnosis_hand = False
-        self.recycler_used = False
+        self.recycler_used = 0
+        self.diagnostic_grant_used = False
         self.selected_card_index = None
         self.run_test_button = None
         self.discard_button = None

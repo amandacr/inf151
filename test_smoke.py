@@ -41,6 +41,7 @@ from Player import (
     DRAW_COST,
     LIMITED_EVIDENCE_REWARD,
     MAX_TEST_HAND_SIZE,
+    MIN_TEST_OPERATING_COST,
     NO_EVIDENCE_REWARD,
     PATIENT_WALKOUT_THRESHOLD,
     PERFECT_DAY_BONUS,
@@ -67,6 +68,8 @@ from gui_card_shop import (
     CARD_SHOP_BASE_PRICE,
     CARD_SHOP_PRICE_STEP,
     CARD_SHOP_PURPOSES,
+    MEMBER_FIRST_CARD_PRICE,
+    SMART_CARD_PRICE_STEP,
     CardShopMixin,
 )
 from gui_cards import CardMixin
@@ -1105,6 +1108,16 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertTrue(all(item.get("path") != "free_use" for item in visible))
         buttons = g.get_machine_path_buttons(g.get_shop_upgrade_rects()[0])
         g.handle_shop_click(buttons[1].center)
+        self.assertEqual(g.selected_shop_upgrade, "temperature_free")
+        self.assertNotIn("temperature_free", g.purchased_shop_upgrades)
+        self.assertEqual(g.player.balance, 100)
+        self.assertIn("Confirm installation", g.shop_message)
+        self.assertIn("Efficiency will lock", g.shop_message)
+        g.handle_shop_click(buttons[0].center)
+        self.assertEqual(g.selected_shop_upgrade, "temperature")
+        self.assertEqual(g.player.balance, 100)
+        g.handle_shop_click(buttons[1].center)
+        g.handle_shop_click(g.shop_purchase_button.center)
         self.assertIn("temperature_free", g.purchased_shop_upgrades)
         self.assertEqual(g.player.balance, 75)
         g.handle_shop_click(buttons[0].center)
@@ -1112,6 +1125,8 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertNotIn("temperature", g.purchased_shop_upgrades)
         g.draw_shop_screen()
         g.handle_shop_click(g.get_machine_path_buttons(g.get_shop_upgrade_rects()[1])[0].center)
+        self.assertNotIn("xray", g.purchased_shop_upgrades)
+        g.handle_shop_click(g.shop_purchase_button.center)
         self.assertIn("xray", g.purchased_shop_upgrades)
         self.assertEqual(g.player.balance, 50)
 
@@ -1190,6 +1205,26 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertFalse(game.recycle_selected_test())
         self.assertFalse(game.recycler_used)
         self.assertEqual(game.player.test_hand, before)
+
+    def test_recycler_mk2_allows_two_swaps_and_requires_the_base_recycler(self):
+        """Recycler Mk II should extend the real per-patient swap allowance."""
+
+        game = self.game
+        mk2 = next(item for item in SHOP_UPGRADES if item["id"] == "recycler_mk2")
+        self.assertEqual(game.get_missing_shop_requirement(mk2)["id"], "recycler")
+        game.purchased_shop_upgrades.add("recycler")
+        self.assertIsNone(game.get_missing_shop_requirement(mk2))
+        game.purchased_shop_upgrades.add("recycler_mk2")
+        self.assertEqual(game.get_recycler_limit(), 2)
+        for expected_use in (1, 2):
+            game.selected_card_index = 0
+            self.assertTrue(game.recycle_selected_test())
+            self.assertEqual(game.recycler_used, expected_use)
+        game.selected_card_index = 0
+        self.assertFalse(game.recycle_selected_test())
+        game.reset_round()
+        self.assertEqual(game.recycler_used, 0)
+        self.assertEqual(game.get_recycler_limit(), 2)
 
     def test_patient_specific_diagnosis_hand_switches_with_the_case(self):
         """Each completed patient set should replace the legacy case files."""
@@ -1958,6 +1993,115 @@ class GuiFlowSmokeTests(unittest.TestCase):
             self.assertTrue(
                 all(not rect.colliderect(self.game.card_shop_button) for rect in stack)
             )
+
+    def test_card_shop_readable_layout_contains_stock_purpose_and_price_copy(self):
+        """The enlarged modal should keep every player-facing label inside its box."""
+
+        panel = self.game.card_shop_panel
+        self.assertTrue(panel.contains(self.game.card_shop_close_button))
+        self.assertTrue(panel.contains(self.game.card_shop_buy_button))
+        slots = self.game.get_card_shop_slot_rects()
+        self.assertEqual(len(slots), len(self.game.card_shop_catalog))
+        self.assertTrue(all(panel.contains(slot) for slot in slots))
+
+        information = pygame.Rect(panel.x + 22, panel.bottom - 58, 420, 44)
+        self.assertTrue(panel.contains(information))
+        self.assertFalse(information.colliderect(self.game.card_shop_buy_button))
+
+        for test, slot in zip(self.game.card_shop_catalog, slots):
+            display_name = {
+                "BLOOD CHEMISTRY": "BLOOD CHEM.",
+                "OXYGEN SCAN": "OXYGEN SCAN",
+                "TOXIN SCREEN": "TOXIN SCREEN",
+            }.get(test.name, test.name)
+            self.assertLessEqual(
+                self.game.compact_ui_font.size(display_name)[0],
+                slot.width - 54,
+                test.name,
+            )
+            self.assertLessEqual(
+                self.game.tutorial_body_font.size(CARD_SHOP_PURPOSES[test.name])[0],
+                information.width - 20,
+                test.name,
+            )
+
+        self.game.selected_card_shop_test = "BLOOD CHEMISTRY"
+        _purpose, details = self.game.get_card_shop_information()
+        self.assertLessEqual(
+            self.game.compact_ui_font.size(details)[0],
+            information.width - 20,
+        )
+        _enabled, purchase_label = self.game.get_card_shop_purchase_state()
+        self.assertLessEqual(
+            self.game.small_font.size(purchase_label)[0],
+            self.game.card_shop_buy_button.width - 20,
+        )
+
+    def test_smart_cards_changes_card_costs_without_discounting_test_machines(self):
+        """Smart Test Cards should improve draws and price growth, not test fees."""
+
+        self.game.purchased_shop_upgrades.add("smart_cards")
+        self.assertEqual(self.game.get_random_draw_cost(), DRAW_COST - 2)
+        self.assertEqual(self.game.get_card_shop_price(0), CARD_SHOP_BASE_PRICE)
+        self.assertEqual(
+            self.game.get_card_shop_price(1),
+            CARD_SHOP_BASE_PRICE + SMART_CARD_PRICE_STEP,
+        )
+        test = TemperatureTest()
+        self.assertEqual(self.game.player.get_test_cost(test), get_test_cost(test))
+        expenses = self.game.daily_draw_expenses
+        self.assertTrue(self.game.draw_card_from_pile())
+        self.assertEqual(
+            self.game.daily_draw_expenses - expenses,
+            DRAW_COST - 2,
+        )
+
+    def test_clinic_membership_and_expanded_case_change_live_card_rules(self):
+        """Membership and the card case should affect prices and capacity directly."""
+
+        self.game.purchased_shop_upgrades.update(
+            {"clinic_membership", "expanded_case"}
+        )
+        self.assertEqual(self.game.get_card_shop_price(0), MEMBER_FIRST_CARD_PRICE)
+        self.assertEqual(
+            self.game.get_card_shop_price(1),
+            MEMBER_FIRST_CARD_PRICE + CARD_SHOP_PRICE_STEP,
+        )
+        self.assertEqual(self.game.get_max_test_hand_size(), MAX_TEST_HAND_SIZE + 1)
+        while len(self.game.player.test_hand) < self.game.get_max_test_hand_size():
+            self.game.player.draw(self.game.deck.draw())
+        self.game.selected_card_shop_test = self.game.card_shop_catalog[0].name
+        self.assertEqual(self.game.get_card_shop_purchase_state()[1], "HAND FULL")
+
+    def test_deck_scanner_previews_the_exact_next_random_card(self):
+        """The scanner should reveal without removing or reordering the top card."""
+
+        self.game.purchased_shop_upgrades.add("deck_scanner")
+        next_card = self.game.deck.contents[-1]
+        self.assertEqual(
+            self.game.get_deck_scanner_preview(),
+            next_card.value.name,
+        )
+        self.game.draw_draw_deck()
+        self.assertTrue(self.game.draw_card_from_pile())
+        self.assertIs(self.game.player.test_hand[-1], next_card)
+
+    def test_diagnostic_grant_makes_one_draw_free_per_patient(self):
+        """The grant should recharge for a new patient and still count each draw."""
+
+        self.game.purchased_shop_upgrades.add("diagnostic_grant")
+        self.assertEqual(self.game.get_random_draw_cost(), 0)
+        self.assertTrue(self.game.draw_card_from_pile())
+        self.assertTrue(self.game.diagnostic_grant_used)
+        self.assertEqual(self.game.daily_draw_expenses, 0)
+        self.assertEqual(self.game.daily_random_draw_count, 1)
+        self.assertEqual(self.game.get_random_draw_cost(), DRAW_COST)
+        self.assertTrue(self.game.draw_card_from_pile())
+        self.assertEqual(self.game.daily_draw_expenses, DRAW_COST)
+        self.assertEqual(self.game.daily_random_draw_count, 2)
+        self.game.reset_round()
+        self.assertFalse(self.game.diagnostic_grant_used)
+        self.assertEqual(self.game.get_random_draw_cost(), 0)
 
     def test_patient_id_details_fit_the_larger_readable_font(self):
         """Wrapped ID details should stay readable and above the flip control."""
@@ -3250,9 +3394,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
         purchase_cost = sum(upgrade["cost"] for upgrade in upgrades)
         self.game.player.balance = purchase_cost + 100
         for upgrade in upgrades:
-            upgrade_index = SHOP_UPGRADES.index(upgrade)
+            self.game.shop_category = self.game.get_shop_category_for_upgrade(upgrade)
+            category_upgrades = self.game.get_shop_category_upgrades()
+            upgrade_index = category_upgrades.index(upgrade)
             self.game.shop_scroll_row = min(
-                upgrade_index // 3,
+                upgrade_index // 6,
                 self.game.get_shop_max_scroll_row(),
             )
             visible_index = self.game.get_visible_shop_upgrades().index(upgrade)
@@ -3261,13 +3407,13 @@ class GuiFlowSmokeTests(unittest.TestCase):
             )
             self.game.handle_shop_click(self.game.shop_purchase_button.center)
         self.assertEqual(self.game.player.balance, 100)
-        self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 2)
-        self.assertEqual(self.game.player.get_test_cost(AllergyTest()), 17)
+        self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 3)
+        self.assertEqual(self.game.player.get_test_cost(AllergyTest()), 18)
         card = __import__("Card").Card("Test", TemperatureTest())
         self.game.player.draw(card)
         self.assertEqual(self.game.player.get_machine_level(card.value), 2)
         self.game.reset_round()
-        self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 2)
+        self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 3)
         rects = self.game.get_shop_upgrade_rects()
         self.assertEqual(len(rects), 6)
         for index, rect in enumerate(rects):
@@ -3291,11 +3437,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.shop_scroll_row, 1)
         pygame.event.post(pygame.event.Event(pygame.MOUSEWHEEL, {"y": -1}))
         self.game.handle_events()
-        self.assertEqual(self.game.shop_scroll_row, 2)
+        self.assertEqual(self.game.shop_scroll_row, 1)
         final_page_ids = {
             upgrade["id"] for upgrade in self.game.get_visible_shop_upgrades()
         }
-        self.assertTrue({"toxin", "neural", "power", "smart_cards"} <= final_page_ids)
+        self.assertEqual(final_page_ids, {"toxin", "neural"})
 
         new_machine_tests = {
             "blood": BloodChemistryTest,
@@ -3316,9 +3462,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
             upgrade = next(
                 item for item in SHOP_UPGRADES if item["id"] == upgrade_id
             )
-            upgrade_index = SHOP_UPGRADES.index(upgrade)
+            self.game.shop_category = "machines"
+            category_upgrades = self.game.get_shop_category_upgrades()
+            upgrade_index = category_upgrades.index(upgrade)
             self.game.shop_scroll_row = min(
-                upgrade_index // 3,
+                upgrade_index // 6,
                 self.game.get_shop_max_scroll_row(),
             )
             visible_index = self.game.get_visible_shop_upgrades().index(upgrade)
@@ -3333,6 +3481,116 @@ class GuiFlowSmokeTests(unittest.TestCase):
             )
 
         self.assertEqual(self.game.player.balance, 0)
+
+    def test_shop_category_tabs_filter_without_changing_campaign_state(self):
+        """Catalog tabs should organize upgrades without purchasing anything."""
+
+        self.game.state = GameState.SHOP
+        original_balance = self.game.player.balance
+        original_purchases = set(self.game.purchased_shop_upgrades)
+        expected_ids = {
+            "machines": {
+                "temperature", "xray", "ultrasound", "allergy",
+                "blood", "oxygen", "toxin", "neural",
+            },
+            "cards": {
+                "smart_cards", "recycler", "expanded_case", "deck_scanner",
+                "recycler_mk2", "diagnostic_grant",
+            },
+            "clinic": {"power", "clinic_membership", "priority_processing"},
+            "installed": set(),
+        }
+        for category, rect in self.game.get_shop_category_rects().items():
+            self.game.handle_shop_click(rect.center)
+            self.assertEqual(self.game.shop_category, category)
+            self.assertEqual(
+                {upgrade["id"] for upgrade in self.game.get_shop_category_upgrades()},
+                expected_ids[category],
+            )
+            self.assertEqual(self.game.shop_scroll_row, 0)
+        self.assertEqual(self.game.player.balance, original_balance)
+        self.assertEqual(self.game.purchased_shop_upgrades, original_purchases)
+
+    def test_installed_filter_includes_both_machine_paths_and_shared_upgrades(self):
+        """The Installed view should show one shelf for every owned product."""
+
+        self.game.purchased_shop_upgrades.update(
+            {"temperature_free", "smart_cards", "power"}
+        )
+        self.game.player.free_test_machines.add("TEMPERATURE")
+        self.game.player.test_discount = 3
+        self.game.shop_category = "installed"
+        installed_ids = {
+            upgrade["id"] for upgrade in self.game.get_shop_category_upgrades()
+        }
+        self.assertEqual(installed_ids, {"temperature", "smart_cards", "power"})
+        self.game.draw_shop_screen()
+
+    def test_machine_upgrade_copy_uses_real_current_and_future_costs(self):
+        """Machine comparisons should reflect global discounts and installed paths."""
+
+        self.game.player.test_discount = 2
+        self.assertEqual(
+            self.game.get_machine_path_cost_details("TEMPERATURE"),
+            (8, 3, 8),
+        )
+        self.game.player.machine_levels["TEMPERATURE"] = 2
+        self.assertEqual(
+            self.game.get_machine_path_cost_details("TEMPERATURE"),
+            (3, 3, 8),
+        )
+        self.game.player.machine_levels.clear()
+        self.game.player.free_test_machines.add("TEMPERATURE")
+        self.assertEqual(
+            self.game.get_machine_path_cost_details("TEMPERATURE"),
+            (0, 3, 8),
+        )
+
+    def test_global_and_machine_discounts_respect_the_operating_cost_floor(self):
+        """Stacked discounts must not make paid medical tests economically meaningless."""
+
+        self.game.player.test_discount = 100
+        self.game.player.machine_levels["TEMPERATURE"] = 2
+        self.assertEqual(
+            self.game.player.get_test_cost(TemperatureTest()),
+            MIN_TEST_OPERATING_COST,
+        )
+        self.game.player.free_test_machines.add("TEMPERATURE")
+        self.assertEqual(self.game.player.get_test_cost(TemperatureTest()), 0)
+        self.game.player.consume_test_use(TemperatureTest())
+        self.assertEqual(
+            self.game.player.get_test_cost(TemperatureTest()),
+            MIN_TEST_OPERATING_COST,
+        )
+
+    def test_priority_processing_purchase_shortens_result_reveal(self):
+        """The processing upgrade should change the actual report animation timing."""
+
+        upgrade = next(
+            item for item in SHOP_UPGRADES if item["id"] == "priority_processing"
+        )
+        self.game.state = GameState.SHOP
+        self.game.player.balance = upgrade["cost"]
+        self.game.shop_category = "clinic"
+        visible = self.game.get_visible_shop_upgrades()
+        index = visible.index(upgrade)
+        self.game.handle_shop_click(self.game.get_shop_upgrade_rects()[index].center)
+        self.game.handle_shop_click(self.game.shop_purchase_button.center)
+        self.assertIn("priority_processing", self.game.purchased_shop_upgrades)
+        self.assertEqual(self.game.test_result_reveal_duration, 850)
+
+    def test_shop_paging_copy_has_room_for_readable_category_pages(self):
+        """The larger arrows and page heading should fit above the product grid."""
+
+        up, down, track = self.game.get_shop_scroll_rects()
+        self.assertGreaterEqual(up.width, 34)
+        self.assertGreaterEqual(up.height, 27)
+        self.assertEqual(up.size, down.size)
+        self.assertFalse(up.colliderect(track))
+        self.assertFalse(down.colliderect(track))
+        self.game.shop_category = "machines"
+        self.assertEqual(self.game.get_shop_max_scroll_row() + 1, 2)
+        self.game.draw_shop_screen()
 
     def test_planet_catalog_defines_valid_consecutive_campaign_days(self):
         """Planet metadata should own all fixed rosters in campaign order."""

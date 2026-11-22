@@ -12,6 +12,7 @@ DRAW_COST = 5
 DEBT_LIMIT = -50
 STARTING_TEST_HAND_SIZE = 5
 MAX_TEST_HAND_SIZE = 8
+MIN_TEST_OPERATING_COST = 3
 PERFECT_DAY_BONUS = 25
 CLINIC_OPERATING_FEE = 50
 RETURN_PASSAGE_COST = 400
@@ -87,7 +88,12 @@ class Player:
             return 0
         base = get_base_test_cost(test)
         level = self.get_machine_level(test)
-        return max(1, (base + 1) // 2 - self.test_discount) if level > 1 else max(1, base - self.test_discount)
+        discounted = (
+            (base + 1) // 2 - self.test_discount
+            if level > 1
+            else base - self.test_discount
+        )
+        return max(MIN_TEST_OPERATING_COST, discounted)
 
     def consume_test_use(self, test):
         """Consume the free allowance only when a machine actually runs."""

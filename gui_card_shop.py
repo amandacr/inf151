@@ -3,11 +3,10 @@
 import pygame
 
 from gui_theme import COLORS, RARITY_COLORS
-from Player import MAX_TEST_HAND_SIZE
-
-
 CARD_SHOP_BASE_PRICE = 10
 CARD_SHOP_PRICE_STEP = 5
+SMART_CARD_PRICE_STEP = 3
+MEMBER_FIRST_CARD_PRICE = 5
 CARD_SHOP_NOTICE_DURATION = 1200
 CARD_SHOP_PURPOSES = {
     "TEMPERATURE": "Measures species-adjusted body temperature.",
@@ -43,9 +42,9 @@ class CardShopMixin:
 
         grid = pygame.Rect(
             self.card_shop_panel.x + 22,
-            self.card_shop_panel.y + 58,
+            self.card_shop_panel.y + 60,
             self.card_shop_panel.width - 44,
-            98,
+            110,
         )
         gap = 8
         slot_width = (grid.width - gap * 3) // 4
@@ -61,10 +60,25 @@ class CardShopMixin:
             for column in range(4)
         ]
 
-    def get_card_shop_price(self):
+    def get_card_shop_price(self, purchase_count=None):
         """Return the next targeted-card price for the current patient."""
 
-        return CARD_SHOP_BASE_PRICE + self.card_shop_patient_purchases * CARD_SHOP_PRICE_STEP
+        purchase_count = (
+            self.card_shop_patient_purchases
+            if purchase_count is None
+            else purchase_count
+        )
+        base_price = (
+            MEMBER_FIRST_CARD_PRICE
+            if "clinic_membership" in self.purchased_shop_upgrades
+            else CARD_SHOP_BASE_PRICE
+        )
+        price_step = (
+            SMART_CARD_PRICE_STEP
+            if "smart_cards" in self.purchased_shop_upgrades
+            else CARD_SHOP_PRICE_STEP
+        )
+        return base_price + purchase_count * price_step
 
     def get_card_shop_inventory_count(self, test_name):
         """Count matching cards still available in the live draw deck."""
@@ -92,23 +106,30 @@ class CardShopMixin:
         selected = self.get_selected_card_shop_test()
         if selected is None:
             return False, "SELECT A CARD"
-        if len(self.player.test_hand) >= MAX_TEST_HAND_SIZE:
+        if len(self.player.test_hand) >= self.get_max_test_hand_size():
             return False, "HAND FULL"
         if self.get_card_shop_inventory_count(selected.name) <= 0:
             return False, "SOLD OUT"
         price = self.get_card_shop_price()
         if not self.can_spend_clinic_funds(price):
             return False, "CREDIT LIMIT -$50"
-        return True, f"BUY FOR ${price}  •  NEXT CARD ${price + CARD_SHOP_PRICE_STEP}"
+        next_price = self.get_card_shop_price(self.card_shop_patient_purchases + 1)
+        return True, f"BUY FOR ${price}  •  NEXT CARD ${next_price}"
 
     def get_card_shop_information(self):
         """Return concise purpose and billing details for the selected card."""
 
         selected = self.get_selected_card_shop_test()
         if selected is None:
+            starting_price = self.get_card_shop_price(0)
+            price_step = (
+                SMART_CARD_PRICE_STEP
+                if "smart_cards" in self.purchased_shop_upgrades
+                else CARD_SHOP_PRICE_STEP
+            )
             return (
                 "Choose a test card to add directly to your hand.",
-                "CARD: $10, THEN $15, $20...  •  RUNNING IT COSTS EXTRA",
+                f"STARTS ${starting_price}  •  +${price_step} EACH PURCHASE  •  TEST FEE EXTRA",
             )
         inventory = self.get_card_shop_inventory_count(selected.name)
         purpose = CARD_SHOP_PURPOSES[selected.name]
@@ -212,14 +233,14 @@ class CardShopMixin:
             name_color = (117, 116, 127) if sold_out else (231, 237, 235)
             name = self.compact_ui_font.render(display_name, True, name_color)
             self.screen.blit(name, (slot.x + 46, slot.y + 8))
-            stock = self.legible_micro_font.render(
+            stock = self.compact_ui_font.render(
                 "SOLD OUT" if sold_out else f"STOCK: {inventory}",
                 True,
                 (106, 102, 113) if sold_out else rarity_color,
             )
-            self.screen.blit(stock, (slot.x + 46, slot.y + 27))
+            self.screen.blit(stock, (slot.x + 46, slot.y + 28))
 
-        information = pygame.Rect(panel.x + 22, panel.bottom - 43, 365, 31)
+        information = pygame.Rect(panel.x + 22, panel.bottom - 58, 420, 44)
         pygame.draw.rect(self.screen, (12, 22, 31), information, border_radius=7)
         pygame.draw.rect(
             self.screen,
@@ -229,7 +250,7 @@ class CardShopMixin:
             border_radius=7,
         )
         purpose, details = self.get_card_shop_information()
-        purpose_text = self.compact_ui_font.render(purpose, True, COLORS["text"])
+        purpose_text = self.tutorial_body_font.render(purpose, True, COLORS["text"])
         details_text = self.compact_ui_font.render(
             details,
             True,
@@ -237,11 +258,11 @@ class CardShopMixin:
         )
         self.screen.blit(
             purpose_text,
-            purpose_text.get_rect(midleft=(information.x + 9, information.y + 8)),
+            purpose_text.get_rect(midleft=(information.x + 10, information.y + 13)),
         )
         self.screen.blit(
             details_text,
-            details_text.get_rect(midleft=(information.x + 9, information.y + 23)),
+            details_text.get_rect(midleft=(information.x + 10, information.y + 33)),
         )
 
         enabled, button_label = self.get_card_shop_purchase_state()
@@ -257,7 +278,7 @@ class CardShopMixin:
         button_border = (224, 176, 241) if enabled else (84, 83, 92)
         pygame.draw.rect(self.screen, button_fill, button, border_radius=7)
         pygame.draw.rect(self.screen, button_border, button, width=2, border_radius=7)
-        buy_text = self.card_font.render(
+        buy_text = self.small_font.render(
             button_label,
             True,
             (246, 231, 250) if enabled else (135, 135, 143),

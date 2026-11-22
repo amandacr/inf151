@@ -457,7 +457,7 @@ class RouteMapMixin:
             item_x = 51 + (index % 4) * 170
             item_y = 568 + (index // 4) * 24
             pygame.draw.circle(self.screen, color, (item_x, item_y), 4)
-            label = self.compact_ui_font.render(label_text, True, (169, 185, 190))
+            label = self.tutorial_label_font.render(label_text, True, (190, 207, 211))
             self.screen.blit(label, label.get_rect(midleft=(item_x + 9, item_y)))
 
     def get_route_map_selection_message(self, destination):
@@ -560,20 +560,7 @@ class RouteMapMixin:
         if selected.map_data.destination_type is DestinationType.BLACKGLASS:
             self.draw_blackglass_contract_panel(selected, state, status_color)
             self.draw_route_map_ticket_action(selected, state, status_color)
-            message_box = pygame.Rect(
-                panel.x + 21,
-                panel.bottom - 24,
-                panel.width - 42,
-                18,
-            )
-            message = self.compact_ui_font.render(
-                self.route_map_message,
-                True,
-                (161, 153, 154),
-            )
-            self.screen.set_clip(message_box)
-            self.screen.blit(message, message.get_rect(center=message_box.center))
-            self.screen.set_clip(None)
+            self.draw_route_map_message((205, 187, 187))
             return
 
         ticket_price = selected.map_data.ticket_price
@@ -595,7 +582,14 @@ class RouteMapMixin:
                 else "CURRENT CREDITS",
                 self.format_money(self.route.available_credits),
             ),
-            ("STILL REQUIRED", self.format_money(remaining)),
+            (
+                "ROUTE ACCESS"
+                if state in (DestinationState.LOCKED, DestinationState.UNKNOWN_DESTINATION)
+                else "STILL REQUIRED",
+                status_text.upper()
+                if state in (DestinationState.LOCKED, DestinationState.UNKNOWN_DESTINATION)
+                else self.format_money(remaining),
+            ),
         )
         for row_index, (label_text, value_text) in enumerate(details):
             row_y = panel.y + 197 + row_index * 25
@@ -603,6 +597,8 @@ class RouteMapMixin:
             value_color = (
                 self.get_balance_color(self.route.available_credits)
                 if label_text in ("CURRENT CREDITS", "CURRENT SAVINGS")
+                else status_color
+                if label_text == "ROUTE ACCESS"
                 else (229, 233, 221)
             )
             value = self.compact_ui_font.render(value_text, True, value_color)
@@ -614,15 +610,46 @@ class RouteMapMixin:
         self.draw_route_map_ticket_stub(selected, state, status_color)
         self.draw_route_map_ticket_action(selected, state, status_color)
 
-        message_box = pygame.Rect(panel.x + 21, panel.bottom - 24, panel.width - 42, 18)
-        message = self.compact_ui_font.render(
-            self.route_map_message,
-            True,
-            (138, 166, 172),
+        self.draw_route_map_message((190, 211, 215))
+
+    def draw_route_map_message(self, color):
+        """Fit complete destination guidance beneath the action button."""
+
+        panel = self.route_map_ticket_panel
+        message_box = pygame.Rect(
+            panel.x + 18,
+            panel.bottom - 27,
+            panel.width - 36,
+            23,
         )
+        fonts = (
+            self.compact_ui_font,
+            self.legible_micro_font,
+            self.tiny_font,
+        )
+        for font in fonts:
+            lines = self.wrap_text(self.route_map_message, font, message_box.width)
+            line_height = font.get_linesize()
+            if len(lines) <= 2 and len(lines) * line_height <= message_box.height:
+                break
+        else:
+            font = fonts[-1]
+            lines = self.wrap_text(self.route_map_message, font, message_box.width)[:2]
+
+        previous_clip = self.screen.get_clip()
         self.screen.set_clip(message_box)
-        self.screen.blit(message, message.get_rect(center=message_box.center))
-        self.screen.set_clip(None)
+        try:
+            total_height = len(lines) * font.get_linesize()
+            y = message_box.centery - total_height // 2
+            for line in lines:
+                rendered = font.render(line, True, color)
+                self.screen.blit(
+                    rendered,
+                    rendered.get_rect(center=(message_box.centerx, y + font.get_linesize() // 2)),
+                )
+                y += font.get_linesize()
+        finally:
+            self.screen.set_clip(previous_clip)
 
     def draw_blackglass_contract_panel(self, destination, state, status_color):
         """Draw Blackglass as emergency employment rather than paid travel."""
@@ -697,8 +724,24 @@ class RouteMapMixin:
         panel = self.route_map_ticket_panel
         ticket = pygame.Rect(panel.x + 24, panel.y + 294, panel.width - 48, 54)
         is_earth = destination.map_data.destination_type is DestinationType.EARTH
-        ticket_fill = (248, 220, 132) if is_earth else (227, 222, 193)
-        ticket_border = (255, 198, 75) if is_earth else status_color
+        unavailable = state in (
+            DestinationState.LOCKED,
+            DestinationState.UNKNOWN_DESTINATION,
+        )
+        ticket_fill = (
+            (93, 99, 105)
+            if unavailable
+            else (248, 220, 132)
+            if is_earth
+            else (227, 222, 193)
+        )
+        ticket_border = (
+            (119, 128, 138)
+            if unavailable
+            else (255, 198, 75)
+            if is_earth
+            else status_color
+        )
         pygame.draw.rect(self.screen, ticket_fill, ticket, border_radius=7)
         pygame.draw.rect(self.screen, ticket_border, ticket, width=2, border_radius=7)
         pygame.draw.circle(self.screen, (10, 22, 35), (ticket.x, ticket.centery), 7)
@@ -715,12 +758,13 @@ class RouteMapMixin:
             "triska_station": "TRISKA STATION",
             "lumora_canopy": "LUMORA CANOPY",
         }
+        ticket_text_color = (205, 211, 214) if unavailable else (31, 39, 43)
         ticket_name = self.compact_ui_font.render(
             "RETURN PASSAGE"
             if is_earth
             else ticket_labels.get(destination.key, destination.planet_name.upper()),
             True,
-            (31, 39, 43),
+            ticket_text_color,
         )
         self.screen.blit(ticket_name, ticket_name.get_rect(midleft=(ticket.x + 15, ticket.y + 18)))
         price_text = (
@@ -731,7 +775,11 @@ class RouteMapMixin:
             if destination.map_data.ticket_price == 0
             else self.format_money(destination.map_data.ticket_price)
         )
-        price = self.small_font.render(price_text, True, (44, 53, 55))
+        price = self.small_font.render(
+            price_text,
+            True,
+            (211, 216, 218) if unavailable else (44, 53, 55),
+        )
         self.screen.blit(price, price.get_rect(midleft=(ticket.x + 15, ticket.y + 37)))
 
         stamp_text = None
@@ -741,6 +789,14 @@ class RouteMapMixin:
             stamp_text = "USED"
         elif state is DestinationState.NO_NEW_PATIENTS:
             stamp_text = "CLOSED"
+        elif state is DestinationState.SHIFT_COMPLETE:
+            stamp_text = "COMPLETE"
+        elif state is DestinationState.CURRENT_LOCATION:
+            stamp_text = "ACTIVE"
+        elif state is DestinationState.LOCKED:
+            stamp_text = "LOCKED"
+        elif state is DestinationState.UNKNOWN_DESTINATION:
+            stamp_text = "UNAVAILABLE"
         if stamp_text:
             stamp = self.tutorial_label_font.render(stamp_text, True, status_color)
             stamp_rect = stamp.get_rect(center=(ticket.right - 48, ticket.centery))
@@ -794,26 +850,36 @@ class RouteMapMixin:
         hovered = enabled and button.collidepoint(self.get_mouse_position())
         emergency_action = state is DestinationState.EMERGENCY_CONTRACT
         fill = (
-            (142, 70, 67)
+            (252, 151, 127)
             if emergency_action and hovered
-            else (91, 48, 51)
+            else (232, 119, 101)
             if emergency_action and enabled
-            else tuple(min(255, channel + 18) for channel in status_color)
+            else tuple(min(255, channel + 24) for channel in status_color)
             if hovered
-            else (31, 68, 72)
+            else status_color
             if enabled
             else (24, 31, 41)
         )
-        border = status_color if enabled else (66, 76, 87)
+        border = (
+            tuple(min(255, channel + 28) for channel in status_color)
+            if enabled
+            else (66, 76, 87)
+        )
         pygame.draw.rect(self.screen, (2, 6, 12), button.move(3, 4), border_radius=9)
         pygame.draw.rect(self.screen, fill, button, border_radius=9)
         pygame.draw.rect(self.screen, border, button, width=2, border_radius=9)
+        if enabled:
+            pygame.draw.line(
+                self.screen,
+                tuple(min(255, channel + 45) for channel in fill),
+                (button.x + 12, button.y + 5),
+                (button.right - 12, button.y + 5),
+                width=1,
+            )
         label = self.tutorial_label_font.render(
             label_text,
             True,
-            (249, 220, 211)
-            if emergency_action and enabled
-            else (8, 20, 24)
+            (15, 24, 28)
             if enabled
             else (112, 122, 132),
         )

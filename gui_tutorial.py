@@ -4,15 +4,12 @@ import math
 
 import pygame
 
-from gui_card_shop import CARD_SHOP_BASE_PRICE, CARD_SHOP_PRICE_STEP
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
 from Player import (
     DEBT_LIMIT,
     DIAGNOSIS_REWARD,
-    DRAW_COST,
     LIMITED_EVIDENCE_REWARD,
-    MAX_TEST_HAND_SIZE,
     NO_EVIDENCE_REWARD,
     RETURN_PASSAGE_COST,
     WRONG_DIAGNOSIS_PENALTY,
@@ -630,14 +627,15 @@ class TutorialMixin:
             (
                 "CARD SHOP",
                 (
-                    f"Choose a test from the live deck. Starts at ${CARD_SHOP_BASE_PRICE}; "
-                    f"+${CARD_SHOP_PRICE_STEP} after each purchase."
+                    f"Choose a test from the live deck. Starts at ${self.get_card_shop_price(0)}; "
+                    f"the next card is ${self.get_card_shop_price(1)}."
                 ),
             ),
             (
                 "CARD HAND",
                 (
-                    f"Draws ${DRAW_COST}  •  Max {MAX_TEST_HAND_SIZE}  •  "
+                    f"Next draw ${self.get_random_draw_cost()}  •  "
+                    f"Max {self.get_max_test_hand_size()}  •  "
                     f"Floor -${abs(DEBT_LIMIT)}  •  unused cards return. "
                     "Emergency Common test/patient."
                 ),

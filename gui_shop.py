@@ -9,12 +9,13 @@ from Player import (
     CLINIC_OPERATING_FEE,
     DEBT_LIMIT,
     DIAGNOSIS_REWARD,
-    DRAW_COST,
     LIMITED_EVIDENCE_REWARD,
+    MIN_TEST_OPERATING_COST,
     NO_EVIDENCE_REWARD,
     PERFECT_DAY_BONUS,
     WRONG_DIAGNOSIS_PENALTY,
 )
+from Test import get_test_cost as get_base_test_cost
 
 
 SHOP_UPGRADES = (
@@ -34,12 +35,24 @@ SHOP_UPGRADES = (
      "description": "Level 2: toxin screens cost 50% less.", "machine": "TOXIN SCREEN"},
     {"id": "neural", "name": "SYNAPSE MAPPER", "category": "NEURAL SCAN", "cost": 45,
      "description": "Level 2: neural scans cost 50% less.", "machine": "NEURAL SCAN"},
-    {"id": "power", "name": "EFFICIENT POWER CORE", "category": "ALL MACHINES", "cost": 40,
+    {"id": "power", "name": "EFFICIENT POWER CORE", "category": "ALL MACHINES", "cost": 50,
      "description": "Every test costs $2 less. Stacks with calibrations.", "discount": 2},
-    {"id": "smart_cards", "name": "SMART TEST CARDS", "category": "CARD UPGRADE", "cost": 25,
-     "description": "Every test costs $1 less. Stacks with upgrades.", "discount": 1},
+    {"id": "smart_cards", "name": "SMART TEST CARDS", "category": "CARD UPGRADE", "cost": 30,
+     "description": "Random draws cost $2 less; targeted prices rise by only $3."},
     {"id": "recycler", "name": "CARD RECYCLER", "category": "CARD MANAGEMENT", "cost": 50,
      "description": "Once per patient, swap a test card for a random one free."},
+    {"id": "clinic_membership", "name": "CLINIC MEMBERSHIP", "category": "CLINIC SERVICE", "cost": 35,
+     "description": "The first targeted Card Shop purchase costs only $5."},
+    {"id": "expanded_case", "name": "EXPANDED CARD CASE", "category": "CARD CAPACITY", "cost": 45,
+     "description": "Carry nine test cards instead of eight."},
+    {"id": "deck_scanner", "name": "DECK SCANNER", "category": "CARD INTEL", "cost": 30,
+     "description": "Preview the next random test card before paying to draw."},
+    {"id": "recycler_mk2", "name": "RECYCLER MK II", "category": "CARD MANAGEMENT", "cost": 35,
+     "description": "Recycle twice per patient instead of once.", "requires": "recycler"},
+    {"id": "diagnostic_grant", "name": "DIAGNOSTIC GRANT", "category": "CARD FUNDING", "cost": 40,
+     "description": "The first random draw for each patient is free."},
+    {"id": "priority_processing", "name": "PRIORITY PROCESSING", "category": "CLINIC SERVICE", "cost": 45,
+     "description": "Test-result scans and reports finish 40% faster."},
 )
 
 # Existing calibrations are the Efficiency path; free-use offers share their price.
@@ -59,6 +72,21 @@ SHOP_SHELVES = tuple(item for item in SHOP_UPGRADES if item.get("path") != "free
 
 SHOP_COLUMNS = 3
 SHOP_VISIBLE_ROWS = 2
+SHOP_CATEGORY_KEYS = ("machines", "cards", "clinic", "installed")
+SHOP_CATEGORY_LABELS = {
+    "machines": "MACHINES",
+    "cards": "CARDS",
+    "clinic": "CLINIC",
+    "installed": "INSTALLED",
+}
+SHOP_CARD_UPGRADE_IDS = {
+    "smart_cards",
+    "recycler",
+    "expanded_case",
+    "deck_scanner",
+    "recycler_mk2",
+    "diagnostic_grant",
+}
 SHOP_PRODUCT_COLORS = {
     "recycler": (105, 230, 180),
     "temperature": (242, 160, 83),
@@ -71,6 +99,12 @@ SHOP_PRODUCT_COLORS = {
     "neural": (195, 132, 245),
     "power": (112, 255, 181),
     "smart_cards": (190, 143, 229),
+    "clinic_membership": (244, 190, 91),
+    "expanded_case": (112, 181, 244),
+    "deck_scanner": (93, 219, 208),
+    "recycler_mk2": (89, 244, 176),
+    "diagnostic_grant": (244, 153, 94),
+    "priority_processing": (224, 127, 239),
 }
 
 for _item in SHOP_UPGRADES:
@@ -121,6 +155,17 @@ class ShopMixin:
         machine = upgrade["machine"]
         return (self.player.machine_levels.get(machine, 1) > 1
                 or machine in self.player.free_test_machines)
+
+    def get_missing_shop_requirement(self, upgrade):
+        """Return the prerequisite upgrade when this item is not yet available."""
+
+        requirement_id = upgrade.get("requires")
+        if not requirement_id or requirement_id in self.purchased_shop_upgrades:
+            return None
+        return next(
+            (item for item in SHOP_UPGRADES if item["id"] == requirement_id),
+            None,
+        )
 
     def get_live_balance(self):
         """Return the balance players see after costs accrued this shift.
@@ -233,12 +278,7 @@ class ShopMixin:
             (232, 211, 242),
         )
         self.screen.blit(title, (109, 129))
-        hint = self.card_font.render(
-            "PERMANENT UPGRADES  //  ONE PATH PER MACHINE",
-            True,
-            COLORS["muted"],
-        )
-        self.screen.blit(hint, (110, 158))
+        self.draw_shop_category_tabs()
 
         balance_badge = pygame.Rect(814, 132, 176, 38)
         pygame.draw.rect(self.screen, (50, 37, 68), balance_badge, border_radius=19)
@@ -269,19 +309,41 @@ class ShopMixin:
         self.screen.blit(balance, balance.get_rect(center=(balance_badge.centerx + 10, balance_badge.centery)))
         self.draw_shop_ticket_badge()
 
-        for upgrade, rect in zip(
-            self.get_visible_shop_upgrades(),
-            self.get_shop_upgrade_rects(),
-        ):
+        visible_upgrades = self.get_visible_shop_upgrades()
+        shop_rects = self.get_shop_upgrade_rects()
+        for upgrade, rect in zip(visible_upgrades, shop_rects):
             self.draw_shop_shelf(upgrade, rect)
+        if (
+            len(visible_upgrades) < len(shop_rects)
+            and self.shop_scroll_row == self.get_shop_max_scroll_row()
+        ):
+            self.draw_shop_loadout_summary(shop_rects[-1])
         self.draw_shop_scroll_controls()
         selected = self.get_selected_shop_upgrade()
         owned = selected and selected["id"] in self.purchased_shop_upgrades
         path_locked = selected and not owned and self.is_shop_path_locked(selected)
-        can_buy = selected and not owned and not path_locked and self.player.balance >= selected["cost"]
+        missing_requirement = selected and self.get_missing_shop_requirement(selected)
+        can_buy = (
+            selected
+            and not owned
+            and not path_locked
+            and not missing_requirement
+            and self.player.balance >= selected["cost"]
+        )
         label = "SELECT AN UPGRADE"
         if selected:
-            label = "OTHER PATH CHOSEN" if path_locked else "INSTALLED" if owned else (f"BUY & INSTALL  ${selected['cost']}" if can_buy else f"NEED ${selected['cost'] - self.player.balance} MORE")
+            if path_locked:
+                label = "OTHER PATH CHOSEN"
+            elif missing_requirement:
+                label = f"REQUIRES {missing_requirement['name']}"
+            elif owned:
+                label = "INSTALLED"
+            elif can_buy and "machine" in selected:
+                label = f"CONFIRM INSTALL  ${selected['cost']}"
+            elif can_buy:
+                label = f"BUY & INSTALL  ${selected['cost']}"
+            else:
+                label = f"NEED ${selected['cost'] - self.player.balance} MORE"
         mouse_position = self.get_mouse_position()
         for rect, text, enabled, accent in (
             (self.shop_purchase_button, label, can_buy, (112, 255, 181)),
@@ -310,7 +372,19 @@ class ShopMixin:
                 COLORS["background"] if enabled and hovered else border,
             )
             self.screen.blit(rendered, rendered.get_rect(center=label_center))
-        message = self.card_font.render(self.shop_message, True, COLORS["text"])
+        message_color = (
+            SHOP_PRODUCT_COLORS[selected["id"]]
+            if selected
+            and "machine" in selected
+            and not owned
+            and not path_locked
+            else COLORS["text"]
+        )
+        message = self.compact_ui_font.render(
+            self.shop_message,
+            True,
+            message_color,
+        )
         self.screen.blit(message, message.get_rect(center=(550, 588)))
 
     def draw_shop_ticket_badge(self):
@@ -467,7 +541,7 @@ class ShopMixin:
         care_detail = "  •  ".join(care_parts) or "No confirmed cases"
         if self.daily_patients_lost:
             care_detail += f"  •  {self.daily_patients_lost} walked out"
-        cards_drawn = self.daily_draw_expenses // DRAW_COST
+        cards_drawn = self.daily_random_draw_count
         diagnostic_costs = (
             self.daily_test_expenses
             + self.daily_draw_expenses
@@ -754,22 +828,105 @@ class ShopMixin:
             for x in (92, 392, 692)
         ]
 
-    def get_shop_total_rows(self):
-        """Return the number of catalog rows required by all current products."""
+    def get_shop_category_rects(self):
+        """Return the compact header tabs for permanent-upgrade categories."""
 
-        return (len(SHOP_SHELVES) + SHOP_COLUMNS - 1) // SHOP_COLUMNS
+        return {
+            key: pygame.Rect(108 + index * 90, 153, 84, 24)
+            for index, key in enumerate(SHOP_CATEGORY_KEYS)
+        }
+
+    def get_shop_category_for_upgrade(self, upgrade):
+        """Return the catalog category for one permanent upgrade."""
+
+        if "machine" in upgrade:
+            return "machines"
+        if upgrade["id"] in SHOP_CARD_UPGRADE_IDS:
+            return "cards"
+        return "clinic"
+
+    def get_shop_category_upgrades(self, category=None):
+        """Return products belonging to the selected category."""
+
+        category = category or self.shop_category
+        if category == "installed":
+            return tuple(
+                upgrade
+                for upgrade in SHOP_SHELVES
+                if upgrade["id"] in self.purchased_shop_upgrades
+                or (
+                    "machine" in upgrade
+                    and upgrade["id"] + "_free" in self.purchased_shop_upgrades
+                )
+            )
+        return tuple(
+            upgrade
+            for upgrade in SHOP_SHELVES
+            if self.get_shop_category_for_upgrade(upgrade) == category
+        )
+
+    def draw_shop_category_tabs(self):
+        """Draw filters so the growing permanent catalog stays scannable."""
+
+        mouse = self.get_mouse_position()
+        for key, rect in self.get_shop_category_rects().items():
+            selected = key == self.shop_category
+            hovered = rect.collidepoint(mouse)
+            count = len(self.get_shop_category_upgrades(key))
+            border = COLORS["accent"] if selected else (151, 113, 184)
+            fill = (
+                (31, 70, 66)
+                if selected
+                else (55, 42, 72)
+                if hovered
+                else (22, 27, 41)
+            )
+            pygame.draw.rect(self.screen, fill, rect, border_radius=6)
+            pygame.draw.rect(self.screen, border, rect, width=2 if selected else 1,
+                             border_radius=6)
+            label = self.card_font.render(
+                f"{SHOP_CATEGORY_LABELS[key]} {count}",
+                True,
+                COLORS["accent"] if selected else COLORS["text"],
+            )
+            self.screen.blit(label, label.get_rect(center=rect.center))
+
+    def handle_shop_category_click(self, position):
+        """Switch catalog filters without purchasing or installing anything."""
+
+        for key, rect in self.get_shop_category_rects().items():
+            if not rect.collidepoint(position):
+                continue
+            self.play_sfx("button")
+            self.shop_category = key
+            self.shop_scroll_row = 0
+            self.selected_shop_upgrade = None
+            if key == "installed":
+                self.shop_message = "Review the permanent upgrades installed in this campaign."
+            else:
+                self.shop_message = f"Showing {SHOP_CATEGORY_LABELS[key].title()} upgrades."
+            return True
+        return False
+
+    def get_shop_total_rows(self):
+        """Return the number of six-product pages in the selected category."""
+
+        item_count = len(self.get_shop_category_upgrades())
+        visible_count = SHOP_COLUMNS * SHOP_VISIBLE_ROWS
+        return max(1, (item_count + visible_count - 1) // visible_count)
 
     def get_shop_max_scroll_row(self):
         """Return the last valid first-row position in the Shop viewport."""
 
-        return max(0, self.get_shop_total_rows() - SHOP_VISIBLE_ROWS)
+        return max(0, self.get_shop_total_rows() - 1)
 
     def get_visible_shop_upgrades(self):
         """Return the products represented by the six visible Shop shelves."""
 
-        first_index = self.shop_scroll_row * SHOP_COLUMNS
         visible_count = SHOP_COLUMNS * SHOP_VISIBLE_ROWS
-        return SHOP_SHELVES[first_index:first_index + visible_count]
+        first_index = self.shop_scroll_row * visible_count
+        upgrades = self.get_shop_category_upgrades()
+        return upgrades[first_index:first_index + visible_count]
 
     def scroll_shop(self, row_delta):
         """Move the Shop viewport by complete product rows."""
@@ -785,9 +942,9 @@ class ShopMixin:
         """Return up button, down button, and scrollbar track rectangles."""
 
         return (
-            pygame.Rect(981, 187, 27, 20),
-            pygame.Rect(981, 514, 27, 20),
-            pygame.Rect(989, 211, 11, 299),
+            pygame.Rect(975, 183, 34, 27),
+            pygame.Rect(975, 509, 34, 27),
+            pygame.Rect(987, 214, 12, 291),
         )
 
     def handle_shop_scroll_click(self, position):
@@ -821,19 +978,16 @@ class ShopMixin:
             pygame.draw.rect(self.screen, border, button, width=2, border_radius=6)
             arrow_y = button.centery + (2 if direction > 0 else -2)
             arrow = (
-                (button.centerx - 5, arrow_y - 3 * direction),
-                (button.centerx + 5, arrow_y - 3 * direction),
-                (button.centerx, arrow_y + 4 * direction),
+                (button.centerx - 7, arrow_y - 4 * direction),
+                (button.centerx + 7, arrow_y - 4 * direction),
+                (button.centerx, arrow_y + 6 * direction),
             )
             pygame.draw.polygon(self.screen, border, arrow)
 
         pygame.draw.rect(self.screen, (13, 18, 29), track, border_radius=6)
         pygame.draw.rect(self.screen, (79, 65, 96), track, width=1, border_radius=6)
         total_rows = self.get_shop_total_rows()
-        thumb_height = max(
-            42,
-            round(track.height * SHOP_VISIBLE_ROWS / total_rows),
-        )
+        thumb_height = max(42, round(track.height / total_rows))
         thumb_travel = track.height - thumb_height
         thumb_y = track.y
         if max_scroll:
@@ -841,18 +995,21 @@ class ShopMixin:
         thumb = pygame.Rect(track.x + 2, thumb_y + 2, track.width - 4, thumb_height - 4)
         pygame.draw.rect(self.screen, (206, 158, 233), thumb, border_radius=4)
 
-        first_item = self.shop_scroll_row * SHOP_COLUMNS + 1
-        last_item = min(
-            len(SHOP_SHELVES),
-            first_item + SHOP_COLUMNS * SHOP_VISIBLE_ROWS - 1,
+        category_label = (
+            "INSTALLED UPGRADES"
+            if self.shop_category == "installed"
+            else f"{SHOP_CATEGORY_LABELS[self.shop_category][:-1]} UPGRADES"
+            if self.shop_category in ("machines", "cards")
+            else "CLINIC UPGRADES"
         )
-        count = self.card_font.render(
-            f"{first_item}-{last_item} OF {len(SHOP_SHELVES)}",
+        page = self.shop_scroll_row + 1
+        page_count = max_scroll + 1
+        count = self.small_font.render(
+            f"{category_label}  —  PAGE {page}/{page_count}",
             True,
-            COLORS["muted"],
+            (232, 211, 242),
         )
-        # Keep the page count beside the header copy and clear of the balance.
-        self.screen.blit(count, count.get_rect(midright=(530, 162)))
+        self.screen.blit(count, count.get_rect(center=(550, 190)))
 
     def get_selected_shop_upgrade(self):
         return next((item for item in SHOP_UPGRADES if item["id"] == self.selected_shop_upgrade), None)
@@ -866,9 +1023,46 @@ class ShopMixin:
                 if "machine" in upgrade:
                     for path, button in zip(("efficiency", "free_use"), self.get_machine_path_buttons(rect)):
                         if button.collidepoint(position):
-                            self.selected_shop_upgrade = upgrade["id"] + ("_free" if path == "free_use" else "")
-                            self.handle_shop_upgrade_click(self.shop_purchase_button.center)
+                            selected_id = upgrade["id"] + ("_free" if path == "free_use" else "")
+                            selected_path = next(
+                                item for item in SHOP_UPGRADES
+                                if item["id"] == selected_id
+                            )
+                            self.play_sfx("button")
+                            if selected_id in self.purchased_shop_upgrades:
+                                self.selected_shop_upgrade = selected_id
+                                self.shop_message = f"{selected_path['name']} is already installed."
+                            elif self.is_shop_path_locked(selected_path):
+                                self.shop_message = (
+                                    f"{upgrade['machine']} already has a permanent path installed."
+                                )
+                            else:
+                                self.selected_shop_upgrade = selected_id
+                                alternate = (
+                                    "Shift Allowance"
+                                    if path == "efficiency"
+                                    else "Efficiency"
+                                )
+                                path_name = (
+                                    "Efficiency"
+                                    if path == "efficiency"
+                                    else "Shift Allowance"
+                                )
+                                self.shop_message = (
+                                    f"{path_name} selected for {upgrade['machine']}. "
+                                    f"Confirm installation; {alternate} will lock."
+                                )
                             return
+                    self.play_sfx("button")
+                    # Clicking the shared machine header defaults to the
+                    # Efficiency path, but still requires the same explicit
+                    # confirmation as either path button.
+                    self.selected_shop_upgrade = upgrade["id"]
+                    self.shop_message = (
+                        f"Efficiency selected for {upgrade['machine']}. "
+                        "Confirm installation; Shift Allowance will lock."
+                    )
+                    return
                 self.play_sfx("button")
                 self.selected_shop_upgrade = upgrade["id"]
                 self.shop_message = f"{upgrade['name']} " + ("is installed." if upgrade["id"] in self.purchased_shop_upgrades else "selected. Buy to install immediately.")
@@ -883,6 +1077,9 @@ class ShopMixin:
             self.shop_message = f"{upgrade['name']} is already installed."
         elif self.is_shop_path_locked(upgrade):
             self.shop_message = "This machine already has a permanent path. Choose another machine."
+        elif self.get_missing_shop_requirement(upgrade):
+            requirement = self.get_missing_shop_requirement(upgrade)
+            self.shop_message = f"Install {requirement['name']} before {upgrade['name']}."
         elif self.player.balance < upgrade["cost"]:
             self.shop_message = f"Not enough money for {upgrade['name']} — need ${upgrade['cost']}."
         else:
@@ -895,9 +1092,32 @@ class ShopMixin:
             elif "discount" in upgrade:
                 self.player.test_discount += upgrade["discount"]
             self.purchased_shop_upgrades.add(upgrade["id"])
-            self.shop_message = ("Recycler installed! Select a test card to recycle once per patient."
-                                 if upgrade["id"] == "recycler" else
-                                 f"Installed {upgrade['name']}. Test costs updated!")
+            if upgrade["id"] == "recycler":
+                self.shop_message = (
+                    "Recycler installed! Select a test card to recycle once per patient."
+                )
+            elif upgrade["id"] == "recycler_mk2":
+                self.shop_message = "Recycler Mk II installed! Two swaps are ready per patient."
+            elif upgrade["id"] == "priority_processing":
+                self.test_result_reveal_duration = 850
+                self.shop_message = "Priority Processing installed! Test reports now finish faster."
+            elif "machine" in upgrade:
+                installed_path = (
+                    "Shift Allowance"
+                    if upgrade.get("path") == "free_use"
+                    else "Efficiency"
+                )
+                locked_path = (
+                    "Efficiency"
+                    if upgrade.get("path") == "free_use"
+                    else "Shift Allowance"
+                )
+                self.shop_message = (
+                    f"{installed_path} installed for {upgrade['machine']}; "
+                    f"{locked_path} is now locked."
+                )
+            else:
+                self.shop_message = f"Installed {upgrade['name']}. Test costs updated!"
 
     def get_machine_path_buttons(self, shelf):
         """Return the clickable columns below the shared machine header."""
@@ -905,6 +1125,81 @@ class ShopMixin:
             pygame.Rect(shelf.left + 2, shelf.top + 47, shelf.width // 2 - 2, shelf.height - 49),
             pygame.Rect(shelf.centerx + 1, shelf.top + 47, shelf.width // 2 - 3, shelf.height - 49),
         )
+
+    def get_machine_path_cost_details(self, machine):
+        """Return real current and post-upgrade costs for a test machine."""
+
+        test = next(
+            (item for item in self.card_shop_catalog if item.name == machine),
+            None,
+        )
+        if test is None:
+            return None
+        base_cost = get_base_test_cost(test)
+        current_cost = self.player.get_test_cost(test)
+        efficiency_cost = max(
+            MIN_TEST_OPERATING_COST,
+            (base_cost + 1) // 2 - self.player.test_discount,
+        )
+        later_allowance_cost = max(
+            MIN_TEST_OPERATING_COST,
+            base_cost - self.player.test_discount,
+        )
+        return current_cost, efficiency_cost, later_allowance_cost
+
+    def draw_shop_loadout_summary(self, shelf):
+        """Use the spare final shelf to summarize the current permanent loadout."""
+
+        installed_count = len(self.purchased_shop_upgrades)
+        free_count = len(self.player.free_test_machines)
+        path_count = sum(
+            1
+            for machine in self.player.machine_levels
+            if self.player.machine_levels[machine] > 1
+        ) + free_count
+        recycler = (
+            "MK II • 2 SWAPS"
+            if "recycler_mk2" in self.purchased_shop_upgrades
+            else "READY • 1 SWAP"
+            if "recycler" in self.purchased_shop_upgrades
+            else "NOT INSTALLED"
+        )
+        accent = (206, 158, 233)
+        pygame.draw.rect(self.screen, (3, 8, 13), shelf.move(3, 4), border_radius=11)
+        pygame.draw.rect(self.screen, (25, 23, 39), shelf, border_radius=11)
+        pygame.draw.rect(self.screen, accent, shelf, width=2, border_radius=11)
+
+        title = self.small_font.render("INSTALLED LOADOUT", True, accent)
+        self.screen.blit(title, (shelf.x + 13, shelf.y + 10))
+        subtitle = self.card_font.render(
+            "CAMPAIGN-WIDE PERMANENT EFFECTS",
+            True,
+            COLORS["muted"],
+        )
+        self.screen.blit(subtitle, (shelf.x + 13, shelf.y + 31))
+        pygame.draw.line(
+            self.screen,
+            (91, 69, 111),
+            (shelf.x + 12, shelf.y + 49),
+            (shelf.right - 12, shelf.y + 49),
+        )
+
+        summary_rows = (
+            ("UPGRADES INSTALLED", str(installed_count)),
+            (
+                "GLOBAL TEST DISCOUNT",
+                f"-${self.player.test_discount}" if self.player.test_discount else "$0",
+            ),
+            ("FREE MACHINE ALLOWANCES", str(free_count)),
+            ("RECYCLER", recycler),
+            ("MACHINE PATHS CHOSEN", str(path_count)),
+        )
+        for index, (label_text, value_text) in enumerate(summary_rows):
+            y = shelf.y + 58 + index * 17
+            label = self.card_font.render(label_text, True, COLORS["muted"])
+            value = self.card_font.render(value_text, True, COLORS["accent"])
+            self.screen.blit(label, (shelf.x + 13, y))
+            self.screen.blit(value, value.get_rect(topright=(shelf.right - 13, y)))
 
     def draw_machine_shop_shelf(self, upgrade, shelf):
         """Draw a shared header and two side-by-side purchase options."""
@@ -917,21 +1212,52 @@ class ShopMixin:
         self.screen.blit(hint, (shelf.x + 12, shelf.y + 26))
         self.draw_shop_purchase_icon(upgrade, (shelf.right - 24, shelf.y + 23))
 
+        cost_details = self.get_machine_path_cost_details(upgrade["machine"])
+        if cost_details is None:
+            efficiency_details = ("50% LOWER COST", "ON EVERY USE")
+            allowance_details = ("FIRST USE: FREE", "THEN NORMAL COST")
+        else:
+            current_cost, efficiency_cost, later_allowance_cost = cost_details
+            efficiency_details = (
+                f"CURRENT COST: ${current_cost}",
+                f"AFTER UPGRADE: ${efficiency_cost}",
+            )
+            allowance_details = (
+                "FIRST USE / SHIFT: FREE",
+                f"LATER USES: ${later_allowance_cost}",
+            )
         options = (
-            ("", "EFFICIENCY", ("Half-price tests", "on every use")),
-            ("_free", "SHIFT ALLOWANCE", ("First test free", "each shift")),
+            ("", "EFFICIENCY", efficiency_details),
+            ("_free", "SHIFT ALLOWANCE", allowance_details),
         )
         mouse = self.get_mouse_position()
         for (suffix, label, details), rect in zip(options, self.get_machine_path_buttons(shelf)):
-            owned = upgrade["id"] + suffix in self.purchased_shop_upgrades
+            option_id = upgrade["id"] + suffix
+            selected = option_id == self.selected_shop_upgrade
+            owned = option_id in self.purchased_shop_upgrades
             locked = not owned and self.is_shop_path_locked(upgrade)
-            affordable = self.player.balance >= upgrade["cost"]
-            enabled = not owned and not locked and affordable
-            hovered = enabled and rect.collidepoint(mouse)
-            fill = (41, 67, 68) if hovered else (23, 41, 43) if owned else (14, 21, 32)
+            available = not owned and not locked
+            hovered = available and rect.collidepoint(mouse)
+            fill = (
+                (38, 63, 66)
+                if selected
+                else (41, 67, 68)
+                if hovered
+                else (23, 41, 43)
+                if owned
+                else (14, 21, 32)
+            )
             pygame.draw.rect(self.screen, fill, rect, border_radius=7)
+            if selected:
+                pygame.draw.rect(self.screen, color, rect, width=3, border_radius=7)
 
-            label_color = COLORS["accent"] if owned else color if enabled else COLORS["muted"]
+            label_color = (
+                COLORS["accent"]
+                if owned
+                else color
+                if available or selected
+                else COLORS["muted"]
+            )
             title = self.card_font.render(label, True, label_color)
             self.screen.blit(title, title.get_rect(midtop=(rect.centerx, rect.top + 10)))
             for index, detail in enumerate(details):
@@ -940,10 +1266,18 @@ class ShopMixin:
 
             footer = pygame.Rect(rect.x + 8, rect.bottom - 30, rect.width - 16, 24)
             pygame.draw.rect(self.screen, (7, 15, 24), footer, border_radius=5)
-            if enabled or owned:
+            if available or owned or selected:
                 pygame.draw.rect(self.screen, label_color, footer, width=1, border_radius=5)
-            status = "INSTALLED" if owned else "LOCKED" if locked else f"${upgrade['cost']}"
-            font = self.card_font if owned or locked else self.small_font
+            status = (
+                "INSTALLED"
+                if owned
+                else "LOCKED"
+                if locked
+                else f"SELECTED  ${upgrade['cost']}"
+                if selected
+                else f"${upgrade['cost']}"
+            )
+            font = self.card_font if owned or locked or selected else self.small_font
             price = font.render(status, True, label_color)
             self.screen.blit(price, price.get_rect(center=footer.center))
 
@@ -963,6 +1297,7 @@ class ShopMixin:
         owned = upgrade["id"] in self.purchased_shop_upgrades
         hovered = shelf.collidepoint(self.get_mouse_position())
         affordable = self.player.balance >= upgrade["cost"]
+        missing_requirement = self.get_missing_shop_requirement(upgrade)
         product_color = SHOP_PRODUCT_COLORS[upgrade["id"]]
         border = (
             COLORS["accent"]
@@ -1012,7 +1347,7 @@ class ShopMixin:
             upgrade,
             art,
             product_color,
-            dimmed=not affordable and not owned,
+            dimmed=(not affordable or bool(missing_requirement)) and not owned,
         )
 
         text_x = art.right + 10
@@ -1057,6 +1392,9 @@ class ShopMixin:
             status_color = COLORS["accent"]
         elif self.is_shop_path_locked(upgrade):
             status_text = "OTHER PATH CHOSEN"
+            status_color = COLORS["muted"]
+        elif missing_requirement:
+            status_text = "REQUIRES RECYCLER"
             status_color = COLORS["muted"]
         elif affordable:
             status_text = "SELECT" if not selected else "READY TO INSTALL"
