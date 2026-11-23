@@ -11,6 +11,20 @@ from PlanetData import get_destination
 
 SHIFT_CHAIR_POSITIONS = (782, 640, 498, 356)
 
+# Lumora's painted sprites contain more fine linework and gradient shading than
+# the earlier pixel-art patients.  A two-step downscale preserves that detail
+# when the fixed game canvas presents them at examination-bay size.
+HIGH_DETAIL_PATIENT_ASSETS = frozenset({"velli", "gribble", "oola", "krix"})
+
+# Tight face crops keep the Lumora patients recognizable on the very small ID
+# portrait instead of shrinking their entire tall silhouettes into the frame.
+PATIENT_ID_FACE_CROPS = {
+    "velli": pygame.Rect(75, 45, 180, 210),
+    "gribble": pygame.Rect(75, 60, 190, 210),
+    "oola": pygame.Rect(65, 60, 190, 220),
+    "krix": pygame.Rect(75, 45, 190, 210),
+}
+
 
 class PatientAssetMixin:
     def roster_for_destination(self, destination):
@@ -185,13 +199,69 @@ class PatientAssetMixin:
         key = (name, tuple(size), render_style, expression)
         if key not in self.patient_sprite_cache:
             source = self.patient_source(name, expression)
-            scaler = (
-                pygame.transform.scale
-                if render_style == "pixel"
-                else pygame.transform.smoothscale
-            )
-            self.patient_sprite_cache[key] = scaler(source, size)
+            if render_style == "pixel":
+                sprite = pygame.transform.scale(source, size)
+            elif name in HIGH_DETAIL_PATIENT_ASSETS:
+                # Smooth the large source once, then make the final reduction
+                # without another blur pass. This keeps the hand-drawn edges
+                # clearer after the entire game canvas is enlarged fullscreen.
+                intermediate_size = (
+                    max(1, size[0] * 2),
+                    max(1, size[1] * 2),
+                )
+                intermediate = pygame.transform.smoothscale(
+                    source,
+                    intermediate_size,
+                )
+                sprite = pygame.transform.scale(intermediate, size)
+            else:
+                sprite = pygame.transform.smoothscale(source, size)
+            self.patient_sprite_cache[key] = sprite
         return self.patient_sprite_cache[key]
+
+    def patient_id_portrait_sprite(self, name, size, render_style="smooth"):
+        """Return a readable face crop for tall Lumora patient ID portraits."""
+
+        crop = PATIENT_ID_FACE_CROPS.get(name)
+        if crop is None:
+            return None
+
+        key = (name, tuple(size), render_style, "id-face")
+        if key in self.patient_sprite_cache:
+            return self.patient_sprite_cache[key]
+
+        source = self.patient_source(name)
+        source_crop = crop.clip(source.get_rect())
+        face = source.subsurface(source_crop).copy()
+        scale = min(size[0] / face.get_width(), size[1] / face.get_height())
+        target_size = (
+            max(1, round(face.get_width() * scale)),
+            max(1, round(face.get_height() * scale)),
+        )
+        if render_style == "pixel":
+            sprite = pygame.transform.scale(face, target_size)
+        else:
+            intermediate = pygame.transform.smoothscale(
+                face,
+                (target_size[0] * 2, target_size[1] * 2),
+            )
+            sprite = pygame.transform.scale(intermediate, target_size)
+
+        outline_color = (48, 24, 63, 255)
+        mask = pygame.mask.from_surface(sprite)
+        silhouette = mask.to_surface(
+            setcolor=outline_color,
+            unsetcolor=(0, 0, 0, 0),
+        ).convert_alpha()
+        presented = pygame.Surface(
+            (sprite.get_width() + 2, sprite.get_height() + 2),
+            pygame.SRCALPHA,
+        )
+        for offset_x, offset_y in ((0, 1), (2, 1), (1, 0), (1, 2)):
+            presented.blit(silhouette, (offset_x, offset_y))
+        presented.blit(sprite, (1, 1))
+        self.patient_sprite_cache[key] = presented
+        return presented
 
     def outlined_patient_sprite(
         self,
@@ -378,9 +448,15 @@ class PatientAssetMixin:
             # Krix's pointed seed-cone crown uses the same lower stage anchor
             # as Oola so the readable-scale sprite stays inside the bay frame.
             stage_offset_y = 11
-        bounds = pygame.Rect(0, 0, 100, bay.height - 32)
+        detailed_asset = name in HIGH_DETAIL_PATIENT_ASSETS
+        bounds = pygame.Rect(
+            0,
+            0,
+            112 if detailed_asset else 100,
+            bay.height - (24 if detailed_asset else 32),
+        )
         bounds.midbottom = (
-            center_x + shake_x,
+            center_x + shake_x - (6 if detailed_asset else 0),
             platform.centery + shake_y + idle_bob + stage_offset_y,
         )
         rect = self.fit_patient_sprite(

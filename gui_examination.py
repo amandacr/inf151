@@ -1434,14 +1434,24 @@ class ExaminationMixin:
         entry = self.get_current_entry()
         asset = entry.get("asset")
         if asset:
-            self.fit_patient_sprite(
+            portrait_bounds = portrait.inflate(-10, -10)
+            face_sprite = self.patient_id_portrait_sprite(
                 asset,
-                portrait.inflate(-8, -8),
+                portrait_bounds.size,
                 render_style=entry.get("render_style", "smooth"),
-                presentation_scale=0.92,
-                anchor="center",
-                outline_width=1,
             )
+            if face_sprite is not None:
+                face_rect = face_sprite.get_rect(center=portrait_bounds.center)
+                self.screen.blit(face_sprite, face_rect)
+            else:
+                self.fit_patient_sprite(
+                    asset,
+                    portrait.inflate(-8, -8),
+                    render_style=entry.get("render_style", "smooth"),
+                    presentation_scale=0.92,
+                    anchor="center",
+                    outline_width=1,
+                )
             return
 
         head = pygame.Rect(portrait.centerx - 12, portrait.y + 11, 24, 22)
