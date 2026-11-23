@@ -21,16 +21,26 @@ class AudioMixin:
         self.music_volume = 0.12
         self.sfx_volume = 0.72
         self.sound_effects = {}
+        self.destination_ambience = {}
+        self.destination_ambience_key = None
+        self.ambience_channel = None
         self.audio_button = pygame.Rect(16, 16, 112, 31)
 
         try:
             if pygame.mixer.get_init() is None:
                 pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
             self.sound_effects = self.build_sound_effects()
+            blackglass_ambience = self.make_noise_tone(
+                2.8, self.blackglass_ambience_wave, seed=404151
+            )
+            blackglass_ambience.set_volume(self.music_volume * 0.48)
+            self.destination_ambience = {"blackglass_industrial": blackglass_ambience}
+            self.ambience_channel = pygame.mixer.Channel(1)
             self.audio_available = True
         except pygame.error:
             # The game remains fully playable on machines without an audio device.
             self.sound_effects = {}
+            self.destination_ambience = {}
 
     def start_music(self):
         """Start the quieter background track without blocking a silent fallback."""
@@ -178,6 +188,28 @@ class AudioMixin:
             ding = 0.23 * math.exp(-4.8 * ding_time) * math.sin(2 * math.pi * 880 * ding_time)
         return self.sound_envelope(t, duration, 0.025, 0.08) * (hiss + motor + ding)
 
+    def blackglass_ambience_wave(self, t, duration, noise):
+        """Low industrial ventilation, distant machinery, and occasional hiss."""
+
+        hum = 0.10 * math.sin(2 * math.pi * 47 * t)
+        motor = 0.05 * math.sin(2 * math.pi * (83 + 3 * math.sin(t * 1.7)) * t)
+        hiss = noise * 0.035 * (0.4 + 0.6 * max(0.0, math.sin(2 * math.pi * t / duration)))
+        return self.sound_envelope(t, duration, 0.12, 0.16) * (hum + motor + hiss)
+
+    def sync_destination_ambience(self):
+        """Loop only the ambience configured by the active destination."""
+
+        if not self.audio_available or self.ambience_channel is None:
+            return
+        requested = getattr(self.current_destination, "ambience", None)
+        if requested == self.destination_ambience_key:
+            return
+        self.ambience_channel.stop()
+        self.destination_ambience_key = requested
+        sound = self.destination_ambience.get(requested)
+        if sound is not None and not self.audio_muted:
+            self.ambience_channel.play(sound, loops=-1)
+
     def play_sfx(self, name):
         """Play one named effect when audio is available and not muted."""
 
@@ -198,6 +230,8 @@ class AudioMixin:
             pygame.mixer.music.set_volume(0.0)
         else:
             pygame.mixer.music.set_volume(self.music_volume)
+            self.destination_ambience_key = None
+            self.sync_destination_ambience()
             self.play_sfx("button")
 
     def draw_audio_button(self):

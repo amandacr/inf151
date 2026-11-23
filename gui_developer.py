@@ -4,6 +4,7 @@ import copy
 
 import pygame
 
+from PlanetData import get_blackglass_destination
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
 from Tests.catalog import create_test_catalog
@@ -24,6 +25,7 @@ DEVELOPER_SCREENS = (
     ("A", "arrival", "PLANET ARRIVAL", GameState.ARRIVAL),
     ("F", "final", "ROUTE COMPLETE", GameState.FINAL),
     ("G", "homecoming", "GO HOME", GameState.ENDING),
+    ("X", "blackglass_boss", "BOSS CONVERSATION", GameState.BLACKGLASS_BOSS),
 )
 
 DEVELOPER_KEY_MAP = {
@@ -41,6 +43,7 @@ DEVELOPER_KEY_MAP = {
     pygame.K_a: "arrival",
     pygame.K_f: "final",
     pygame.K_g: "homecoming",
+    pygame.K_x: "blackglass_boss",
 }
 
 
@@ -148,6 +151,12 @@ DEVELOPER_SNAPSHOT_FIELDS = (
     "intro_dialogue_started_at",
     "intro_started_at",
     "intro_wake_active",
+    "blackglass_detour",
+    "blackglass_boss_lines",
+    "blackglass_boss_index",
+    "blackglass_boss_action",
+    "blackglass_boss_scene",
+    "blackglass_boss_started_at",
 )
 
 
@@ -304,7 +313,7 @@ class DeveloperMixin:
             GameState.ROUTE_BRIEFING: "route_briefing",
             GameState.ROUTE_MAP: "route_map",
             GameState.BLACKGLASS_CONTRACT: "route_map",
-            GameState.BLACKGLASS_BOSS: "reception",
+            GameState.BLACKGLASS_BOSS: "blackglass_boss",
             GameState.ENDING: "ending",
             GameState.ARRIVAL: "arrival",
             GameState.FINAL: "final",
@@ -335,11 +344,31 @@ class DeveloperMixin:
                 416,
                 102,
             )
-            for index in range(len(self.destinations))
+            for index in range(len(self.get_developer_destinations()))
+        )
+
+    def get_developer_destinations(self):
+        """Include the fallback contract clinic without adding it to the route."""
+
+        return (*self.destinations, get_blackglass_destination(1))
+
+    def get_selected_developer_destination(self):
+        return next(
+            destination
+            for destination in self.get_developer_destinations()
+            if destination.day_number == self.developer_selected_day
         )
 
     def get_developer_screen_entries(self):
         """Return only checkpoints that belong to the selected destination."""
+
+        if self.developer_selected_day == 0:
+            scene_ids = (
+                "blackglass_boss", "arrival", "reception", "patient_1",
+                "patient_2", "patient_3", "patient_4", "recap",
+            )
+            entries_by_id = {entry[1]: entry for entry in DEVELOPER_SCREENS}
+            return tuple(entries_by_id[scene_id] for scene_id in scene_ids)
 
         destination_index = next(
             index
@@ -371,13 +400,17 @@ class DeveloperMixin:
     def get_developer_roster(self, day_number=None):
         """Return the selected configured destination's stable preview roster."""
 
-        selected_day = day_number or self.developer_selected_day
+        selected_day = self.developer_selected_day if day_number is None else day_number
+        if selected_day == 0:
+            return self.roster_for_destination(get_blackglass_destination(1))
         return self.roster_for_day(selected_day)
 
     def select_developer_day(self, day_number):
         """Open the checkpoint directory for one configured destination."""
 
-        configured_days = {destination.day_number for destination in self.destinations}
+        configured_days = {
+            destination.day_number for destination in self.get_developer_destinations()
+        }
         if day_number not in configured_days:
             raise ValueError("The developer navigator requires a configured destination.")
         self.developer_selected_day = day_number
@@ -416,9 +449,10 @@ class DeveloperMixin:
             )
             if key in number_keys:
                 destination_index = number_keys.index(key)
-                if destination_index < len(self.destinations):
+                destinations = self.get_developer_destinations()
+                if destination_index < len(destinations):
                     self.select_developer_day(
-                        self.destinations[destination_index].day_number
+                        destinations[destination_index].day_number
                     )
             elif key == pygame.K_RETURN:
                 self.select_developer_day(self.developer_selected_day)
@@ -469,7 +503,7 @@ class DeveloperMixin:
             return
         if self.developer_navigator_level == "destinations":
             for destination, rect in zip(
-                self.destinations,
+                self.get_developer_destinations(),
                 self.get_developer_day_rects(),
             ):
                 if rect.collidepoint(position):
@@ -531,6 +565,13 @@ class DeveloperMixin:
             self.prepare_developer_final_checkpoint()
         elif scene_id == "homecoming":
             self.prepare_developer_homecoming_checkpoint()
+        elif scene_id == "blackglass_boss":
+            self.prepare_developer_campaign_day()
+            self.open_blackglass_boss_dialogue(
+                (("OUTPOST BOSS", "Blackglass always has another contract."),),
+                "arrive",
+                "outpost",
+            )
 
         if scene_id in ("shop", "route_briefing", "route_map", "ending"):
             self.settle_daily_pay()
@@ -597,6 +638,9 @@ class DeveloperMixin:
         """Complete every earlier stop and approach the selected destination."""
 
         selected_day = self.developer_selected_day
+        if selected_day == 0:
+            self.prepare_developer_campaign_day()
+            return
         destination_index = next(
             index
             for index, destination in enumerate(self.destinations)
@@ -654,6 +698,21 @@ class DeveloperMixin:
         """Reset safely, then load the selected preview roster when needed."""
 
         self.restart_game()
+        if self.developer_selected_day == 0:
+            target = self.route.next_destination
+            self.blackglass_detour = {
+                "mode": "ticket",
+                "day": 1,
+                "return_key": self.route.current_destination.key,
+                "return_planet": self.route.current_destination.planet_name,
+                "target_key": target.key,
+                "target_name": target.planet_name,
+                "required_balance": target.map_data.ticket_price,
+                "entry_balance": self.player.balance,
+                "destination": get_blackglass_destination(1),
+            }
+            self.load_current_destination()
+            return
         if self.developer_selected_day != self.destinations[0].day_number:
             self.route.select_day(self.developer_selected_day)
             self.load_current_destination()
@@ -745,7 +804,7 @@ class DeveloperMixin:
         self.developer_destination_button_rects = list(self.get_developer_day_rects())
         self.developer_day_button_rects = self.developer_destination_button_rects
         for destination, rect in zip(
-            self.destinations,
+            self.get_developer_destinations(),
             self.developer_destination_button_rects,
         ):
             selected = destination.day_number == self.developer_selected_day
@@ -771,7 +830,11 @@ class DeveloperMixin:
                 width=2,
             )
             day = self.card_font.render(
-                f"{destination.day_number}  •  DAY {destination.day_number}",
+                (
+                    "X  •  CONTRACT CLINIC"
+                    if destination.day_number == 0
+                    else f"{destination.day_number}  •  DAY {destination.day_number}"
+                ),
                 True,
                 accent,
             )
@@ -821,11 +884,7 @@ class DeveloperMixin:
     def draw_developer_checkpoint_directory(self, panel, mouse_position):
         """Draw only the selected destination's patients and valid screens."""
 
-        destination = next(
-            item
-            for item in self.destinations
-            if item.day_number == self.developer_selected_day
-        )
+        destination = self.get_selected_developer_destination()
         back_hovered = self.developer_back_button.collidepoint(mouse_position)
         pygame.draw.rect(
             self.screen,
@@ -844,7 +903,11 @@ class DeveloperMixin:
         self.screen.blit(back, back.get_rect(center=self.developer_back_button.center))
 
         destination_label = self.small_font.render(
-            f"DAY {destination.day_number}  •  {destination.planet_name.upper()}",
+            (
+                "CONTRACT CLINIC  •  BLACKGLASS OUTPOST"
+                if destination.day_number == 0
+                else f"DAY {destination.day_number}  •  {destination.planet_name.upper()}"
+            ),
             True,
             destination.theme.accent_color,
         )

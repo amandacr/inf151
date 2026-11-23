@@ -527,6 +527,7 @@ class TutorialMixin:
             GameState.ROUTE_BRIEFING: "RETURN TO ROUTE BRIEFING",
             GameState.ROUTE_MAP: "RETURN TO ROUTE MAP",
             GameState.BLACKGLASS_CONTRACT: "RETURN TO CONTRACT",
+            GameState.BLACKGLASS_BOSS: "RETURN TO CONVERSATION",
             GameState.ENDING: "CONTINUE ENDING",
             GameState.ARRIVAL: "RETURN TO ARRIVAL",
             GameState.FINAL: "RETURN TO SUMMARY",
@@ -591,6 +592,10 @@ class TutorialMixin:
                 "BLACKGLASS CONTRACT",
                 "Emergency clinic work will cover the travel shortfall, and transportation is provided without a ticket.",
             ),
+            GameState.BLACKGLASS_BOSS: (
+                "BLACKGLASS SUPERVISOR",
+                "Continue the conversation to begin contract work, take another shift, or return to the Route Map.",
+            ),
             GameState.ENDING: (
                 "DESTINATION TRAVEL" if self.route.arrival_pending else "FINAL DEPARTURE",
                 (
@@ -615,14 +620,20 @@ class TutorialMixin:
     def get_help_rules(self):
         """Return the permanent gameplay and economy reminders shown in Help."""
 
+        blackglass = self.blackglass_detour is not None
+        test_cost_text = (
+            "Blackglass contract rates reduce machine fees to 25% of list price."
+            if blackglass
+            else (
+                f"Common ${TEST_COSTS_BY_RARITY['Common']}  •  "
+                f"Uncommon ${TEST_COSTS_BY_RARITY['Uncommon']}  •  "
+                f"Rare ${TEST_COSTS_BY_RARITY['Rare']} per use."
+            )
+        )
         return (
             (
                 "TEST COSTS",
-                (
-                    f"Common ${TEST_COSTS_BY_RARITY['Common']}  •  "
-                    f"Uncommon ${TEST_COSTS_BY_RARITY['Uncommon']}  •  "
-                    f"Rare ${TEST_COSTS_BY_RARITY['Rare']} per use."
-                ),
+                test_cost_text,
             ),
             (
                 "CARD SHOP",
@@ -636,7 +647,7 @@ class TutorialMixin:
                 (
                     f"Next draw ${self.get_random_draw_cost()}  •  "
                     f"Max {self.get_max_test_hand_size()}  •  "
-                    f"Floor -${abs(DEBT_LIMIT)}  •  unused cards return. "
+                    f"Floor {self.format_money(self.get_debt_limit())}  •  unused cards return. "
                     "Emergency Common test/patient."
                 ),
             ),
@@ -666,8 +677,9 @@ class TutorialMixin:
             (
                 "PLANET ROUTE & BLACKGLASS",
                 (
-                    "Day 3 Lumora is a new destination with different aliens and conditions. "
-                    "Money and upgrades carry between planets."
+                    "A new destination brings different aliens and conditions. "
+                    "Lumora is Day 3. Money and upgrades carry between planets; "
+                    "Blackglass contracts fund tickets."
                 ),
             ),
         )
@@ -807,7 +819,9 @@ class TutorialMixin:
         context_title = self.small_font.render(context_name, True, COLORS["text"])
         self.screen.blit(
             context_title,
-            context_title.get_rect(midleft=(context.x + 145, context_heading_y)),
+            context_title.get_rect(
+                midleft=(context.x + 18 + current_label.get_width() + 18, context_heading_y)
+            ),
         )
         context_text_box = pygame.Rect(
             context.x + 18,
@@ -837,7 +851,7 @@ class TutorialMixin:
                 panel.x + 24 + column * 434,
                 panel.y + 188 + row_index * 75,
                 418,
-                70,
+                88 if row_index == 3 else 70,
             )
             pygame.draw.rect(self.screen, (35, 42, 55), rule, border_radius=8)
             pygame.draw.rect(self.screen, (92, 72, 111), rule, width=1, border_radius=8)
@@ -847,7 +861,12 @@ class TutorialMixin:
                 (216, 159, 238),
             )
             self.screen.blit(heading_label, (rule.x + 14, rule.y + 8))
-            detail_box = pygame.Rect(rule.x + 14, rule.y + 28, rule.width - 28, 38)
+            detail_box = pygame.Rect(
+                rule.x + 14,
+                rule.y + 28,
+                rule.width - 28,
+                56 if row_index == 3 else 38,
+            )
             self.draw_wrapped_text(
                 detail,
                 self.tutorial_body_font,
@@ -855,7 +874,7 @@ class TutorialMixin:
                 detail_box,
                 line_spacing=1,
             )
-        controls = pygame.Rect(panel.x + 24, panel.y + 497, panel.width - 48, 38)
+        controls = pygame.Rect(panel.x + 24, panel.y + 515, panel.width - 48, 38)
         pygame.draw.rect(self.screen, (14, 22, 34), controls, border_radius=8)
         pygame.draw.rect(self.screen, (92, 72, 111), controls, width=1, border_radius=8)
         controls_label = self.tutorial_label_font.render(

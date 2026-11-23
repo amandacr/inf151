@@ -441,8 +441,8 @@ BLACKGLASS_MAP_DESTINATION = MapDestination(
             "A polluted industrial outpost offering transportation in "
             "exchange for emergency medical labor."
         ),
-        # Blackglass is always overwhelmed in the story, but its playable
-        # patient pool deliberately remains disabled until that content exists.
+        # The outpost is playable through its temporary roster hook, but its
+        # final contributed patient content has not landed yet.
         has_patients=True,
         destination_type=DestinationType.BLACKGLASS,
         content_ready=False,
@@ -484,13 +484,11 @@ BLACKGLASS_DESTINATION = Destination(
         "Blackglass has no appointment system. Whoever is still breathing "
         "is your next patient."
     ),
-    # TEMPORARY stand-in roster (Triska's four patients) so the detour is
-    # playable today. Replace with Blackglass-specific aliens; with eight or
-    # more entries, day 2 automatically draws a different four.
+    # Temporary roster hook until the Blackglass patient contribution lands.
     patient_roster=DAY_TWO_PATIENTS,
     theme=BLACKGLASS_THEME,
     map_data=BLACKGLASS_MAP_DESTINATION.map_data,
-    ambience=None,
+    ambience="blackglass_industrial",
     gameplay_modifiers=(
         ("draw_cost", 1.0),                 # dollars per random card draw
         ("test_cost_multiplier", 0.25),     # tests cost a quarter of list price
@@ -524,7 +522,9 @@ def get_blackglass_destination(day_number=1):
     """Return Blackglass with the four patients assigned to detour day N."""
 
     population = BLACKGLASS_DESTINATION.alien_population
-    offset = ((day_number - 1) * 4) % len(population)
+    # Repeat contracts rotate the waiting order, so a second outpost shift
+    # does not feel like an exact replay even with the fixed four-patient pool.
+    offset = ((day_number - 1) * 2) % len(population)
     rotated = population[offset:] + population[:offset]
     return replace(BLACKGLASS_DESTINATION, patient_roster=rotated[:4])
 

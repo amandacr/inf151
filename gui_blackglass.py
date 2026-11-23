@@ -1,14 +1,14 @@
-"""Blackglass Outpost debt detour: boss dialogue, shift tracking, and return.
+"""Blackglass Outpost contracts: boss dialogue, shift tracking, and return.
 
-When a shift ends at or below ``BLACKGLASS_DEBT_THRESHOLD`` the doctor is
-reassigned to Blackglass for at most ``BLACKGLASS_MAX_DAYS`` shifts:
+Debt recovery sends the doctor to Blackglass for at most
+``BLACKGLASS_MAX_DAYS`` shifts:
 
 * ending any Blackglass shift with $0 or more clears the debt, or
 * ending the final shift still in debt has the outpost boss forgive the rest,
 
-and either way the doctor returns to the planet they left with
-``BLACKGLASS_RETURN_BALANCE``.  The detour never touches the route
-controller's campaign order or ticket inventory.
+Voluntary ticket contracts continue until the intended fare is funded, then
+return to the Galactic Route Map with every earned credit intact. Neither path
+changes the route controller's campaign order or ticket inventory.
 """
 
 import pygame
@@ -17,7 +17,6 @@ from PlanetData import get_blackglass_destination, get_modifier
 from Player import (
     BLACKGLASS_DEBT_THRESHOLD,
     BLACKGLASS_MAX_DAYS,
-    BLACKGLASS_RETURN_BALANCE,
     CLINIC_OPERATING_FEE,
     DEBT_LIMIT,
 )
@@ -59,6 +58,21 @@ def build_entry_lines(debt_text, planet_name):
     )
 
 
+def build_contract_entry_lines(destination_name, shortfall_text):
+    """Supervisor dialogue for voluntary work that funds a route ticket."""
+
+    return (
+        (OUTPOST_BOSS, "Blackglass always has patients. It rarely has doctors."),
+        (
+            OUTPOST_BOSS,
+            f"Your route to {destination_name} is short {shortfall_text}. "
+            "Work here and keep what you earn.",
+        ),
+        (PLAYER_SPEAKER, "Transportation included?"),
+        (OUTPOST_BOSS, "To Blackglass, yes. Your destination ticket is still your problem."),
+    )
+
+
 def build_still_in_debt_lines(balance_text):
     """Short note after a non-final Blackglass shift that did not clear the debt."""
 
@@ -68,15 +82,28 @@ def build_still_in_debt_lines(balance_text):
     )
 
 
-def build_cleared_lines(planet_name, return_text):
+def build_contract_continue_lines(destination_name, shortfall_text):
+    return (
+        (OUTPOST_BOSS, f"You still need {shortfall_text} for {destination_name}."),
+        (OUTPOST_BOSS, "Another shift is available. Blackglass never runs out of patients."),
+    )
+
+
+def build_contract_funded_lines(destination_name, balance_text):
+    return (
+        (OUTPOST_BOSS, f"Your balance is now {balance_text}. The contract is complete."),
+        (OUTPOST_BOSS, f"Return to the Route Map and secure passage to {destination_name}."),
+    )
+
+
+def build_cleared_lines(planet_name, balance_text):
     """Boss dialogue when the doctor ends a Blackglass shift out of debt."""
 
     return (
         (OUTPOST_BOSS, "Your balance is back in the black. I did not see that coming."),
         (
             OUTPOST_BOSS,
-            f"Debt cleared. Here is your starting budget of {return_text}. "
-            f"Back to {planet_name} with you.",
+            f"Debt cleared. You kept {balance_text}. Back to {planet_name} with you.",
         ),
         (OUTPOST_BOSS, "Try not to lose it this time."),
     )
@@ -99,7 +126,7 @@ def build_forgiven_lines(owed_text, planet_name, return_text):
         ),
         (
             OUTPOST_BOSS,
-            f"Here is {return_text} to start fresh. Your clinic is waiting on {planet_name}.",
+            f"Your balance is now {return_text}. Your clinic is waiting on {planet_name}.",
         ),
     )
 
@@ -175,10 +202,10 @@ class BlackglassMixin:
     def get_blackglass_location_subtitle(self):
         """Return the header label shown during a Blackglass shift."""
 
-        return (
-            f"BLACKGLASS SHIFT {self.blackglass_detour['day']} OF "
-            f"{BLACKGLASS_MAX_DAYS}  •  BLACKGLASS OUTPOST"
-        )
+        detour = self.blackglass_detour
+        if detour.get("mode") == "ticket":
+            return f"CONTRACT SHIFT {detour['day']}  •  BLACKGLASS OUTPOST"
+        return f"DEBT SHIFT {detour['day']} OF {BLACKGLASS_MAX_DAYS}  •  BLACKGLASS OUTPOST"
 
     def get_day_complete_button_label(self, resulting_balance):
         """Name the day-complete action according to where it leads."""
@@ -200,13 +227,18 @@ class BlackglassMixin:
 
         if self.blackglass_detour is None:
             if self.player.balance <= BLACKGLASS_DEBT_THRESHOLD:
-                self.start_blackglass_detour()
+                self.start_blackglass_debt_detour()
                 return True
             return False
         self.finish_blackglass_day()
         return True
 
     def start_blackglass_detour(self):
+        """Compatibility wrapper for the automatic debt-recovery flow."""
+
+        self.start_blackglass_debt_detour()
+
+    def start_blackglass_debt_detour(self):
         """File the current shift, then open the clinic boss's reprimand."""
 
         planet = self.route.current_destination
@@ -214,6 +246,7 @@ class BlackglassMixin:
             self.record_current_route_performance()
         debt_text = self.format_money(self.player.balance)
         self.blackglass_detour = {
+            "mode": "debt",
             "day": 1,
             "return_key": planet.key,
             "return_planet": planet.planet_name,
@@ -224,19 +257,62 @@ class BlackglassMixin:
             build_entry_lines(debt_text, "Blackglass Outpost"), "arrive", "clinic"
         )
 
+    def start_blackglass_ticket_contract(self):
+        """Begin voluntary work to fund a ticket without calling it debt."""
+
+        target = self.get_intended_route_destination()
+        if target is None:
+            self.route_map_message = "No destination currently needs contract funding."
+            return
+        shortfall = max(0, target.map_data.ticket_price - self.player.balance)
+        if shortfall <= 0:
+            self.route_map_message = "Your intended destination is already fully funded."
+            return
+        if not self.route.current_is_complete:
+            self.record_current_route_performance()
+        self.blackglass_detour = {
+            "mode": "ticket",
+            "day": 1,
+            "return_key": self.route.current_destination.key,
+            "return_planet": self.route.current_destination.planet_name,
+            "target_key": target.key,
+            "target_name": target.planet_name,
+            "required_balance": target.map_data.ticket_price,
+            "entry_balance": self.player.balance,
+            "destination": get_blackglass_destination(1),
+        }
+        self.open_blackglass_boss_dialogue(
+            build_contract_entry_lines(target.planet_name, self.format_money(shortfall)),
+            "arrive",
+            "outpost",
+        )
+
     def finish_blackglass_day(self):
         """Evaluate a completed Blackglass shift and queue the right dialogue."""
 
         detour = self.blackglass_detour
+        if detour.get("mode") == "ticket":
+            shortfall = max(0, detour["required_balance"] - self.player.balance)
+            if shortfall == 0:
+                lines = build_contract_funded_lines(
+                    detour["target_name"], self.format_money(self.player.balance)
+                )
+                action = "return"
+            else:
+                lines = build_contract_continue_lines(
+                    detour["target_name"], self.format_money(shortfall)
+                )
+                action = "next_day"
+            self.open_blackglass_boss_dialogue(lines, action, "outpost")
+            return
         planet_name = detour["return_planet"]
-        return_text = self.format_money(BLACKGLASS_RETURN_BALANCE)
         balance = self.player.balance
         if balance >= 0:
-            lines = build_cleared_lines(planet_name, return_text)
+            lines = build_cleared_lines(planet_name, self.format_money(balance))
             action = "return"
         elif detour["day"] >= BLACKGLASS_MAX_DAYS:
             lines = build_forgiven_lines(
-                self.format_money(abs(balance)), planet_name, return_text
+                self.format_money(abs(balance)), planet_name, self.format_money(0)
             )
             action = "return"
         else:
@@ -245,11 +321,21 @@ class BlackglassMixin:
         self.open_blackglass_boss_dialogue(lines, action, "outpost")
 
     def end_blackglass_detour(self):
-        """Return to the planet the doctor left, with the starting balance."""
+        """Return without erasing legitimate earnings from outpost work."""
 
+        detour = self.blackglass_detour
+        ticket_contract = detour.get("mode") == "ticket"
+        target_key = detour.get("target_key")
+        if not ticket_contract and self.player.balance < 0:
+            # Final-shift forgiveness clears only the debt. It never invents a
+            # replacement balance or overwrites a profitable result.
+            self.player.balance = 0
         self.blackglass_detour = None
-        self.player.balance = BLACKGLASS_RETURN_BALANCE
         self.route.sync_available_credits(self.player.balance)
+        if ticket_contract:
+            self.route.select_map_destination(target_key)
+            self.open_route_map()
+            return
         self.waiting_room_queue = self.roster_for_destination(
             self.route.current_destination
         )
@@ -301,29 +387,45 @@ class BlackglassMixin:
     # -------------------------------------------------------------- drawing
 
     def draw_blackglass_debt_panel(self, projected_balance, panel):
-        """Show the doctor's remaining debt on the Blackglass payroll recap."""
+        """Show the correct contract goal on the Blackglass payroll recap."""
 
         detour = self.blackglass_detour
         fund = pygame.Rect(panel.x + 130, panel.y + 386, panel.width - 260, 36)
-        cleared = projected_balance >= 0
+        ticket_contract = detour.get("mode") == "ticket"
+        target_balance = detour.get("required_balance", 0)
+        cleared = (
+            projected_balance >= target_balance
+            if ticket_contract
+            else projected_balance >= 0
+        )
         accent = (255, 160, 64) if not cleared else (112, 255, 181)
         pygame.draw.rect(self.screen, (28, 17, 10), fund, border_radius=9)
         pygame.draw.rect(self.screen, accent, fund, width=1, border_radius=9)
-        title = self.card_font.render(
-            f"BLACKGLASS DEBT RECOVERY  •  SHIFT {detour['day']} OF {BLACKGLASS_MAX_DAYS}",
-            True,
-            accent,
-        )
-        detail = self.card_font.render(
-            (
+        if ticket_contract:
+            title_text = (
+                f"TICKET FUND  •  {detour['target_name'].upper()}  •  "
+                f"CONTRACT SHIFT {detour['day']}"
+            )
+            shortfall = max(0, target_balance - projected_balance)
+            detail_text = (
+                "TICKET FUNDED  •  REPORT TO THE OUTPOST BOSS"
+                if cleared
+                else f"AFTER PAY: {self.format_money(projected_balance)}  •  "
+                f"STILL NEEDED: {self.format_money(shortfall)}"
+            )
+        else:
+            title_text = (
+                f"BLACKGLASS DEBT RECOVERY  •  SHIFT {detour['day']} OF "
+                f"{BLACKGLASS_MAX_DAYS}"
+            )
+            detail_text = (
                 "DEBT CLEARED  •  REPORT TO THE OUTPOST BOSS"
                 if cleared
                 else f"AFTER PAY: {self.format_money(projected_balance)}  •  "
                 f"STILL OWED: {self.format_money(abs(projected_balance))}"
-            ),
-            True,
-            COLORS["text"],
-        )
+            )
+        title = self.card_font.render(title_text, True, accent)
+        detail = self.card_font.render(detail_text, True, COLORS["text"])
         self.screen.blit(title, title.get_rect(center=(fund.centerx, fund.y + 10)))
         self.screen.blit(detail, detail.get_rect(center=(fund.centerx, fund.y + 23)))
 
