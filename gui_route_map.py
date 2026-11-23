@@ -122,7 +122,7 @@ class RouteMapMixin:
                         "Your intended destination is already fully funded."
                     )
                 else:
-                    self.state = GameState.BLACKGLASS_CONTRACT
+                    self.state = self.start_blackglass_detour()
                 return selected
             if (
                 state is DestinationState.TICKET_REQUIRED

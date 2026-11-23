@@ -1351,7 +1351,11 @@ class EndingMixin:
             border_radius=18,
         )
 
-        tag = self.small_font.render("NEXT STOP", True, theme.accent_color)
+        tag = self.small_font.render(
+            "REASSIGNED TO" if self.blackglass_detour is not None else "NEXT STOP",
+            True,
+            theme.accent_color,
+        )
         self.screen.blit(tag, (panel.x + 28, panel.y + 24))
         name_box = pygame.Rect(panel.x + 28, panel.y + 58, panel.width - 56, 72)
         self.draw_wrapped_text(
@@ -1375,8 +1379,13 @@ class EndingMixin:
             width=2,
         )
 
+        day_label = (
+            f"BLACKGLASS SHIFT {self.blackglass_detour['day']}"
+            if self.blackglass_detour is not None
+            else f"DAY {destination.day_number}"
+        )
         roster_text = (
-            f"DAY {destination.day_number}  •  "
+            f"{day_label}  •  "
             f"{len(destination.patient_roster)} PATIENTS WAITING"
         )
         roster = self.body_font.render(roster_text, True, theme.accent_color)
@@ -1420,7 +1429,11 @@ class EndingMixin:
             border_radius=10,
         )
         label = self.body_font.render(
-            f"BEGIN DAY {destination.day_number}",
+            (
+                f"BEGIN BLACKGLASS SHIFT {self.blackglass_detour['day']}"
+                if self.blackglass_detour is not None
+                else f"BEGIN DAY {destination.day_number}"
+            ),
             True,
             (5, 16, 22),
         )
@@ -1636,6 +1649,9 @@ class EndingMixin:
             if self.state == GameState.BLACKGLASS_CONTRACT:
                 self.state = GameState.ROUTE_MAP
                 self.close_exit_confirmation()
+            elif self.state == GameState.BLACKGLASS_BOSS:
+                self.close_exit_confirmation()
+                self.finish_blackglass_boss_dialogue()
             elif self.state == GameState.ROUTE_MAP:
                 if self.route_map_tutorial_active:
                     self.close_exit_confirmation()
@@ -1651,7 +1667,7 @@ class EndingMixin:
     def load_current_destination(self):
         """Load the route controller's current roster into the playable GUI."""
 
-        destination = self.route.current_destination
+        destination = self.current_destination
         if destination.key != self.destinations[0].key:
             self.finish_guided_tutorial()
         patient_queue = self.roster_for_destination(destination)
@@ -1668,7 +1684,8 @@ class EndingMixin:
     def start_next_shift(self):
         """Start the shift at the destination reached after Shop departure."""
 
-        self.route.begin_current_shift()
+        if self.blackglass_detour is None:
+            self.route.begin_current_shift()
         self.load_current_destination()
 
     def restart_current_shift(self):
@@ -1688,7 +1705,9 @@ class EndingMixin:
         self.finish_guided_tutorial()
         self.intro_dialogue_active = False
         self.intro_dialogue_started_at = None
-        if self.route.arrival_pending:
+        if self.blackglass_detour is not None:
+            pass  # Blackglass never touches the campaign route's filed shifts.
+        elif self.route.arrival_pending:
             self.route.begin_current_shift()
         elif self.route.current_is_complete:
             self.route.reopen_current_shift()
@@ -1710,6 +1729,7 @@ class EndingMixin:
         self.player.free_test_machines.clear()
         self.player.free_tests_used.clear()
         self.player.test_discount = 0
+        self.reset_blackglass_detour()
         self.purchased_shop_upgrades.clear()
         self.homecoming_started = False
         self.route_briefing_seen = False
@@ -1751,7 +1771,9 @@ class EndingMixin:
         heading = self.heading_font.render(heading_text, True, COLORS["text"])
         self.screen.blit(heading, heading.get_rect(center=(panel.centerx, 190)))
         detail_text = (
-            "Your selected destination, tickets, money, and completed shift will be preserved."
+            "The conversation will skip ahead to what comes next."
+            if self.state == GameState.BLACKGLASS_BOSS
+            else "Your selected destination, tickets, money, and completed shift will be preserved."
             if route_map_context
             else "Return to reception restarts the current clinic shift."
         )
@@ -1770,7 +1792,9 @@ class EndingMixin:
         self.draw_ending_button(
             self.exit_reception_button,
             (
-                "RETURN TO ROUTE MAP"
+                "SKIP DIALOGUE"
+                if self.state == GameState.BLACKGLASS_BOSS
+                else "RETURN TO ROUTE MAP"
                 if self.state == GameState.BLACKGLASS_CONTRACT or self.route_map_tutorial_active
                 else "RETURN TO SUPPLY SHOP"
                 if self.state == GameState.ROUTE_MAP

@@ -6,6 +6,7 @@ import pygame
 
 from gui_theme import COLORS
 from Player import (
+    BLACKGLASS_DEBT_THRESHOLD,
     CLINIC_OPERATING_FEE,
     DEBT_LIMIT,
     DIAGNOSIS_REWARD,
@@ -137,7 +138,7 @@ class ShopMixin:
     def can_spend_clinic_funds(self, amount):
         """Return whether an optional charge stays inside the clinic credit line."""
 
-        return amount <= 0 or self.get_live_balance() - amount >= DEBT_LIMIT
+        return amount <= 0 or self.get_live_balance() - amount >= self.get_debt_limit()
 
     def get_test_charge_state(self, test):
         """Return (allowed, charged cost, emergency) for one test run."""
@@ -528,15 +529,15 @@ class ShopMixin:
         care_parts = []
         if supported_cases:
             care_parts.append(
-                f"{supported_cases} full × ${DIAGNOSIS_REWARD}"
+                f"{supported_cases} full × ${self.scale_case_reward(DIAGNOSIS_REWARD)}"
             )
         if partial_cases:
             care_parts.append(
-                f"{partial_cases} partial × ${LIMITED_EVIDENCE_REWARD}"
+                f"{partial_cases} partial × ${self.scale_case_reward(LIMITED_EVIDENCE_REWARD)}"
             )
         if no_evidence_cases:
             care_parts.append(
-                f"{no_evidence_cases} no-clue × ${NO_EVIDENCE_REWARD}"
+                f"{no_evidence_cases} no-clue × ${self.scale_case_reward(NO_EVIDENCE_REWARD)}"
             )
         care_detail = "  •  ".join(care_parts) or "No confirmed cases"
         if self.daily_patients_lost:
@@ -590,8 +591,12 @@ class ShopMixin:
             ),
             (
                 "CLINIC OPERATING FEE",
-                "Daily rent, power, and medical supplies",
-                f"-${CLINIC_OPERATING_FEE}",
+                (
+                    "Daily rent, power, and medical supplies"
+                    if self.get_operating_fee() > 0
+                    else "Waived  •  nobody inspects Blackglass"
+                ),
+                f"-${self.get_operating_fee()}",
                 (232, 168, 92),
             ),
         )
@@ -640,7 +645,7 @@ class ShopMixin:
         )
 
         balance_y = summary.bottom + 17
-        remaining_pay = base_pay - CLINIC_OPERATING_FEE + bonus
+        remaining_pay = base_pay - self.get_operating_fee() + bonus
         if self.daily_payout_applied:
             resulting_balance = self.player.balance
             current_balance = resulting_balance - remaining_pay
@@ -688,7 +693,12 @@ class ShopMixin:
             ),
         )
 
-        self.draw_payroll_travel_fund(resulting_balance, panel)
+        if self.blackglass_detour is not None:
+            self.draw_blackglass_debt_panel(resulting_balance, panel)
+        elif resulting_balance <= BLACKGLASS_DEBT_THRESHOLD:
+            self.draw_debt_alert_panel(resulting_balance, panel)
+        else:
+            self.draw_payroll_travel_fund(resulting_balance, panel)
 
         hovered = self.day_complete_button.collidepoint(self.get_mouse_position())
         button_fill = (23, 49, 54) if hovered else (21, 27, 39)
@@ -719,7 +729,7 @@ class ShopMixin:
         coin = self.card_font.render("$", True, COLORS["accent"])
         self.screen.blit(coin, coin.get_rect(center=coin_center))
         button_text = self.small_font.render(
-            "COLLECT PAY  •  OPEN SUPPLY SHOP",
+            self.get_day_complete_button_label(resulting_balance),
             True,
             COLORS["accent"],
         )
@@ -787,9 +797,9 @@ class ShopMixin:
             self.daily_correct_diagnoses - supported_cases - partial_cases
         )
         base_pay = (
-            supported_cases * DIAGNOSIS_REWARD
-            + partial_cases * LIMITED_EVIDENCE_REWARD
-            + no_evidence_cases * NO_EVIDENCE_REWARD
+            supported_cases * self.scale_case_reward(DIAGNOSIS_REWARD)
+            + partial_cases * self.scale_case_reward(LIMITED_EVIDENCE_REWARD)
+            + no_evidence_cases * self.scale_case_reward(NO_EVIDENCE_REWARD)
         )
         penalties = self.daily_wrong_diagnoses * WRONG_DIAGNOSIS_PENALTY
         perfect_day = (
@@ -797,14 +807,14 @@ class ShopMixin:
             and self.daily_wrong_diagnoses == 0
             and self.daily_evidence_cases == len(self.waiting_room_queue)
         )
-        bonus = PERFECT_DAY_BONUS if perfect_day else 0
+        bonus = self.scale_case_reward(PERFECT_DAY_BONUS) if perfect_day else 0
         total = (
             base_pay
             - penalties
             - self.daily_test_expenses
             - self.daily_draw_expenses
             - self.daily_card_shop_expenses
-            - CLINIC_OPERATING_FEE
+            - self.get_operating_fee()
             + bonus
         )
         return base_pay, penalties, bonus, total

@@ -1,6 +1,6 @@
 """Destination and daily-roster data for The Cosmic Clinic campaign."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Callable, Optional
 
@@ -450,6 +450,85 @@ BLACKGLASS_MAP_DESTINATION = MapDestination(
 )
 
 
+BLACKGLASS_THEME = PlanetTheme(
+    scene="blackglass_outpost",
+    space_color=(92, 40, 16),
+    horizon_color=(214, 120, 40),
+    accent_color=(224, 96, 36),
+    secondary_color=(176, 196, 52),  # acid green
+    room_color=(44, 27, 19),
+    wall_color=(116, 82, 50),
+    structure_color=(104, 66, 36),
+    floor_color=(70, 48, 34),
+    floor_trim_color=(150, 102, 52),
+    chair_color=(78, 54, 36),
+    chair_accent_color=(150, 120, 44),
+    sign_color=(255, 150, 48),
+    decor_style="blackglass_grime",
+    particle_style="ash_steam",
+    alien_render_style="smooth",
+    window_details=("blackglass_panorama", "acid_pits", "steam_vents"),
+)
+
+
+# Blackglass is a debt-recovery detour, not a numbered campaign stop, so it is
+# deliberately NOT part of DESTINATIONS (which must form a continuous route).
+# day_number=0 marks it as outside the route; the GUI labels its shifts
+# "BLACKGLASS DAY 1/2" itself.
+BLACKGLASS_DESTINATION = Destination(
+    key="blackglass_outpost",
+    day_number=0,
+    planet_name="Blackglass Outpost",
+    subtitle="Emergency Clinic Contract",
+    arrival_message=(
+        "Blackglass has no appointment system. Whoever is still breathing "
+        "is your next patient."
+    ),
+    # TEMPORARY stand-in roster (Triska's four patients) so the detour is
+    # playable today. Replace with Blackglass-specific aliens; with eight or
+    # more entries, day 2 automatically draws a different four.
+    patient_roster=DAY_TWO_PATIENTS,
+    theme=BLACKGLASS_THEME,
+    map_data=BLACKGLASS_MAP_DESTINATION.map_data,
+    ambience=None,
+    gameplay_modifiers=(
+        ("draw_cost", 1.0),                 # dollars per random card draw
+        ("test_cost_multiplier", 0.25),     # tests cost a quarter of list price
+        ("patient_leave_chance", 0.0),      # patients never walk out
+        ("reward_multiplier", 0.5),         # case pay and bonus are halved
+        ("operating_fee_multiplier", 0.0),  # no rent on a condemned outpost
+        ("debt_limit", -1000.0),            # optional spending is never blocked
+        ("patient_rudeness", 1.0),          # interview lines get a rude pass
+    ),
+)
+
+FALLBACK_DESTINATIONS = (BLACKGLASS_DESTINATION,)
+FALLBACK_DESTINATIONS_BY_KEY = {
+    destination.key: destination for destination in FALLBACK_DESTINATIONS
+}
+
+
+def get_modifier(destination, name, default=1.0):
+    """Return one gameplay modifier for a destination, or ``default``."""
+
+    return dict(destination.gameplay_modifiers).get(name, default)
+
+
+def get_any_destination(key):
+    """Look up a clinic destination or a fallback clinic such as Blackglass."""
+
+    return DESTINATIONS_BY_KEY.get(key) or FALLBACK_DESTINATIONS_BY_KEY.get(key)
+
+
+def get_blackglass_destination(day_number=1):
+    """Return Blackglass with the four patients assigned to detour day N."""
+
+    population = BLACKGLASS_DESTINATION.alien_population
+    offset = ((day_number - 1) * 4) % len(population)
+    rotated = population[offset:] + population[:offset]
+    return replace(BLACKGLASS_DESTINATION, patient_roster=rotated[:4])
+
+
 def _clinic_map_destination(destination):
     """Return the map-facing identity for a playable clinic destination."""
 
@@ -685,3 +764,28 @@ def validate_map_destinations(
 
 validate_destinations()
 validate_map_destinations()
+
+
+def validate_blackglass_destination(destination=BLACKGLASS_DESTINATION):
+    """Reject a malformed Blackglass fallback before a debt detour can break."""
+
+    if destination.key in DESTINATIONS_BY_KEY:
+        raise ValueError("Blackglass must not be part of the numbered route.")
+    if destination.theme.scene != "blackglass_outpost":
+        raise ValueError("Blackglass needs its own reception scene.")
+    if len(destination.patient_roster) != 4:
+        raise ValueError("Blackglass shifts require four patients.")
+    required = {
+        "draw_cost",
+        "test_cost_multiplier",
+        "patient_leave_chance",
+        "reward_multiplier",
+        "operating_fee_multiplier",
+        "debt_limit",
+    }
+    if not required <= {name for name, _ in destination.gameplay_modifiers}:
+        raise ValueError("Blackglass is missing a required gameplay modifier.")
+    return True
+
+
+validate_blackglass_destination()

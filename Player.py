@@ -19,6 +19,12 @@ RETURN_PASSAGE_COST = 400
 PATIENT_WALKOUT_THRESHOLD = 2
 PATIENT_LEAVES_CHANCE = 0.25
 
+# Blackglass Outpost debt detour. If a shift ends at or below the threshold,
+# the doctor is reassigned to Blackglass for at most BLACKGLASS_MAX_DAYS shifts.
+BLACKGLASS_DEBT_THRESHOLD = -100
+BLACKGLASS_MAX_DAYS = 2
+BLACKGLASS_RETURN_BALANCE = STARTING_BALANCE
+
 
 def get_diagnosis_reward(evidence_count, evidence_total=2):
     """Return case pay for zero, partial, or complete supporting evidence."""
@@ -58,6 +64,8 @@ class Player:
         self.free_test_machines = set()
         self.free_tests_used = set()
         self.test_discount = 0
+        # Destination pricing hook (Blackglass charges a fraction of list price).
+        self.test_cost_multiplier = 1.0
         self.balance = STARTING_BALANCE
         self.test_hand = []
         self.diagnosis_hand = []
@@ -93,7 +101,10 @@ class Player:
             if level > 1
             else base - self.test_discount
         )
-        return max(MIN_TEST_OPERATING_COST, discounted)
+        cost = max(MIN_TEST_OPERATING_COST, discounted)
+        if self.test_cost_multiplier != 1.0:
+            cost = max(1, round(cost * self.test_cost_multiplier))
+        return cost
 
     def consume_test_use(self, test):
         """Consume the free allowance only when a machine actually runs."""

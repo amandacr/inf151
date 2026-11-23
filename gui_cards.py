@@ -43,9 +43,10 @@ class CardMixin:
             and not self.diagnostic_grant_used
         ):
             return 0
+        base_cost = int(self.get_destination_modifier("draw_cost", DRAW_COST))
         if "smart_cards" in self.purchased_shop_upgrades:
-            return max(0, DRAW_COST - 2)
-        return DRAW_COST
+            return max(0, base_cost - 2)
+        return base_cost
 
 
     def get_recycler_limit(self):
@@ -512,7 +513,10 @@ class CardMixin:
             self.patient_left = (
                 not self.guided_tutorial_active
                 and self.patient_wrong_diagnoses >= PATIENT_WALKOUT_THRESHOLD
-                and random.random() < PATIENT_LEAVES_CHANCE
+                and random.random()
+                < self.get_destination_modifier(
+                    "patient_leave_chance", PATIENT_LEAVES_CHANCE
+                )
             )
             if self.patient_left:
                 self.daily_patients_lost += 1

@@ -11,6 +11,8 @@ from Tests.catalog import create_test_catalog
 from gui_patient_assets import PatientAssetMixin
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
+from gui_blackglass import BlackglassMixin
+from gui_blackglass_room import BlackglassRoomMixin
 from gui_card_shop import CardShopMixin
 from gui_cards import CardMixin
 from gui_developer import DeveloperMixin
@@ -41,6 +43,8 @@ class CosmicClinicGUI(
     PatientAssetMixin,
     AnimationMixin,
     AudioMixin,
+    BlackglassMixin,
+    BlackglassRoomMixin,
     CardShopMixin,
     CardMixin,
     DeveloperMixin,
@@ -64,8 +68,11 @@ class CosmicClinicGUI(
 
     @property
     def current_destination(self):
-        """Expose the active route destination to screens and tests."""
+        """Expose the active destination, including a Blackglass debt detour."""
 
+        detour = getattr(self, "blackglass_detour", None)
+        if detour is not None:
+            return detour["destination"]
         return self.route.current_destination
 
     @property
@@ -77,6 +84,8 @@ class CosmicClinicGUI(
     def get_location_subtitle(self):
         """Return the persistent day and destination label used by clinic screens."""
 
+        if getattr(self, "blackglass_detour", None) is not None:
+            return self.get_blackglass_location_subtitle()
         return (
             f"DAY {self.day_number}  •  "
             f"{self.current_destination.planet_name.upper()}"
@@ -106,6 +115,7 @@ class CosmicClinicGUI(
             for _ in range(70)
         ]
 
+        self.setup_blackglass_detour()
         self.patient_sprite_cache = {}
         self.route = RouteController(
             DESTINATIONS,
@@ -399,6 +409,9 @@ class CosmicClinicGUI(
                     self.handle_route_map_click(position)
                 elif self.state == GameState.BLACKGLASS_CONTRACT:
                     self.handle_blackglass_contract_click(position)
+                elif self.state == GameState.BLACKGLASS_BOSS:
+                    self.play_sfx("button")
+                    self.advance_blackglass_boss_dialogue()
                 elif self.state == GameState.ENDING and self.can_skip_ending():
                     self.play_sfx("button")
                     self.finish_ending_sequence()
@@ -494,6 +507,9 @@ class CosmicClinicGUI(
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE) and self.state == GameState.ROUTE_BRIEFING:
                     self.play_sfx("button")
                     self.advance_route_briefing()
+                elif event.key in (pygame.K_RETURN, pygame.K_SPACE) and self.state == GameState.BLACKGLASS_BOSS:
+                    self.play_sfx("button")
+                    self.advance_blackglass_boss_dialogue()
                 elif (event.key == pygame.K_RETURN and self.state == GameState.ENDING
                       and self.can_skip_ending()):
                     self.play_sfx("button")
@@ -724,6 +740,10 @@ class CosmicClinicGUI(
         if self.day_complete_button.collidepoint(position):
             self.play_sfx("button")
             self.settle_daily_pay()
+            # A shift that ends at -$100 or worse sends the doctor to Blackglass;
+            # inside a Blackglass detour the same hook clears or forgives debt.
+            if self.route_after_daily_pay():
+                return
             self.state = GameState.SHOP
 
     def reset_day(self):
@@ -794,6 +814,8 @@ class CosmicClinicGUI(
         self.player.test_discount = test_discount
         self.player.free_test_machines = free_test_machines
         self.player.free_tests_used = free_tests_used
+        self.apply_destination_modifiers()
+        self.apply_patient_rudeness(self.patient)
         if self.patient.diagnosis_options:
             self.player.set_diagnosis_hand(self.patient.diagnosis_options)
         self.deck.shuffle_cards(self.player.diagnosis_hand)
@@ -890,6 +912,18 @@ class CosmicClinicGUI(
             self.draw_audio_button()
             if self.route_map_tutorial_active:
                 self.draw_route_map_tutorial()
+            if self.tutorial_open:
+                self.draw_tutorial_overlay()
+            if self.exit_confirmation_open:
+                self.draw_exit_confirmation()
+            if self.developer_navigator_open:
+                self.draw_developer_navigator()
+            return
+
+        if self.state == GameState.BLACKGLASS_BOSS:
+            self.draw_blackglass_boss_screen()
+            self.draw_help_button()
+            self.draw_audio_button()
             if self.tutorial_open:
                 self.draw_tutorial_overlay()
             if self.exit_confirmation_open:

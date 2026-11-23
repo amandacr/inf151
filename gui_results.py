@@ -1141,9 +1141,11 @@ class ResultsMixin:
         pygame.draw.circle(self.screen, (255, 230, 150), coin_center, 17, width=2)
         coin = self.small_font.render("$", True, (80, 61, 36))
         self.screen.blit(coin, coin.get_rect(center=coin_center))
-        case_reward = get_diagnosis_reward(
-            self.last_diagnosis_evidence_count,
-            self.last_diagnosis_evidence_total,
+        case_reward = self.scale_case_reward(
+            get_diagnosis_reward(
+                self.last_diagnosis_evidence_count,
+                self.last_diagnosis_evidence_total,
+            )
         )
         reward_text = (
             f"PENDING CASE PAY  +${case_reward}"

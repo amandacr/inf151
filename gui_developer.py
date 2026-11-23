@@ -304,6 +304,7 @@ class DeveloperMixin:
             GameState.ROUTE_BRIEFING: "route_briefing",
             GameState.ROUTE_MAP: "route_map",
             GameState.BLACKGLASS_CONTRACT: "route_map",
+            GameState.BLACKGLASS_BOSS: "reception",
             GameState.ENDING: "ending",
             GameState.ARRIVAL: "arrival",
             GameState.FINAL: "final",
@@ -509,6 +510,7 @@ class DeveloperMixin:
         self.end_day_shutdown_started_at = None
         self.test_result_started_at = None
         self.ending_started_at = None
+        self.reset_blackglass_detour()
 
         if scene_id == "intro":
             self.restart_game()

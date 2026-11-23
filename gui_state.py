@@ -17,6 +17,7 @@ class GameState(Enum):
     ROUTE_BRIEFING = auto()
     ROUTE_MAP = auto()
     BLACKGLASS_CONTRACT = auto()
+    BLACKGLASS_BOSS = auto()
     ENDING = auto()
     ARRIVAL = auto()
     FINAL = auto()

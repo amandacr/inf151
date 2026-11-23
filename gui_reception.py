@@ -382,6 +382,8 @@ class ReceptionMixin:
 
         if theme.scene == "lumora_orbit":
             self.draw_lumora_room_lighting(room)
+        elif theme.scene == "blackglass_outpost":
+            self.draw_blackglass_room_decay()
 
 
     def draw_lumora_room_lighting(self, room):
@@ -479,6 +481,9 @@ class ReceptionMixin:
             return
         if scene == "triska_orbit":
             self.draw_triska_waiting_room_windows()
+            return
+        if scene == "blackglass_outpost":
+            self.draw_blackglass_waiting_room_windows()
             return
 
         window = pygame.Rect(37, 164, 792, 239)
@@ -1362,6 +1367,9 @@ class ReceptionMixin:
 
         if theme.decor_style == "triska_crystals":
             self.draw_triska_desk_crystals()
+            return
+        if theme.decor_style == "blackglass_grime":
+            self.draw_blackglass_desk_clutter()
             return
 
         pygame.draw.ellipse(self.screen, (38, 35, 55), pygame.Rect(244, 447, 52, 10))
