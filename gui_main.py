@@ -874,6 +874,8 @@ class CosmicClinicGUI(
     def draw(self):
         """Draws shell + active screen."""
 
+        self.sync_destination_ambience()
+
         if self.state == GameState.INTRO:
             self.draw_intro_screen()
             if self.exit_confirmation_open:

@@ -19,11 +19,10 @@ RETURN_PASSAGE_COST = 400
 PATIENT_WALKOUT_THRESHOLD = 2
 PATIENT_LEAVES_CHANCE = 0.25
 
-# Blackglass Outpost debt detour. If a shift ends at or below the threshold,
-# the doctor is reassigned to Blackglass for at most BLACKGLASS_MAX_DAYS shifts.
+# Blackglass Outpost debt recovery. If a shift ends at or below the threshold,
+# the doctor is reassigned for at most BLACKGLASS_MAX_DAYS shifts.
 BLACKGLASS_DEBT_THRESHOLD = -100
 BLACKGLASS_MAX_DAYS = 2
-BLACKGLASS_RETURN_BALANCE = STARTING_BALANCE
 
 
 def get_diagnosis_reward(evidence_count, evidence_total=2):

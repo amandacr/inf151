@@ -2251,7 +2251,7 @@ class GuiFlowSmokeTests(unittest.TestCase):
         self.assertEqual(self.game.developer_navigator_level, "destinations")
         self.assertEqual(
             len(self.game.get_developer_day_rects()),
-            len(self.game.destinations),
+            len(self.game.destinations) + 1,
         )
         self.game.draw()
 

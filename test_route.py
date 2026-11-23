@@ -172,7 +172,7 @@ class RouteRegressionTests(unittest.TestCase):
             )
             balance -= fare
 
-    def test_earth_and_blackglass_placeholder_contracts_are_distinct(self):
+    def test_earth_and_blackglass_contracts_are_distinct(self):
         earth = EARTH_MAP_DESTINATION.map_data
         self.assertEqual(earth.destination_type, DestinationType.EARTH)
         self.assertEqual(earth.ticket_price, RETURN_PASSAGE_COST)
@@ -706,8 +706,8 @@ class RouteRegressionTests(unittest.TestCase):
             "RETURN TO ROUTE MAP",
         )
 
-    def test_blackglass_contract_shows_shortfall_and_safe_placeholder(self):
-        """Accepting placeholder work must not mutate money or route progress."""
+    def test_blackglass_contract_shows_shortfall_and_opens_supervisor(self):
+        """Accepting work starts the playable contract without spending money."""
 
         game = self.open_first_route_map_with_balance(80)
         game.finish_route_map_tutorial()
@@ -725,18 +725,15 @@ class RouteRegressionTests(unittest.TestCase):
         game.draw()
         game.handle_route_map_click(game.route_map_purchase_button.center)
 
-        self.assertEqual(game.state, GameState.BLACKGLASS_CONTRACT)
+        self.assertEqual(game.state, GameState.BLACKGLASS_BOSS)
         self.assertEqual(game.player.balance, starting_balance)
         self.assertEqual(game.route.travel_state, starting_travel_state)
         self.assertEqual(
             game.get_help_context()[0],
-            "BLACKGLASS CONTRACT",
+            "BLACKGLASS SUPERVISOR",
         )
         game.draw()
-        game.handle_blackglass_contract_click(
-            game.blackglass_contract_return_button.center
-        )
-        self.assertEqual(game.state, GameState.ROUTE_MAP)
+        self.assertEqual(game.blackglass_detour["target_key"], "triska_station")
 
     def test_blackglass_contract_is_not_needed_when_ticket_is_funded(self):
         game = self.open_first_route_map_with_balance(TRISKA_TICKET_COST)
@@ -1026,7 +1023,7 @@ class RouteRegressionTests(unittest.TestCase):
         live_fingerprint = self.game.get_campaign_state_fingerprint()
 
         self.game.toggle_developer_navigator()
-        self.assertEqual(len(self.game.get_developer_day_rects()), 3)
+        self.assertEqual(len(self.game.get_developer_day_rects()), 4)
         self.game.select_developer_day(3)
         entries = self.game.get_developer_screen_entries()
         scene_ids = {entry[1] for entry in entries}

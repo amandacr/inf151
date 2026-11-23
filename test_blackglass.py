@@ -18,7 +18,6 @@ from PlanetData import (
 from Player import (
     BLACKGLASS_DEBT_THRESHOLD,
     BLACKGLASS_MAX_DAYS,
-    BLACKGLASS_RETURN_BALANCE,
     DEBT_LIMIT,
     DIAGNOSIS_REWARD,
     DRAW_COST,
@@ -105,7 +104,7 @@ class BlackglassFlowTests(unittest.TestCase):
         game.handle_arrival_click(game.arrival_begin_button.center)
         self.assertEqual(game.state, GameState.TITLE)
         self.assertEqual(game.current_destination.key, "blackglass_outpost")
-        self.assertIn("BLACKGLASS SHIFT 1", game.get_location_subtitle())
+        self.assertIn("DEBT SHIFT 1", game.get_location_subtitle())
 
     def test_planet_shift_is_filed_once_and_route_is_untouched(self):
         self.finish_shift(wrong=5)
@@ -157,7 +156,7 @@ class BlackglassFlowTests(unittest.TestCase):
         )
 
     # -- outcomes ---------------------------------------------------------
-    def test_clearing_debt_on_day_one_returns_with_starting_balance(self):
+    def test_clearing_debt_on_day_one_preserves_earned_balance(self):
         self.enter_blackglass()
         self.game.player.balance = -10
         self.finish_shift(correct=2, evidence=2)  # +50 -> $40
@@ -167,10 +166,9 @@ class BlackglassFlowTests(unittest.TestCase):
         self.finish_dialogue()
         self.assertEqual(game.state, GameState.SHOP)
         self.assertIsNone(game.blackglass_detour)
-        self.assertEqual(game.player.balance, BLACKGLASS_RETURN_BALANCE)
-        self.assertEqual(BLACKGLASS_RETURN_BALANCE, STARTING_BALANCE)
+        self.assertEqual(game.player.balance, 40)
         self.assertEqual(game.current_destination.key, DESTINATIONS[0].key)
-        self.assertEqual(game.route.available_credits, STARTING_BALANCE)
+        self.assertEqual(game.route.available_credits, 40)
 
     def test_still_in_debt_after_day_one_continues_to_day_two(self):
         self.enter_blackglass()
@@ -181,7 +179,7 @@ class BlackglassFlowTests(unittest.TestCase):
         self.finish_dialogue()
         self.assertEqual(game.state, GameState.TITLE)
         self.assertEqual(game.blackglass_detour["day"], 2)
-        self.assertIn("BLACKGLASS SHIFT 2", game.get_location_subtitle())
+        self.assertIn("DEBT SHIFT 2", game.get_location_subtitle())
         self.assertEqual(game.patients_called, 0)
 
     def test_debt_is_forgiven_after_day_two(self):
@@ -198,8 +196,7 @@ class BlackglassFlowTests(unittest.TestCase):
         self.finish_dialogue()
         self.assertEqual(game.state, GameState.SHOP)
         self.assertIsNone(game.blackglass_detour)
-        self.assertGreater(game.player.balance, 0)
-        self.assertEqual(game.player.balance, BLACKGLASS_RETURN_BALANCE)
+        self.assertEqual(game.player.balance, 0)
         self.assertEqual(game.current_destination.key, DESTINATIONS[0].key)
 
     def test_clearing_debt_on_day_two_also_returns(self):
@@ -210,7 +207,7 @@ class BlackglassFlowTests(unittest.TestCase):
         self.finish_shift(correct=1, evidence=1)
         self.assertIn("Debt cleared", " ".join(l for _, l in self.game.blackglass_boss_lines))
         self.finish_dialogue()
-        self.assertEqual(self.game.player.balance, BLACKGLASS_RETURN_BALANCE)
+        self.assertEqual(self.game.player.balance, 20)
 
     def test_never_more_than_two_blackglass_shifts(self):
         self.enter_blackglass()
@@ -230,7 +227,7 @@ class BlackglassFlowTests(unittest.TestCase):
         self.assertEqual(self.game.state, GameState.SHOP)
         self.game.open_route_map()
         self.assertEqual(self.game.state, GameState.ROUTE_MAP)
-        self.assertEqual(self.game.route.available_credits, STARTING_BALANCE)
+        self.assertEqual(self.game.route.available_credits, self.game.player.balance)
         self.assertTrue(self.game.route.current_is_complete)
 
     # -- safety -----------------------------------------------------------
@@ -255,6 +252,39 @@ class BlackglassFlowTests(unittest.TestCase):
         self.assertEqual(self.game.current_destination.key, DESTINATIONS[0].key)
         self.assertEqual(self.game.player.balance, STARTING_BALANCE)
 
+    def test_ticket_contract_uses_shortfall_dialogue_and_returns_to_map(self):
+        game = self.game
+        game.player.balance = 80
+        game.open_route_map()
+        game.finish_route_map_tutorial()
+        game.route.select_map_destination("blackglass_outpost")
+        game.handle_route_map_click(game.route_map_purchase_button.center)
+        self.assertEqual(game.state, GameState.BLACKGLASS_BOSS)
+        self.assertEqual(game.blackglass_detour["mode"], "ticket")
+        dialogue = " ".join(line for _, line in game.blackglass_boss_lines)
+        self.assertIn("short", dialogue)
+        self.assertNotIn("in debt", dialogue)
+        self.finish_dialogue()
+        game.handle_arrival_click(game.arrival_begin_button.center)
+        game.player.balance = 160
+        self.finish_shift()
+        self.finish_dialogue()
+        self.assertEqual(game.state, GameState.ROUTE_MAP)
+        self.assertEqual(game.player.balance, 160)
+        self.assertEqual(game.route.selected_map_destination.key, "triska_station")
+
+    def test_ticket_contract_continues_until_the_ticket_is_funded(self):
+        game = self.game
+        game.player.balance = 10
+        game.open_route_map()
+        game.finish_route_map_tutorial()
+        game.route.select_map_destination("blackglass_outpost")
+        game.handle_route_map_click(game.route_map_purchase_button.center)
+        self.finish_dialogue()
+        game.handle_arrival_click(game.arrival_begin_button.center)
+        self.finish_shift()
+        self.assertEqual(game.blackglass_boss_action, "next_day")
+
     def test_every_detour_screen_renders(self):
         game = self.game
         game.player.balance = -125
@@ -270,6 +300,38 @@ class BlackglassFlowTests(unittest.TestCase):
         game.draw()  # reception
         game.state = GameState.DAY_COMPLETE
         game.draw()
+
+    def test_f10_lists_blackglass_and_restores_the_live_campaign(self):
+        game = self.game
+        game.player.balance = 73
+        game.toggle_developer_navigator()
+        game.select_developer_day(0)
+        scene_ids = {entry[1] for entry in game.get_developer_screen_entries()}
+        self.assertEqual(
+            scene_ids,
+            {
+                "blackglass_boss", "arrival", "reception", "patient_1",
+                "patient_2", "patient_3", "patient_4", "recap",
+            },
+        )
+        reception_index = game.get_developer_scene_index("reception")
+        game.jump_to_developer_screen(reception_index)
+        self.assertEqual(game.current_destination.key, "blackglass_outpost")
+        self.assertEqual(game.state, GameState.TITLE)
+        game.restore_developer_campaign_snapshot()
+        self.assertEqual(game.player.balance, 73)
+        self.assertIsNone(game.blackglass_detour)
+
+    def test_blackglass_ambience_is_configured_and_selected(self):
+        self.assertEqual(BLACKGLASS_DESTINATION.ambience, "blackglass_industrial")
+        self.enter_blackglass()
+        self.game.draw()
+        if self.game.audio_available:
+            self.assertIn("blackglass_industrial", self.game.destination_ambience)
+            self.assertEqual(
+                self.game.destination_ambience_key,
+                "blackglass_industrial",
+            )
 
 
 if __name__ == "__main__":
