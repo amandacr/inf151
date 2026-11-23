@@ -255,6 +255,48 @@ class BlackglassPresentationTests(unittest.TestCase):
                     game.showing_health_id = not game.showing_health_id
                 game.showing_health_id = False
 
+    def test_f10_exposes_both_blackglass_debt_shifts(self):
+        """Blackglass previews all eight patients without touching live progress."""
+
+        game = self.game
+        game.state = GameState.PATIENT
+        game.player.balance = 73
+        live_fingerprint = game.get_campaign_state_fingerprint()
+
+        game.toggle_developer_navigator()
+        game.select_developer_day(0)
+        self.assertEqual(
+            [entry["create"]().name for entry in game.get_developer_roster()],
+            ["Snelly Gumshoe", "Gremolda Stillwater", "Urnblod Vandermere III", "Mune"],
+        )
+
+        game.draw()
+        game.handle_developer_click(game.developer_blackglass_shift_rects[1].center)
+        self.assertEqual(game.developer_blackglass_day, 2)
+        self.assertEqual(
+            [entry["create"]().name for entry in game.get_developer_roster()],
+            ["Ramdole Mellowby", "Deborah", "Puter", "Mycicle"],
+        )
+        self.assertEqual(
+            game.get_selected_developer_destination().patient_roster,
+            get_blackglass_destination(2).patient_roster,
+        )
+
+        for patient_number, expected_name in enumerate(
+            ("Ramdole Mellowby", "Deborah", "Puter", "Mycicle"),
+            start=1,
+        ):
+            game.jump_to_developer_screen(
+                game.get_developer_scene_index(f"patient_{patient_number}")
+            )
+            self.assertEqual(game.patient.name, expected_name)
+            self.assertEqual(game.blackglass_detour["day"], 2)
+            self.assertEqual(len(game.player.test_hand), 5)
+
+        game.toggle_developer_navigator()
+        game.handle_developer_click(game.developer_return_button.center)
+        self.assertEqual(game.get_campaign_state_fingerprint(), live_fingerprint)
+
     def test_speech_styles_and_levitation(self):
         from gui_patient_assets import blackglass_idle
         from PatientData import create_deborah, create_puter, create_snelly

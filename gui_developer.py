@@ -171,8 +171,13 @@ class DeveloperMixin:
         self.developer_day_button_rects = self.developer_destination_button_rects
         self.developer_navigator_level = "destinations"
         self.developer_selected_day = 1
+        self.developer_blackglass_day = 1
         self.developer_scene_id = None
         self.developer_back_button = pygame.Rect(82, 91, 118, 32)
+        self.developer_blackglass_shift_rects = (
+            pygame.Rect(329, 119, 212, 34),
+            pygame.Rect(559, 119, 212, 34),
+        )
         self.developer_return_button = pygame.Rect(390, 553, 320, 34)
         self.developer_campaign_snapshot = None
         self.developer_snapshot_started_at = None
@@ -354,6 +359,8 @@ class DeveloperMixin:
         return (*self.destinations, get_blackglass_destination(1))
 
     def get_selected_developer_destination(self):
+        if self.developer_selected_day == 0:
+            return get_blackglass_destination(self.developer_blackglass_day)
         return next(
             destination
             for destination in self.get_developer_destinations()
@@ -403,7 +410,9 @@ class DeveloperMixin:
 
         selected_day = self.developer_selected_day if day_number is None else day_number
         if selected_day == 0:
-            return self.roster_for_destination(get_blackglass_destination(1))
+            return self.roster_for_destination(
+                get_blackglass_destination(self.developer_blackglass_day)
+            )
         return self.roster_for_day(selected_day)
 
     def select_developer_day(self, day_number):
@@ -416,6 +425,17 @@ class DeveloperMixin:
             raise ValueError("The developer navigator requires a configured destination.")
         self.developer_selected_day = day_number
         self.developer_navigator_level = "screens"
+        self.play_sfx("button")
+
+    def select_developer_blackglass_day(self, day_number):
+        """Switch between Blackglass debt shifts without leaving F10."""
+
+        if self.developer_selected_day != 0:
+            raise ValueError("Blackglass shift tabs require the contract clinic.")
+        if day_number not in (1, 2):
+            raise ValueError("Blackglass currently has exactly two debt shifts.")
+        self.developer_blackglass_day = day_number
+        self.developer_scene_id = None
         self.play_sfx("button")
 
     def return_to_developer_destinations(self):
@@ -515,6 +535,14 @@ class DeveloperMixin:
         if self.developer_back_button.collidepoint(position):
             self.return_to_developer_destinations()
             return
+        if self.developer_selected_day == 0:
+            for day_number, rect in enumerate(
+                self.developer_blackglass_shift_rects,
+                start=1,
+            ):
+                if rect.collidepoint(position):
+                    self.select_developer_blackglass_day(day_number)
+                    return
         for entry, rect in zip(
             self.get_developer_screen_entries(),
             self.get_developer_screen_rects(),
@@ -701,16 +729,19 @@ class DeveloperMixin:
         self.restart_game()
         if self.developer_selected_day == 0:
             target = self.route.next_destination
+            blackglass_destination = get_blackglass_destination(
+                self.developer_blackglass_day
+            )
             self.blackglass_detour = {
                 "mode": "ticket",
-                "day": 1,
+                "day": self.developer_blackglass_day,
                 "return_key": self.route.current_destination.key,
                 "return_planet": self.route.current_destination.planet_name,
                 "target_key": target.key,
                 "target_name": target.planet_name,
                 "required_balance": target.map_data.ticket_price,
                 "entry_balance": self.player.balance,
-                "destination": get_blackglass_destination(1),
+                "destination": blackglass_destination,
             }
             self.load_current_destination()
             return
@@ -848,8 +879,12 @@ class DeveloperMixin:
             self.screen.blit(day, (text_x, rect.y + 15))
             self.screen.blit(name, (text_x, rect.y + 38))
             detail_text = (
-                f"{len(destination.patient_roster)} PATIENTS  //  "
-                f"{destination.subtitle.upper()}"
+                "8 PATIENTS  //  2 DEBT SHIFTS"
+                if destination.day_number == 0
+                else (
+                    f"{len(destination.patient_roster)} PATIENTS  //  "
+                    f"{destination.subtitle.upper()}"
+                )
             )
             detail_lines = self.wrap_text(
                 detail_text,
@@ -903,19 +938,47 @@ class DeveloperMixin:
         back = self.card_font.render("<  DESTINATIONS", True, COLORS["text"])
         self.screen.blit(back, back.get_rect(center=self.developer_back_button.center))
 
-        destination_label = self.small_font.render(
-            (
-                "CONTRACT CLINIC  •  BLACKGLASS OUTPOST"
-                if destination.day_number == 0
-                else f"DAY {destination.day_number}  •  {destination.planet_name.upper()}"
-            ),
-            True,
-            destination.theme.accent_color,
-        )
-        self.screen.blit(
-            destination_label,
-            destination_label.get_rect(center=(panel.centerx, 139)),
-        )
+        if destination.day_number == 0:
+            for day_number, rect in enumerate(
+                self.developer_blackglass_shift_rects,
+                start=1,
+            ):
+                selected_shift = day_number == self.developer_blackglass_day
+                hovered_shift = rect.collidepoint(mouse_position)
+                pygame.draw.rect(
+                    self.screen,
+                    (95, 50, 25)
+                    if selected_shift
+                    else (56, 39, 34) if hovered_shift else (21, 27, 39),
+                    rect,
+                    border_radius=7,
+                )
+                pygame.draw.rect(
+                    self.screen,
+                    destination.theme.accent_color,
+                    rect,
+                    width=3 if selected_shift else 2,
+                    border_radius=7,
+                )
+                shift_label = self.card_font.render(
+                    f"DEBT SHIFT {day_number}  •  4 PATIENTS",
+                    True,
+                    COLORS["text"],
+                )
+                self.screen.blit(
+                    shift_label,
+                    shift_label.get_rect(center=rect.center),
+                )
+        else:
+            destination_label = self.small_font.render(
+                f"DAY {destination.day_number}  •  {destination.planet_name.upper()}",
+                True,
+                destination.theme.accent_color,
+            )
+            self.screen.blit(
+                destination_label,
+                destination_label.get_rect(center=(panel.centerx, 139)),
+            )
 
         entries = self.get_developer_screen_entries()
         self.developer_button_rects = self.get_developer_screen_rects()
