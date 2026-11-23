@@ -7,7 +7,7 @@ import random
 
 import pygame
 
-from Tests.catalog import create_test_catalog
+from Tests.catalog import BONUS_TEST_TYPES, create_bonus_test, create_test_catalog
 from gui_patient_assets import PatientAssetMixin
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
@@ -212,6 +212,7 @@ class CosmicClinicGUI(
         self.daily_card_shop_purchases = 0
         self.daily_patients_lost = 0
         self.daily_draw_expenses = 0
+        self.daily_recycle_refunds = 0
         self.daily_random_draw_count = 0
         self.reception_transition_started_at = None
         self.reception_transition_duration = 3350
@@ -317,6 +318,11 @@ class CosmicClinicGUI(
         self.tutorial_label_font = pygame.font.SysFont("Arial", 14, bold=True)
         self.dialogue_speaker_font = pygame.font.SysFont("Arial", 16, bold=True)
         self.dialogue_body_font = pygame.font.SysFont("Arial", 23)
+        # One regular-weight family for every interview line; long lines only
+        # shrink, so they never switch to a bold face mid-conversation.
+        self.interview_fonts = tuple(
+            pygame.font.SysFont("Arial", size) for size in (16, 15, 14, 13, 12)
+        )
         self.game_logo = self.create_game_logo_surface()
         intro_ufo_layer = pygame.Surface(WINDOW_SIZE, pygame.SRCALPHA)
         self.draw_intro_clinic(intro_ufo_layer, beam_alpha=0)
@@ -770,6 +776,7 @@ class CosmicClinicGUI(
         self.deck.populate(create_test_catalog())
         self.daily_patients_lost = 0
         self.daily_draw_expenses = 0
+        self.daily_recycle_refunds = 0
         self.daily_random_draw_count = 0
         self.reset_round(recycle_unused_cards=False)
 
@@ -794,6 +801,47 @@ class CosmicClinicGUI(
             self.player.draw(card)
 
         self.deck.shuffle_cards(self.player.test_hand)
+        self.guarantee_bonus_test_in_hand()
+
+    def sync_patient_bonus_tests(self):
+        """Deal patient-specific tests (like Puter's) only for that patient.
+
+        Any leftover patient-specific cards from the previous encounter are
+        removed first, so ordinary patients never see tests that do not apply
+        to them.
+        """
+
+        self.deck.contents = [
+            card
+            for card in self.deck.contents
+            if getattr(card.value, "name", None) not in BONUS_TEST_TYPES
+        ]
+        for test_name in getattr(self.patient, "bonus_tests", ()):
+            self.deck.add_card(create_bonus_test(test_name))
+
+    def guarantee_bonus_test_in_hand(self):
+        """Make sure a patient's first special test shows up in the opening hand."""
+
+        bonus_tests = getattr(self.patient, "bonus_tests", ())
+        if not bonus_tests:
+            return
+        hand_names = {card.value.name for card in self.player.test_hand}
+        for test_name in bonus_tests:
+            if test_name in hand_names:
+                continue
+            bonus_card = self.deck.draw_matching(test_name)
+            if bonus_card is None or not self.player.test_hand:
+                if bonus_card is not None:
+                    self.player.draw(bonus_card)
+                continue
+            # Swap out one ordinary card so the hand stays at five cards.
+            for index, card in enumerate(self.player.test_hand):
+                if card.value.name not in bonus_tests:
+                    self.deck.return_cards([self.player.test_hand[index]])
+                    self.player.test_hand[index] = bonus_card
+                    break
+            hand_names.add(test_name)
+        self.deck.shuffle_cards(self.player.test_hand)
 
     def reset_round(self, recycle_unused_cards=True):
         """Prepare a fresh patient encounter while preserving money and unused cards."""
@@ -803,6 +851,7 @@ class CosmicClinicGUI(
             self.deck.return_cards(self.player.test_hand)
         next_slot = min(self.patients_called, len(self.waiting_room_queue) - 1)
         self.patient = self.waiting_room_queue[next_slot]["create"]()
+        self.sync_patient_bonus_tests()
         self.patient_dialogue_index = 0
         machine_levels = self.player.machine_levels.copy()
         test_discount = self.player.test_discount

@@ -20,7 +20,6 @@ from Player import (
     PATIENT_LEAVES_CHANCE,
     PATIENT_LEAVES_TEXT,
     PATIENT_WALKOUT_THRESHOLD,
-    WRONG_DIAGNOSIS_PENALTY,
 )
 
 class CardMixin:
@@ -382,7 +381,13 @@ class CardMixin:
         self.run_test_button = None
         self.discard_button = None
         self.refresh_hand_layout()
-        self.set_card_draw_notice("SLOT OPEN  •  DRAW WHEN READY")
+        refund = self.get_recycle_refund()
+        if refund > 0:
+            self.daily_recycle_refunds += refund
+            self.start_live_money_credit(refund, "RECYCLED")
+            self.set_card_draw_notice(f"RECYCLED  •  +${refund} BACK")
+        else:
+            self.set_card_draw_notice("SLOT OPEN  •  DRAW WHEN READY")
         return True
 
 
@@ -500,7 +505,7 @@ class CardMixin:
             self.play_sfx("correct")
         else:
             self.start_live_money_deduction(
-                WRONG_DIAGNOSIS_PENALTY,
+                self.get_wrong_diagnosis_penalty(),
                 "WRONG DIAGNOSIS",
             )
             self.daily_wrong_diagnoses += 1
@@ -1401,12 +1406,13 @@ class CardMixin:
         self.discard_button = self.get_discard_button(card_rect)
         pygame.draw.rect(
             self.screen,
-            (205, 100, 100),
+            (88, 190, 120) if self.get_recycle_refund() > 0 else (205, 100, 100),
             self.discard_button,
             border_radius=5,
         )
+        refund = self.get_recycle_refund()
         discard_text = self.small_font.render(
-            "DISCARD",
+            f"RECYCLE +${refund}" if refund > 0 else "DISCARD",
             True,
             COLORS["background"],
         )
@@ -1567,6 +1573,40 @@ class CardMixin:
                     4,
                 )
                 pygame.draw.circle(icon_surface, ink, node, 4, width=1)
+        elif test_name == "VIRUS SCAN":
+            # A bug under a magnifying glass.
+            body = (center_x - 4, center_y + 1)
+            pygame.draw.ellipse(
+                icon_surface, rarity_color, pygame.Rect(body[0] - 7, body[1] - 8, 14, 16)
+            )
+            pygame.draw.ellipse(
+                icon_surface, ink, pygame.Rect(body[0] - 7, body[1] - 8, 14, 16), width=2
+            )
+            for leg_y in (-5, 0, 5):
+                for side in (-1, 1):
+                    pygame.draw.line(
+                        icon_surface,
+                        ink,
+                        (body[0] + side * 7, body[1] + leg_y),
+                        (body[0] + side * 12, body[1] + leg_y + side * 2 - 1),
+                        width=2,
+                    )
+            lens = (center_x + 8, center_y - 6)
+            pygame.draw.circle(icon_surface, (238, 246, 228), lens, 8, width=0)
+            pygame.draw.circle(icon_surface, ink, lens, 8, width=2)
+            pygame.draw.line(icon_surface, ink, (lens[0] + 6, lens[1] + 6), (lens[0] + 12, lens[1] + 12), width=3)
+        elif test_name == "SYSTEM LOG":
+            # A terminal window with a prompt and log lines.
+            window = pygame.Rect(center_x - 14, center_y - 12, 28, 24)
+            pygame.draw.rect(icon_surface, (238, 246, 228), window, border_radius=4)
+            pygame.draw.rect(icon_surface, ink, window, width=2, border_radius=4)
+            pygame.draw.rect(icon_surface, rarity_color, pygame.Rect(window.x + 2, window.y + 2, window.width - 4, 5))
+            pygame.draw.lines(
+                icon_surface, ink, False,
+                [(window.x + 5, window.y + 10), (window.x + 9, window.y + 13), (window.x + 5, window.y + 16)],
+                width=2,
+            )
+            pygame.draw.line(icon_surface, ink, (window.x + 12, window.y + 17), (window.x + 20, window.y + 17), width=2)
         else:
             icon_text = self.body_font.render(test_name[0], True, ink)
             icon_surface.blit(icon_text, icon_text.get_rect(center=icon_area.center))

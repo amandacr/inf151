@@ -23,6 +23,9 @@ PATIENT_LEAVES_CHANCE = 0.25
 # the doctor is reassigned for at most BLACKGLASS_MAX_DAYS shifts.
 BLACKGLASS_DEBT_THRESHOLD = -100
 BLACKGLASS_MAX_DAYS = 2
+# Paid on top of a cleared/forgiven debt so the doctor can always afford the
+# next route ticket (Triska costs $100) after a debt contract.
+BLACKGLASS_CONTRACT_PAYOUT = 100
 
 
 def get_diagnosis_reward(evidence_count, evidence_total=2):

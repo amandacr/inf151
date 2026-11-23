@@ -183,7 +183,7 @@ class RouteRegressionTests(unittest.TestCase):
         self.assertEqual(blackglass.destination_type, DestinationType.BLACKGLASS)
         self.assertEqual(blackglass.ticket_price, 0)
         self.assertTrue(blackglass.has_patients)
-        self.assertFalse(blackglass.content_ready)
+        self.assertTrue(blackglass.content_ready)
 
     def test_map_validation_rejects_broken_destination_links(self):
         broken_earth = replace(

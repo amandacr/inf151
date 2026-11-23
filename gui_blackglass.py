@@ -4,7 +4,10 @@ Debt recovery sends the doctor to Blackglass for at most
 ``BLACKGLASS_MAX_DAYS`` shifts:
 
 * ending any Blackglass shift with $0 or more clears the debt, or
-* ending the final shift still in debt has the outpost boss forgive the rest,
+* ending the final shift still in debt has the outpost boss forgive the rest.
+
+Either way the contract then pays ``BLACKGLASS_CONTRACT_PAYOUT`` on top of the
+cleared balance, so the doctor can always afford the next route ticket.
 
 Voluntary ticket contracts continue until the intended fare is funded, then
 return to the Galactic Route Map with every earned credit intact. Neither path
@@ -15,10 +18,12 @@ import pygame
 
 from PlanetData import get_blackglass_destination, get_modifier
 from Player import (
+    BLACKGLASS_CONTRACT_PAYOUT,
     BLACKGLASS_DEBT_THRESHOLD,
     BLACKGLASS_MAX_DAYS,
     CLINIC_OPERATING_FEE,
     DEBT_LIMIT,
+    WRONG_DIAGNOSIS_PENALTY,
 )
 from gui_state import GameState
 from gui_theme import COLORS, WINDOW_SIZE
@@ -96,20 +101,24 @@ def build_contract_funded_lines(destination_name, balance_text):
     )
 
 
-def build_cleared_lines(planet_name, balance_text):
+def build_cleared_lines(planet_name, balance_text, payout_text="$100"):
     """Boss dialogue when the doctor ends a Blackglass shift out of debt."""
 
     return (
         (OUTPOST_BOSS, "Your balance is back in the black. I did not see that coming."),
         (
             OUTPOST_BOSS,
-            f"Debt cleared. You kept {balance_text}. Back to {planet_name} with you.",
+            f"Debt cleared. Plus {payout_text} contract pay for your trouble.",
+        ),
+        (
+            OUTPOST_BOSS,
+            f"Your balance is now {balance_text}. Back to {planet_name} with you.",
         ),
         (OUTPOST_BOSS, "Try not to lose it this time."),
     )
 
 
-def build_forgiven_lines(owed_text, planet_name, return_text):
+def build_forgiven_lines(owed_text, planet_name, return_text, payout_text="$100"):
     """Boss dialogue when the final Blackglass shift ends with debt remaining."""
 
     return (
@@ -124,6 +133,7 @@ def build_forgiven_lines(owed_text, planet_name, return_text):
             "The outpost is covering the rest in exchange for the hard work you put in. "
             "Do not make it a habit.",
         ),
+        (OUTPOST_BOSS, f"And here is {payout_text} contract pay. Enough for a ticket out."),
         (
             OUTPOST_BOSS,
             f"Your balance is now {return_text}. Your clinic is waiting on {planet_name}.",
@@ -175,6 +185,19 @@ class BlackglassMixin:
 
         return int(self.get_destination_modifier("debt_limit", DEBT_LIMIT))
 
+    def get_wrong_diagnosis_penalty(self):
+        """Return the wrong-diagnosis fee after destination modifiers."""
+
+        multiplier = self.get_destination_modifier(
+            "wrong_diagnosis_penalty_multiplier", 1.0
+        )
+        return round(WRONG_DIAGNOSIS_PENALTY * multiplier)
+
+    def get_recycle_refund(self):
+        """Return the credit paid back for trashing a test card (Blackglass)."""
+
+        return int(self.get_destination_modifier("recycle_refund", 0.0))
+
     def apply_destination_modifiers(self):
         """Push destination pricing onto the freshly created Player."""
 
@@ -187,6 +210,8 @@ class BlackglassMixin:
 
         if self.get_destination_modifier("patient_rudeness", 0.0) <= 0:
             return patient
+        if getattr(patient, "bespoke_voice", False):
+            return patient  # already written in character
         patient.dialogue = tuple(
             RUDE_PREFIXES[index % len(RUDE_PREFIXES)] + line
             for index, line in enumerate(patient.dialogue)
@@ -307,12 +332,20 @@ class BlackglassMixin:
             return
         planet_name = detour["return_planet"]
         balance = self.player.balance
+        payout_text = self.format_money(BLACKGLASS_CONTRACT_PAYOUT)
         if balance >= 0:
-            lines = build_cleared_lines(planet_name, self.format_money(balance))
+            lines = build_cleared_lines(
+                planet_name,
+                self.format_money(balance + BLACKGLASS_CONTRACT_PAYOUT),
+                payout_text,
+            )
             action = "return"
         elif detour["day"] >= BLACKGLASS_MAX_DAYS:
             lines = build_forgiven_lines(
-                self.format_money(abs(balance)), planet_name, self.format_money(0)
+                self.format_money(abs(balance)),
+                planet_name,
+                self.format_money(BLACKGLASS_CONTRACT_PAYOUT),
+                payout_text,
             )
             action = "return"
         else:
@@ -326,10 +359,12 @@ class BlackglassMixin:
         detour = self.blackglass_detour
         ticket_contract = detour.get("mode") == "ticket"
         target_key = detour.get("target_key")
-        if not ticket_contract and self.player.balance < 0:
-            # Final-shift forgiveness clears only the debt. It never invents a
-            # replacement balance or overwrites a profitable result.
-            self.player.balance = 0
+        if not ticket_contract:
+            # Forgiveness clears any remaining debt, then the contract pays out
+            # so even a rough stint leaves enough for the next route ticket.
+            self.player.balance = (
+                max(0, self.player.balance) + BLACKGLASS_CONTRACT_PAYOUT
+            )
         self.blackglass_detour = None
         self.route.sync_available_credits(self.player.balance)
         if ticket_contract:

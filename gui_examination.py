@@ -7,6 +7,25 @@ import pygame
 from gui_theme import COLORS, WINDOW_SIZE
 
 
+# Alternate speech-bubble looks for patients that do not talk like everyone else.
+SPEECH_STYLES = {
+    # Deborah has no voice: a toe-tap translator prints her taps.
+    "toe_tap": {
+        "fill": (222, 236, 244),
+        "text": (36, 62, 92),
+        "outline": (86, 130, 170),
+        "footer": (76, 108, 140),
+    },
+    # Puter speaks in glowing terminal text.
+    "terminal": {
+        "fill": (10, 28, 22),
+        "text": (118, 255, 172),
+        "outline": (62, 204, 134),
+        "footer": (72, 176, 124),
+    },
+}
+
+
 class ExaminationMixin:
     def draw_patient_screen(self):
         """Draw every panel that makes up the main patient workspace."""
@@ -1077,12 +1096,7 @@ class ExaminationMixin:
     def fit_interview_statement(self, statement, width, max_height):
         """Return the largest interview font that shows the complete statement."""
 
-        fonts = (
-            self.tutorial_body_font,
-            self.tutorial_label_font,
-            self.compact_ui_font,
-            self.interview_tiny_font,
-        )
+        fonts = self.interview_fonts
         for font in fonts:
             lines = self.wrap_text(statement, font, width)
             if len(lines) * font.get_linesize() <= max_height:
@@ -1110,10 +1124,13 @@ class ExaminationMixin:
         """Draw the current patient-interview statement beside the alien."""
 
         bubble = self.get_symptom_bubble_rect(bay)
-        bubble_fill = (246, 241, 220)
+        speech_style = SPEECH_STYLES.get(getattr(self.patient, "speech_style", None))
+        bubble_fill = speech_style["fill"] if speech_style else (246, 241, 220)
         hovered = self.layout["alien"].collidepoint(self.get_mouse_position())
-        text_color = (62, 50, 74)
-        bubble_outline = COLORS["accent"] if hovered else text_color
+        text_color = speech_style["text"] if speech_style else (62, 50, 74)
+        bubble_outline = COLORS["accent"] if hovered else (
+            speech_style["outline"] if speech_style else text_color
+        )
         tail = (
             (bubble.x + 5, bubble.y + 34),
             (alien_head.right - 2, alien_head.y + 27),
@@ -1167,7 +1184,7 @@ class ExaminationMixin:
         footer = self.readable_detail_font.render(
             f"{footer_action}  {self.patient_dialogue_index + 1}/{len(self.patient.dialogue)}",
             True,
-            (102, 86, 112),
+            speech_style["footer"] if speech_style else (102, 86, 112),
         )
         self.screen.blit(
             footer,
@@ -1570,12 +1587,22 @@ class ExaminationMixin:
         """Draw used and discarded cards inside a medical-waste container."""
 
         panel = self.layout["throwaway"]
-        label = self.card_font.render("MED-WASTE", True, (245, 130, 115))
+        # Blackglass swaps med-waste for a recycler that refunds each trashed test.
+        recycling = self.get_recycle_refund() > 0
+        accent = (112, 220, 140) if recycling else (245, 130, 115)
+        label = self.card_font.render(
+            "RECYCLING" if recycling else "MED-WASTE", True, accent
+        )
         label_plate = pygame.Rect(panel.x + 4, panel.y + 3, panel.width - 8, 23)
-        pygame.draw.rect(self.screen, (48, 38, 45), label_plate, border_radius=5)
         pygame.draw.rect(
             self.screen,
-            (119, 70, 76),
+            (30, 52, 38) if recycling else (48, 38, 45),
+            label_plate,
+            border_radius=5,
+        )
+        pygame.draw.rect(
+            self.screen,
+            (70, 128, 86) if recycling else (119, 70, 76),
             label_plate,
             width=1,
             border_radius=5,
@@ -1616,7 +1643,7 @@ class ExaminationMixin:
             )
 
         lid = pygame.Rect(panel.x + 12, panel.y + 40, panel.width - 24, 10)
-        pygame.draw.rect(self.screen, (245, 130, 115), lid, border_radius=5)
+        pygame.draw.rect(self.screen, accent, lid, border_radius=5)
         pygame.draw.rect(
             self.screen,
             COLORS["background"],
@@ -1633,15 +1660,57 @@ class ExaminationMixin:
             (panel.right - 23, panel.bottom - 7),
             (panel.x + 23, panel.bottom - 7),
         )
-        pygame.draw.polygon(self.screen, (48, 72, 76), container_points)
         pygame.draw.polygon(
             self.screen,
-            (245, 130, 115),
+            (34, 78, 52) if recycling else (48, 72, 76),
+            container_points,
+        )
+        pygame.draw.polygon(
+            self.screen,
+            accent,
             container_points,
             width=2,
         )
 
-        warning_center = (panel.centerx, panel.y + 68)
+        if recycling:
+            self.draw_recycling_symbol((panel.centerx, panel.y + 68), 11, accent)
+        else:
+            self.draw_hazard_symbol((panel.centerx, panel.y + 68))
+
+        count_text = (
+            "CARDS: " + str(len(self.discard_pile))
+            if self.discard_pile
+            else "EMPTY"
+        )
+        count = self.readable_detail_font.render(count_text, True, COLORS["text"])
+        self.screen.blit(
+            count,
+            count.get_rect(center=(panel.centerx, panel.bottom - 12)),
+        )
+
+    def draw_recycling_symbol(self, center, radius, color):
+        """Draw three chasing arrows around ``center``."""
+
+        cx, cy = center
+        for k in range(3):
+            start = math.radians(90 + k * 120 + 12)
+            end = start + math.radians(84)
+            arc_rect = pygame.Rect(cx - radius, cy - radius, radius * 2, radius * 2)
+            pygame.draw.arc(self.screen, color, arc_rect, start, end, width=2)
+            # pygame arcs run counter-clockwise with screen y pointing down.
+            tip = (cx + math.cos(end) * radius, cy - math.sin(end) * radius)
+            tangent = (-math.sin(end), -math.cos(end))
+            normal = (math.cos(end), -math.sin(end))
+            head = (
+                (tip[0] + tangent[0] * 5, tip[1] + tangent[1] * 5),
+                (tip[0] + normal[0] * 4, tip[1] + normal[1] * 4),
+                (tip[0] - normal[0] * 4, tip[1] - normal[1] * 4),
+            )
+            pygame.draw.polygon(self.screen, color, head)
+
+    def draw_hazard_symbol(self, warning_center):
+        """Draw the med-waste warning triangle."""
+
         warning_triangle = (
             (warning_center[0], warning_center[1] - 10),
             (warning_center[0] - 11, warning_center[1] + 8),
@@ -1665,17 +1734,6 @@ class ExaminationMixin:
             (245, 130, 115),
             (warning_center[0], warning_center[1] + 7),
             1,
-        )
-
-        count_text = (
-            "CARDS: " + str(len(self.discard_pile))
-            if self.discard_pile
-            else "EMPTY"
-        )
-        count = self.readable_detail_font.render(count_text, True, COLORS["text"])
-        self.screen.blit(
-            count,
-            count.get_rect(center=(panel.centerx, panel.bottom - 12)),
         )
 
     def get_current_entry(self):

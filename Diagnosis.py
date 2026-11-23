@@ -827,3 +827,467 @@ KRIX_DIAGNOSES = {
         rejection_tests=("BLOOD CHEMISTRY", "ULTRASOUND"),
     ),
 }
+
+
+# ---------------------------------------------------------------------------
+# Blackglass Outpost case files.  Day 1: Snelly, Gremolda, Urnblod, Mune.
+# Day 2: Ramdole, Deborah, Puter, Mycicle.
+# ---------------------------------------------------------------------------
+
+SNELLY_DIAGNOSES = {
+    "gastropod_influenza": Diagnosis(
+        "Gastropod Influenza",
+        "A common but nasty virus is inflaming the patient's mucus glands, "
+        "eyes, and sinuses and driving a high fever.",
+        "Prescribe fluids, rest, and a Gastropodan-safe antiviral. No smoking "
+        "until the fever breaks (he will ignore this).",
+        evidence_combinations=(("TEMPERATURE",), ("BLOOD CHEMISTRY",)),
+    ),
+    "shell_crack_infection": Diagnosis(
+        "Shell-Crack Infection",
+        "Bacteria have entered the cracked shell and are spreading to the "
+        "soft tissue underneath.",
+        "Drain the shell, clean the crack, and seal it with Gastropodan resin.",
+        evidence_combinations=(("X-RAY", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "X-ray shows the shell crack is old and fully healed, with no "
+            "infection, fluid, or damaged tissue behind it."
+        ),
+        rejection_tests=("X-RAY",),
+    ),
+    "chronic_smokers_lung": Diagnosis(
+        "Chronic Smoker's Lung",
+        "Years of smoke have scarred the lung, causing congestion, "
+        "coughing, and watery eyes.",
+        "Begin lung-clearing therapy and strongly recommend quitting.",
+        evidence_combinations=(("OXYGEN SCAN", "X-RAY"),),
+        rejection_reason=(
+            "The Oxygen Scan shows the lung exchanging air normally, with no "
+            "tar scarring or permanent damage."
+        ),
+        rejection_tests=("OXYGEN SCAN",),
+    ),
+    "salt_contamination": Diagnosis(
+        "Salt Contamination",
+        "Salt exposure is irritating the skin and body, a serious threat to "
+        "any Gastropodan.",
+        "Rinse with fresh water and administer a salt-neutralizing agent.",
+        evidence_combinations=(("TOXIN SCREEN", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "The Toxin Screen found no salt or irritants beyond ordinary "
+            "smoke residue."
+        ),
+        rejection_tests=("TOXIN SCREEN",),
+    ),
+    "mucus_gland_blockage": Diagnosis(
+        "Mucus-Gland Blockage",
+        "A blocked mucus gland is forcing slime backward into the nose "
+        "and eyes.",
+        "Flush the gland and prescribe a Gastropodan-safe decongestant.",
+        evidence_combinations=(("ULTRASOUND", "OXYGEN SCAN"),),
+        rejection_reason=(
+            "Ultrasound shows swollen mucus glands that are still open, "
+            "with no blockage."
+        ),
+        rejection_tests=("ULTRASOUND",),
+    ),
+}
+
+GREMOLDA_DIAGNOSES = {
+    "too_enlightened": Diagnosis(
+        "Too Enlightened",
+        "The patient has reached such complete inner peace that pain, stress, "
+        "and urgency no longer register at all.",
+        "Prescribe mild daily stress: traffic, paperwork, and one rude email. "
+        "Taper slowly. Do not recommend meditation.",
+        evidence_combinations=(("NEURAL SCAN",), ("BLOOD CHEMISTRY",)),
+    ),
+    "congenital_pain_insensitivity": Diagnosis(
+        "Congenital Pain Insensitivity",
+        "A rare inherited condition prevents the nerves from sending pain "
+        "signals to the brain.",
+        "Teach injury checks and arrange regular body inspections.",
+        evidence_combinations=(("NEURAL SCAN", "X-RAY"),),
+        rejection_reason=(
+            "The Neural Scan shows every pain pathway working perfectly. She "
+            "feels everything and simply does not mind."
+        ),
+        rejection_tests=("NEURAL SCAN",),
+    ),
+    "meditation_hypoxia": Diagnosis(
+        "Meditation-Induced Hypoxia",
+        "Extremely slow breathing has starved the brain of oxygen, causing "
+        "a dreamy and detached state.",
+        "Provide oxygen therapy and coach faster breathing.",
+        evidence_combinations=(("OXYGEN SCAN", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "Oxygen saturation is excellent. Her slow breathing is "
+            "deliberate, not a deficiency."
+        ),
+        rejection_tests=("OXYGEN SCAN",),
+    ),
+    "spinal_nerve_damage": Diagnosis(
+        "Spinal Nerve Damage",
+        "A damaged spine is blocking sensation from reaching the brain.",
+        "Stabilize the spine and begin Zenarian nerve-repair therapy.",
+        evidence_combinations=(("X-RAY", "NEURAL SCAN"),),
+        rejection_reason=(
+            "X-ray shows an undamaged spine and open nerve channels, with no "
+            "compression or injury."
+        ),
+        rejection_tests=("X-RAY",),
+    ),
+    "endorphin_overdose": Diagnosis(
+        "Endorphin Overdose",
+        "A flood of painkilling chemicals, natural or otherwise, is numbing "
+        "the patient completely.",
+        "Flush the system and monitor chemical balance.",
+        evidence_combinations=(("TOXIN SCREEN", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "The Toxin Screen found no drugs or foreign compounds. Her "
+            "calm is entirely natural."
+        ),
+        rejection_tests=("TOXIN SCREEN",),
+    ),
+}
+
+URNBLOD_DIAGNOSES = {
+    "post_surgical_wheel_infection": Diagnosis(
+        "Post-Surgical Wheel Infection",
+        "Bacteria have infected the sites where the illegal wheel hardware "
+        "was bolted into the patient's body.",
+        "Drain the infected sites, start a Frostling-safe antibiotic course, "
+        "and sterilize the axle mounts. No more back-alley surgeons.",
+        evidence_combinations=(("X-RAY", "BLOOD CHEMISTRY"),),
+    ),
+    "axle_mount_fracture": Diagnosis(
+        "Axle-Mount Fracture",
+        "A crack in the pelvis where the axles attach is causing swelling "
+        "and pain.",
+        "Immobilize the pelvis and repair the bone with Frostling resin.",
+        evidence_combinations=(("X-RAY", "ULTRASOUND"),),
+        rejection_reason=(
+            "X-ray shows the pelvis solid around every mount, with no "
+            "fractures, only swelling and fluid."
+        ),
+        rejection_tests=("X-RAY",),
+    ),
+    "rubber_lubricant_allergy": Diagnosis(
+        "Rubber & Lubricant Allergy",
+        "The patient's immune system is overreacting to the cheap rubber "
+        "and lubricants used in the conversion.",
+        "Replace the materials and begin an antihistamine course.",
+        evidence_combinations=(("ALLERGY", "TOXIN SCREEN"),),
+        rejection_reason=(
+            "Allergy screening shows only a mild rubber reaction, far too "
+            "weak to explain the fever and fluid."
+        ),
+        rejection_tests=("ALLERGY",),
+    ),
+    "tire_sealant_poisoning": Diagnosis(
+        "Tire-Sealant Poisoning",
+        "Toxic sealant has entered the bloodstream and is poisoning the "
+        "patient.",
+        "Begin chelation therapy and flush the blood.",
+        evidence_combinations=(("TOXIN SCREEN", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "The Toxin Screen found sealant on the skin only. None has "
+            "entered the bloodstream."
+        ),
+        rejection_tests=("TOXIN SCREEN",),
+    ),
+    "motor_nerve_short_circuit": Diagnosis(
+        "Motor-Nerve Short Circuit",
+        "The crude nerve wiring to the wheel motors is shorting out and "
+        "causing fever and pain.",
+        "Rewire the motor nerves and insulate the connections.",
+        evidence_combinations=(("NEURAL SCAN", "TEMPERATURE"),),
+        rejection_reason=(
+            "The Neural Scan shows the rewired nerves signaling cleanly, "
+            "with no shorts or damage."
+        ),
+        rejection_tests=("NEURAL SCAN",),
+    ),
+}
+
+MUNE_DIAGNOSES = {
+    "terminal_over_extraction": Diagnosis(
+        "Terminal Over-Extraction",
+        "Years of deep drilling have hollowed Mune's crust and core past any "
+        "possible repair, and the damage is spreading.",
+        "Nothing can refill a hollowed core. Comfort Mune, then end the "
+        "suffering with a gentle, controlled detonation. Stay until the end.",
+        evidence_combinations=(("X-RAY",), ("ULTRASOUND",)),
+    ),
+    "meteor_impact_damage": Diagnosis(
+        "Meteor Impact Damage",
+        "A large impact has cracked the crust and shaken loose the interior.",
+        "Seal the craters and stabilize the crust with mineral foam.",
+        evidence_combinations=(("X-RAY", "ULTRASOUND"),),
+        rejection_reason=(
+            "X-ray finds no craters or impact fractures. Every break follows "
+            "a straight, drilled channel."
+        ),
+        rejection_tests=("X-RAY",),
+    ),
+    "core_cooling": Diagnosis(
+        "Core Cooling",
+        "Mune's core is losing heat, weakening the crust and slowing "
+        "the planet's rotation.",
+        "Reheat the core with a geothermal stimulator.",
+        evidence_combinations=(("TEMPERATURE", "ULTRASOUND"),),
+        rejection_reason=(
+            "Surface and core temperatures are both normal, ruling out "
+            "core cooling."
+        ),
+        rejection_tests=("TEMPERATURE",),
+    ),
+    "atmospheric_leak": Diagnosis(
+        "Atmospheric Leak",
+        "Mune's thin atmosphere is leaking into space, leaving the surface "
+        "weak and cold.",
+        "Seal the leak and re-pressurize the atmosphere.",
+        evidence_combinations=(("OXYGEN SCAN", "TEMPERATURE"),),
+        rejection_reason=(
+            "Atmospheric pressure is stable. There is no large leak, only a "
+            "faint hiss from the drilled channels."
+        ),
+        rejection_tests=("OXYGEN SCAN",),
+    ),
+    "tidal_strain_fatigue": Diagnosis(
+        "Tidal Strain Fatigue",
+        "Constant tides from a larger world have worn Mune's crust thin "
+        "and brittle.",
+        "Reduce tidal stress with a gravity-stabilizing satellite.",
+        evidence_combinations=(("ULTRASOUND", "NEURAL SCAN"),),
+        rejection_reason=(
+            "Sonar shows no tidal stress fractures. The damage is hollow "
+            "space, not strain."
+        ),
+        rejection_tests=("ULTRASOUND",),
+    ),
+}
+
+RAMDOLE_DIAGNOSES = {
+    "nebula_nod_overdose": Diagnosis(
+        "Nebula Nod Overdose",
+        "A dangerous overdose of Nebula Nod, a banned sedative, is "
+        "suppressing the patient's breathing and heart rate.",
+        "Give a sedative-reversal agent, support his breathing, and monitor "
+        "until he is alert. Then have a serious talk about his snacks.",
+        evidence_combinations=(("TOXIN SCREEN",), ("BLOOD CHEMISTRY",)),
+    ),
+    "heat_stroke": Diagnosis(
+        "Heat Stroke",
+        "Overheating has left the patient dazed, slow, and relaxed.",
+        "Cool the patient gradually and rehydrate with Orbulan-safe fluids.",
+        evidence_combinations=(("TEMPERATURE", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "His temperature is low, not high, which rules out heat stroke."
+        ),
+        rejection_tests=("TEMPERATURE",),
+    ),
+    "respiratory_failure": Diagnosis(
+        "Respiratory Failure",
+        "The lungs are failing to move enough air, leaving the patient "
+        "drowsy and slow.",
+        "Provide ventilator support and treat the lungs.",
+        evidence_combinations=(("OXYGEN SCAN", "X-RAY"),),
+        rejection_reason=(
+            "His lungs are healthy. The slowed breathing comes from "
+            "sedation, not lung failure."
+        ),
+        rejection_tests=("OXYGEN SCAN",),
+    ),
+    "food_poisoning": Diagnosis(
+        "Food Poisoning",
+        "Spoiled snacks are poisoning the patient and making him woozy.",
+        "Flush the stomach and give anti-nausea support.",
+        evidence_combinations=(("TOXIN SCREEN", "TEMPERATURE"),),
+        rejection_reason=(
+            "The Toxin Screen found no bacteria or food toxins, only a "
+            "banned sedative."
+        ),
+        rejection_tests=("TOXIN SCREEN",),
+    ),
+    "sudden_sleep_syndrome": Diagnosis(
+        "Sudden Sleep Syndrome",
+        "A sleep disorder is repeatedly switching off the patient's "
+        "waking brain.",
+        "Prescribe a wake-cycle regulator and a strict nap schedule.",
+        evidence_combinations=(("NEURAL SCAN", "OXYGEN SCAN"),),
+        rejection_reason=(
+            "The Neural Scan shows no sleep-disorder patterns. His brain is "
+            "sedated, not sleep-disordered."
+        ),
+        rejection_tests=("NEURAL SCAN",),
+    ),
+}
+
+DEBORAH_DIAGNOSES = {
+    "traumatic_bilateral_foot_amputation": Diagnosis(
+        "Traumatic Bilateral Foot Amputation",
+        "Both feet were severed cleanly at the ankles by a sudden injury and "
+        "are no longer attached to the body.",
+        "Clean and stabilize both ankles, reattach with sterile stitches, and "
+        "give a long, supportive rest. Pair with excellent shoes.",
+        evidence_combinations=(("X-RAY",), ("BLOOD CHEMISTRY",)),
+    ),
+    "severe_frostbite": Diagnosis(
+        "Severe Frostbite",
+        "Freezing exposure has killed the tissue in both feet.",
+        "Rewarm gradually and treat the damaged tissue.",
+        evidence_combinations=(("TEMPERATURE", "ULTRASOUND"),),
+        rejection_reason=(
+            "Her temperature is cool but far above freezing, and the skin "
+            "shows no frost damage."
+        ),
+        rejection_tests=("TEMPERATURE",),
+    ),
+    "compound_ankle_fracture": Diagnosis(
+        "Compound Ankle Fracture",
+        "Both ankle bones are broken and have torn through the skin.",
+        "Set the bones and immobilize both ankles in a cast.",
+        evidence_combinations=(("X-RAY", "ULTRASOUND"),),
+        rejection_reason=(
+            "X-ray shows clean cuts at the ankles, not breaks. The bones "
+            "are not fractured."
+        ),
+        rejection_tests=("X-RAY",),
+    ),
+    "athletes_foot_infection": Diagnosis(
+        "Athlete's Foot Infection",
+        "A stubborn fungus is attacking the skin and causing pain.",
+        "Apply an antifungal cream and keep the feet dry.",
+        evidence_combinations=(("TOXIN SCREEN", "ALLERGY"),),
+        rejection_reason=(
+            "The Toxin Screen found no fungus or infection, only very "
+            "expensive foot powder."
+        ),
+        rejection_tests=("TOXIN SCREEN",),
+    ),
+    "circulatory_collapse": Diagnosis(
+        "Circulatory Collapse",
+        "Blood flow has failed throughout the body, starving the limbs.",
+        "Restore circulation with fluids and a heart stimulant.",
+        evidence_combinations=(("OXYGEN SCAN", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "Oxygen delivery is normal in the feet. The blood loss comes "
+            "from the ankles alone."
+        ),
+        rejection_tests=("OXYGEN SCAN",),
+    ),
+}
+
+PUTER_DIAGNOSES = {
+    "computer_virus_infection": Diagnosis(
+        "Computer Virus Infection",
+        "A self-copying malicious program is hijacking the patient's "
+        "processor, memory, and homepage.",
+        "Quarantine the infected memory, run a full antivirus purge, and "
+        "restore from a clean backup. Never click 'FREE RAM' again.",
+        evidence_combinations=(("VIRUS SCAN", "SYSTEM LOG"),),
+    ),
+    "cooling_fan_failure": Diagnosis(
+        "Cooling-Fan Failure",
+        "The cooling fans have failed, and the processor is overheating "
+        "and slowing down.",
+        "Replace the fans and re-seat the heat sink.",
+        evidence_combinations=(("TEMPERATURE", "ULTRASOUND"),),
+        rejection_reason=(
+            "Ultrasound shows every fan and pump spinning smoothly. The heat "
+            "is coming from the processor, not the cooling."
+        ),
+        rejection_tests=("ULTRASOUND",),
+    ),
+    "storage_drive_corruption": Diagnosis(
+        "Storage-Drive Corruption",
+        "Physical damage to the storage drive is scrambling files and "
+        "slowing the system.",
+        "Replace the drive and restore from backup.",
+        evidence_combinations=(("X-RAY", "SYSTEM LOG"),),
+        rejection_reason=(
+            "X-ray shows the drive and every chip physically intact, with "
+            "no cracks or burned traces."
+        ),
+        rejection_tests=("X-RAY",),
+    ),
+    "dust_clog": Diagnosis(
+        "Dust Clog",
+        "Packed dust is blocking airflow, trapping heat inside the case.",
+        "Vacuum the filters and clear the vents.",
+        evidence_combinations=(("OXYGEN SCAN", "TEMPERATURE"),),
+        rejection_reason=(
+            "Airflow is strong and unobstructed, and the dust filters are "
+            "clean."
+        ),
+        rejection_tests=("OXYGEN SCAN",),
+    ),
+    "battery_degradation": Diagnosis(
+        "Battery Degradation",
+        "Worn power cells are delivering unstable power and causing "
+        "random reboots.",
+        "Replace the battery cells and recalibrate power delivery.",
+        evidence_combinations=(("BLOOD CHEMISTRY", "SYSTEM LOG"),),
+        rejection_reason=(
+            "Power chemistry is normal and every battery cell is healthy."
+        ),
+        rejection_tests=("BLOOD CHEMISTRY",),
+    ),
+}
+
+MYCICLE_DIAGNOSES = {
+    "bicycle_ingestion": Diagnosis(
+        "Bicycle Ingestion",
+        "A full-size bicycle was swallowed whole and is lodged inside the "
+        "patient's gel body.",
+        "Coax the bicycle out with a lubricating rinse and a very large "
+        "ramp. Recommend smaller snacks.",
+        evidence_combinations=(("X-RAY",), ("ULTRASOUND",)),
+    ),
+    "rust_poisoning": Diagnosis(
+        "Rust Poisoning",
+        "Metal particles are leaching into the patient's body and "
+        "poisoning the jelly.",
+        "Filter the gel with a chelating rinse and monitor metal levels.",
+        evidence_combinations=(("TOXIN SCREEN", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "The Toxin Screen found rust traces, but at levels far too low "
+            "to poison anyone."
+        ),
+        rejection_tests=("TOXIN SCREEN",),
+    ),
+    "jelly_tumor": Diagnosis(
+        "Jelly Tumor",
+        "A growth inside the gel is pressing on the patient's body.",
+        "Surgically remove the growth and monitor regrowth.",
+        evidence_combinations=(("ULTRASOUND", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "Ultrasound shows a rigid object rattling freely through the "
+            "jelly, not a growth attached to anything."
+        ),
+        rejection_tests=("ULTRASOUND",),
+    ),
+    "gas_buildup": Diagnosis(
+        "Gas Buildup",
+        "Trapped gas is stretching the gel body and causing painful bloating.",
+        "Release the gas and prescribe a gentle digestive tonic.",
+        evidence_combinations=(("OXYGEN SCAN", "ULTRASOUND"),),
+        rejection_reason=(
+            "The Oxygen Scan found no trapped gas. The bulge is a solid "
+            "object."
+        ),
+        rejection_tests=("OXYGEN SCAN",),
+    ),
+    "metal_allergy": Diagnosis(
+        "Metal Allergy",
+        "The patient's gel is reacting to metal and rubber, causing swelling "
+        "and discomfort.",
+        "Remove the allergen and begin an antihistamine rinse.",
+        evidence_combinations=(("ALLERGY", "BLOOD CHEMISTRY"),),
+        rejection_reason=(
+            "Allergy screening shows no immune response to metal or rubber."
+        ),
+        rejection_tests=("ALLERGY",),
+    ),
+}

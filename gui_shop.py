@@ -14,7 +14,6 @@ from Player import (
     MIN_TEST_OPERATING_COST,
     NO_EVIDENCE_REWARD,
     PERFECT_DAY_BONUS,
-    WRONG_DIAGNOSIS_PENALTY,
 )
 from Test import get_test_cost as get_base_test_cost
 
@@ -178,13 +177,14 @@ class ShopMixin:
 
         if self.daily_payout_applied:
             return self.player.balance
-        penalties = self.daily_wrong_diagnoses * WRONG_DIAGNOSIS_PENALTY
+        penalties = self.daily_wrong_diagnoses * self.get_wrong_diagnosis_penalty()
         return (
             self.player.balance
             - self.daily_test_expenses
             - self.daily_draw_expenses
             - self.daily_card_shop_expenses
             - penalties
+            + self.daily_recycle_refunds
         )
 
     def get_displayed_balance(self):
@@ -216,6 +216,21 @@ class ShopMixin:
             "started_at": pygame.time.get_ticks(),
         }
 
+    def start_live_money_credit(self, amount, reason):
+        """Animate an immediate refund; call after the ledger already holds it."""
+
+        if amount <= 0:
+            return
+        live_balance = self.get_live_balance()
+        self.money_deduction_animation = {
+            "from": min(self.get_displayed_balance(), live_balance - amount),
+            "to": live_balance,
+            "amount": amount,
+            "reason": reason,
+            "credit": True,
+            "started_at": pygame.time.get_ticks(),
+        }
+
     def draw_money_deduction_popup(self, center):
         """Float a short red cost label beside the current balance display."""
 
@@ -228,14 +243,17 @@ class ShopMixin:
         progress = max(0.0, min(1.0, elapsed / self.money_popup_duration))
         rise = round(15 * progress)
         alpha = 255 if progress < 0.62 else round(255 * (1 - progress) / 0.38)
+        credit = animation.get("credit", False)
         label = self.card_font.render(
-            f"-${animation['amount']}  {animation['reason']}",
+            f"{'+' if credit else '-'}${animation['amount']}  {animation['reason']}",
             True,
-            (255, 139, 126),
+            (126, 240, 160) if credit else (255, 139, 126),
         )
+        fill = (17, 46, 28, 232) if credit else (49, 19, 27, 232)
+        edge = (88, 214, 128, 245) if credit else (232, 98, 91, 245)
         panel = pygame.Surface((label.get_width() + 18, label.get_height() + 10), pygame.SRCALPHA)
-        pygame.draw.rect(panel, (49, 19, 27, 232), panel.get_rect(), border_radius=7)
-        pygame.draw.rect(panel, (232, 98, 91, 245), panel.get_rect(), width=1, border_radius=7)
+        pygame.draw.rect(panel, fill, panel.get_rect(), border_radius=7)
+        pygame.draw.rect(panel, edge, panel.get_rect(), width=1, border_radius=7)
         panel.blit(label, (9, 5))
         panel.set_alpha(alpha)
         self.screen.blit(panel, panel.get_rect(center=(center[0], center[1] - rise)))
@@ -547,6 +565,7 @@ class ShopMixin:
             self.daily_test_expenses
             + self.daily_draw_expenses
             + self.daily_card_shop_expenses
+            - self.daily_recycle_refunds
         )
         mistake_label = (
             "WRONG DIAGNOSIS"
@@ -572,7 +591,7 @@ class ShopMixin:
             ),
             (
                 "DIAGNOSIS PENALTIES",
-                f"{self.daily_wrong_diagnoses} {mistake_label.lower()} × ${WRONG_DIAGNOSIS_PENALTY}",
+                f"{self.daily_wrong_diagnoses} {mistake_label.lower()} × ${self.get_wrong_diagnosis_penalty()}",
                 f"-${penalties}",
                 (245, 130, 115),
             ),
@@ -801,7 +820,7 @@ class ShopMixin:
             + partial_cases * self.scale_case_reward(LIMITED_EVIDENCE_REWARD)
             + no_evidence_cases * self.scale_case_reward(NO_EVIDENCE_REWARD)
         )
-        penalties = self.daily_wrong_diagnoses * WRONG_DIAGNOSIS_PENALTY
+        penalties = self.daily_wrong_diagnoses * self.get_wrong_diagnosis_penalty()
         perfect_day = (
             self.daily_correct_diagnoses == len(self.waiting_room_queue)
             and self.daily_wrong_diagnoses == 0
@@ -814,6 +833,7 @@ class ShopMixin:
             - self.daily_test_expenses
             - self.daily_draw_expenses
             - self.daily_card_shop_expenses
+            + self.daily_recycle_refunds
             - self.get_operating_fee()
             + bonus
         )

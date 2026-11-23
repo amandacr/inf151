@@ -17,6 +17,8 @@ CARD_SHOP_PURPOSES = {
     "TOXIN SCREEN": "Screens fluids and residue for harmful compounds.",
     "ALLERGY": "Detects immune reactions and their severity.",
     "NEURAL SCAN": "Maps nerve signals, senses, and motor control.",
+    "VIRUS SCAN": "Hunts malicious programs hiding in a computer patient.",
+    "SYSTEM LOG": "Reads a computer patient's history of recent changes.",
 }
 
 

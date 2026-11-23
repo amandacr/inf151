@@ -7,14 +7,22 @@ from typing import Callable, Optional
 from Patient import Patient
 from PatientData import (
     create_conmann,
+    create_deborah,
     create_dooski,
     create_flersch,
     create_flump,
+    create_gremolda,
     create_gribble,
     create_krix,
+    create_mune,
+    create_mycicle,
     create_oola,
+    create_puter,
+    create_ramdole,
     create_roldi,
+    create_snelly,
     create_titus,
+    create_urnblod,
     create_velli,
     create_zoogy,
     create_zorpa,
@@ -243,6 +251,73 @@ LUMORA_PATIENTS = (
 )
 
 
+# Blackglass Outpost's eight patients: shift 1 uses the first four, shift 2 the
+# last four. Final art lives at assets/patients/<asset>.png (an optional
+# <asset>_interview.png is used in the exam bay); until a PNG exists the
+# loader draws a clearly marked placeholder.
+BLACKGLASS_DAY_ONE_PATIENTS = (
+    PatientSlot(
+        "snelly",
+        create_snelly,
+        "SLG-117-SG",
+        ((232, 214, 190), (92, 62, 40), (158, 112, 72), (212, 170, 118)),
+        1.0,
+    ),
+    PatientSlot(
+        "gremolda",
+        create_gremolda,
+        "ZEN-000-GS",
+        ((233, 226, 246), (96, 70, 140), (160, 130, 210), (214, 196, 245)),
+        1.0,
+    ),
+    PatientSlot(
+        "urnblod",
+        create_urnblod,
+        "WHL-300-UV",
+        ((222, 236, 248), (46, 70, 120), (96, 140, 206), (176, 210, 245)),
+        1.0,
+    ),
+    PatientSlot(
+        "mune",
+        create_mune,
+        "MUN-001-MN",
+        ((224, 224, 232), (70, 70, 96), (130, 130, 168), (190, 190, 222)),
+        0.95,
+    ),
+)
+
+BLACKGLASS_DAY_TWO_PATIENTS = (
+    PatientSlot(
+        "ramdole",
+        create_ramdole,
+        "RND-042-RM",
+        ((246, 226, 200), (140, 70, 40), (222, 130, 80), (248, 188, 130)),
+        1.1,
+    ),
+    PatientSlot(
+        "deborah",
+        create_deborah,
+        "PDL-002-DB",
+        ((246, 218, 214), (150, 60, 64), (226, 120, 120), (248, 176, 170)),
+        0.9,
+    ),
+    PatientSlot(
+        "puter",
+        create_puter,
+        "PUT-3R-0X",
+        ((208, 238, 228), (30, 80, 70), (72, 168, 140), (140, 235, 200)),
+        1.0,
+    ),
+    PatientSlot(
+        "mycicle",
+        create_mycicle,
+        "JEL-010-MC",
+        ((214, 240, 244), (30, 100, 120), (80, 190, 210), (150, 226, 240)),
+        1.12,
+    ),
+)
+
+
 DESTINATIONS = (
     Destination(
         key="training_orbit",
@@ -441,11 +516,11 @@ BLACKGLASS_MAP_DESTINATION = MapDestination(
             "A polluted industrial outpost offering transportation in "
             "exchange for emergency medical labor."
         ),
-        # The outpost is playable through its temporary roster hook, but its
-        # final contributed patient content has not landed yet.
+        # Blackglass is fully playable: eight patients across two shifts
+        # (BLACKGLASS_DAY_ONE_PATIENTS / BLACKGLASS_DAY_TWO_PATIENTS).
         has_patients=True,
         destination_type=DestinationType.BLACKGLASS,
-        content_ready=False,
+        content_ready=True,
     ),
 )
 
@@ -484,8 +559,10 @@ BLACKGLASS_DESTINATION = Destination(
         "Blackglass has no appointment system. Whoever is still breathing "
         "is your next patient."
     ),
-    # Temporary roster hook until the Blackglass patient contribution lands.
-    patient_roster=DAY_TWO_PATIENTS,
+    # Shift 1 patients; shift 2 patients live in ``additional_population`` and
+    # are swapped in by ``get_blackglass_destination``.
+    patient_roster=BLACKGLASS_DAY_ONE_PATIENTS,
+    additional_population=BLACKGLASS_DAY_TWO_PATIENTS,
     theme=BLACKGLASS_THEME,
     map_data=BLACKGLASS_MAP_DESTINATION.map_data,
     ambience="blackglass_industrial",
@@ -496,7 +573,9 @@ BLACKGLASS_DESTINATION = Destination(
         ("reward_multiplier", 0.5),         # case pay and bonus are halved
         ("operating_fee_multiplier", 0.0),  # no rent on a condemned outpost
         ("debt_limit", -1000.0),            # optional spending is never blocked
-        ("patient_rudeness", 1.0),          # interview lines get a rude pass
+        ("patient_rudeness", 1.0),          # generic rude pass (bespoke voices opt out)
+        ("wrong_diagnosis_penalty_multiplier", 0.0),  # wrong calls cost nothing
+        ("recycle_refund", 1.0),            # trashing a test card refunds one draw
     ),
 )
 
@@ -522,9 +601,9 @@ def get_blackglass_destination(day_number=1):
     """Return Blackglass with the four patients assigned to detour day N."""
 
     population = BLACKGLASS_DESTINATION.alien_population
-    # Repeat contracts rotate the waiting order, so a second outpost shift
-    # does not feel like an exact replay even with the fixed four-patient pool.
-    offset = ((day_number - 1) * 2) % len(population)
+    # Shift 1 uses the first four patients, shift 2 the next four, and any
+    # further shift wraps around the eight-patient pool.
+    offset = ((day_number - 1) * 4) % len(population)
     rotated = population[offset:] + population[:offset]
     return replace(BLACKGLASS_DESTINATION, patient_roster=rotated[:4])
 

@@ -11,6 +11,47 @@ from PlanetData import get_destination
 
 SHIFT_CHAIR_POSITIONS = (782, 640, 498, 356)
 
+# Blackglass patients: (bob pixels, bob period ms, sway degrees, sway period ms,
+# lift pixels above the chair). Gremolda levitates; Mune wobbles in orbit;
+# Mycicle jiggles; Deborah's toes tap; Puter glitches (handled separately).
+BLACKGLASS_IDLE_MOTION = {
+    "snelly": (1.0, 800, 0.6, 1400, 0),
+    "gremolda": (3.0, 700, 0.8, 1300, 14),
+    "urnblod": (0.8, 600, 0.9, 1000, 0),
+    "mune": (2.0, 900, 4.0, 1700, 6),
+    "ramdole": (1.0, 900, 2.2, 1500, 0),
+    "deborah": (1.5, 240, 0.0, 1000, 0),
+    "puter": (0.0, 1000, 0.0, 1000, 0),
+    "mycicle": (2.0, 480, 1.6, 700, 0),
+}
+
+# Temporary placeholder tints until each final PNG is added.
+BLACKGLASS_PLACEHOLDER_ACCENTS = {
+    "snelly": (158, 112, 72),
+    "gremolda": (160, 130, 210),
+    "urnblod": (96, 140, 206),
+    "mune": (130, 130, 168),
+    "ramdole": (222, 130, 80),
+    "deborah": (226, 120, 120),
+    "puter": (72, 168, 140),
+    "mycicle": (80, 190, 210),
+}
+
+
+def blackglass_idle(name, idle_time):
+    """Return (bob, sway_degrees, lift) for a Blackglass patient, else None."""
+
+    motion = BLACKGLASS_IDLE_MOTION.get(name)
+    if motion is None:
+        return None
+    bob_amp, bob_period, sway_amp, sway_period, lift = motion
+    bob = round(math.sin(idle_time / bob_period) * bob_amp) - lift
+    sway = math.sin(idle_time / sway_period) * sway_amp
+    if name == "puter":
+        # Brief screen-glitch twitch every couple of seconds.
+        sway = 1.6 if (idle_time // 140) % 19 == 0 else 0.0
+    return bob, sway, lift
+
 # Lumora's painted sprites contain more fine linework and gradient shading than
 # the earlier pixel-art patients.  A two-step downscale preserves that detail
 # when the fixed game canvas presents them at examination-bay size.
@@ -89,6 +130,16 @@ class PatientAssetMixin:
             self.patient_sprite_cache[source_key] = source
         return self.patient_sprite_cache[source_key]
 
+    def patient_has_interview_asset(self, name):
+        """Return whether ``<name>_interview.png`` exists (cached)."""
+
+        key = (name, "has-interview")
+        if key not in self.patient_sprite_cache:
+            self.patient_sprite_cache[key] = (
+                Path(__file__).parent / "assets" / "patients" / f"{name}_interview.png"
+            ).is_file()
+        return self.patient_sprite_cache[key]
+
     def build_pending_patient_source(self, name):
         """Return unmistakable temporary art for a configured patient asset.
 
@@ -102,6 +153,7 @@ class PatientAssetMixin:
             "oola": (81, 178, 174),
             "krix": (225, 151, 70),
         }
+        accent_by_name.update(BLACKGLASS_PLACEHOLDER_ACCENTS)
         accent = accent_by_name.get(name, (150, 150, 170))
         outline = (48, 24, 63)
         highlight = tuple(min(255, component + 58) for component in accent)
@@ -388,10 +440,16 @@ class PatientAssetMixin:
             # Krix's heavier lantern shell stays grounded with a slower pulse.
             idle_bob = round(math.sin(idle_time / 760) * 1.0)
             idle_sway = math.sin(idle_time / 1180) * 0.45
-        shadow_width = round(width * 0.68)
+        lift = 0
+        blackglass_motion = blackglass_idle(name, idle_time)
+        if blackglass_motion is not None:
+            idle_bob, idle_sway, lift = blackglass_motion
+        # A levitating patient casts a smaller, fainter shadow on the floor.
+        shadow_width = round(width * (0.68 - 0.012 * lift))
+        shadow_color = (35, 27, 44) if lift == 0 else (52, 38, 40)
         pygame.draw.ellipse(
             self.screen,
-            (35, 27, 44),
+            shadow_color,
             pygame.Rect(x - shadow_width // 2, bottom - 8, shadow_width, 11),
         )
         self.fit_patient_sprite(
@@ -448,12 +506,19 @@ class PatientAssetMixin:
             # Krix's pointed seed-cone crown uses the same lower stage anchor
             # as Oola so the readable-scale sprite stays inside the bay frame.
             stage_offset_y = 11
+        lift = 0
+        blackglass_motion = blackglass_idle(name, idle_time)
+        if blackglass_motion is not None:
+            idle_bob, idle_sway, lift = blackglass_motion
+            # Use an expression-specific PNG only when the artist supplied one.
+            if self.patient_has_interview_asset(name):
+                expression = "interview"
         detailed_asset = name in HIGH_DETAIL_PATIENT_ASSETS
         bounds = pygame.Rect(
             0,
             0,
             112 if detailed_asset else 100,
-            bay.height - (24 if detailed_asset else 32),
+            bay.height - (24 if detailed_asset else 32) - lift,
         )
         bounds.midbottom = (
             center_x + shake_x - (6 if detailed_asset else 0),

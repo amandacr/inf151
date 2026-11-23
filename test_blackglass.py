@@ -16,6 +16,7 @@ from PlanetData import (
     validate_blackglass_destination,
 )
 from Player import (
+    BLACKGLASS_CONTRACT_PAYOUT,
     BLACKGLASS_DEBT_THRESHOLD,
     BLACKGLASS_MAX_DAYS,
     DEBT_LIMIT,
@@ -140,11 +141,18 @@ class BlackglassFlowTests(unittest.TestCase):
         game = self.game
         self.assertEqual(game.get_destination_modifier("patient_leave_chance", 1.0), 0.0)
 
-    def test_blackglass_patients_are_rude(self):
+    def test_generic_rudeness_pass_skips_bespoke_voices(self):
+        from PatientData import create_flersch, create_snelly
+
         self.enter_blackglass()
+        # Generic patients are rewritten rudely at Blackglass...
+        rude = self.game.apply_patient_rudeness(create_flersch())
         self.assertTrue(
-            any(line.startswith(("Ugh.", "Tch.", "Hurry up")) for line in self.game.patient.dialogue)
+            any(line.startswith(("Ugh.", "Tch.", "Hurry up")) for line in rude.dialogue)
         )
+        # ...but characters with their own voice keep it.
+        snelly = self.game.apply_patient_rudeness(create_snelly())
+        self.assertEqual(snelly.dialogue, create_snelly().dialogue)
 
     def test_normal_planets_keep_normal_prices(self):
         game = self.game
@@ -159,16 +167,16 @@ class BlackglassFlowTests(unittest.TestCase):
     def test_clearing_debt_on_day_one_preserves_earned_balance(self):
         self.enter_blackglass()
         self.game.player.balance = -10
-        self.finish_shift(correct=2, evidence=2)  # +50 -> $40
+        self.finish_shift(correct=2, evidence=2)  # +50 -> $40, +$100 contract pay
         game = self.game
         self.assertEqual(game.state, GameState.BLACKGLASS_BOSS)
         self.assertEqual(game.blackglass_boss_action, "return")
         self.finish_dialogue()
         self.assertEqual(game.state, GameState.SHOP)
         self.assertIsNone(game.blackglass_detour)
-        self.assertEqual(game.player.balance, 40)
+        self.assertEqual(game.player.balance, 40 + BLACKGLASS_CONTRACT_PAYOUT)
         self.assertEqual(game.current_destination.key, DESTINATIONS[0].key)
-        self.assertEqual(game.route.available_credits, 40)
+        self.assertEqual(game.route.available_credits, 40 + BLACKGLASS_CONTRACT_PAYOUT)
 
     def test_still_in_debt_after_day_one_continues_to_day_two(self):
         self.enter_blackglass()
@@ -196,7 +204,7 @@ class BlackglassFlowTests(unittest.TestCase):
         self.finish_dialogue()
         self.assertEqual(game.state, GameState.SHOP)
         self.assertIsNone(game.blackglass_detour)
-        self.assertEqual(game.player.balance, 0)
+        self.assertEqual(game.player.balance, BLACKGLASS_CONTRACT_PAYOUT)
         self.assertEqual(game.current_destination.key, DESTINATIONS[0].key)
 
     def test_clearing_debt_on_day_two_also_returns(self):
@@ -207,7 +215,40 @@ class BlackglassFlowTests(unittest.TestCase):
         self.finish_shift(correct=1, evidence=1)
         self.assertIn("Debt cleared", " ".join(l for _, l in self.game.blackglass_boss_lines))
         self.finish_dialogue()
-        self.assertEqual(self.game.player.balance, 20)
+        self.assertEqual(self.game.player.balance, 20 + BLACKGLASS_CONTRACT_PAYOUT)
+
+    def test_debt_contract_always_affords_the_next_ticket(self):
+        from PlanetData import TRISKA_TICKET_COST
+
+        self.enter_blackglass()
+        self.game.player.balance = -900  # a disastrous stint
+        for _ in range(BLACKGLASS_MAX_DAYS):
+            self.finish_shift()
+            self.finish_dialogue()
+        self.assertIsNone(self.game.blackglass_detour)
+        self.assertGreaterEqual(self.game.player.balance, TRISKA_TICKET_COST)
+
+    def test_wrong_diagnosis_is_free_at_blackglass(self):
+        self.assertGreater(self.game.get_wrong_diagnosis_penalty(), 0)
+        self.enter_blackglass()
+        game = self.game
+        self.assertEqual(game.get_wrong_diagnosis_penalty(), 0)
+        before = game.get_live_balance()
+        game.daily_wrong_diagnoses = 3
+        self.assertEqual(game.get_live_balance(), before)
+        self.assertEqual(game.get_daily_pay_breakdown()[1], 0)
+
+    def test_recycling_a_test_card_refunds_one_draw(self):
+        game = self.game
+        self.assertEqual(game.get_recycle_refund(), 0)  # med-waste on planets
+        self.enter_blackglass()
+        game.state = GameState.PATIENT
+        game.showing_diagnosis_hand = False
+        game.selected_card_index = 0
+        before = game.get_live_balance()
+        self.assertTrue(game.discard_selected_test())
+        self.assertEqual(game.get_live_balance(), before + game.get_random_draw_cost())
+        self.assertEqual(game.daily_recycle_refunds, 1)
 
     def test_never_more_than_two_blackglass_shifts(self):
         self.enter_blackglass()

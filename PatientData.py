@@ -1,13 +1,21 @@
 """Patient records used by The Cosmic Clinic GUI."""
 
 from Diagnosis import (
+    DEBORAH_DIAGNOSES,
     DIAGNOSES,
     DOOSKI_DIAGNOSES,
     FLUMP_DIAGNOSES,
+    GREMOLDA_DIAGNOSES,
     GRIBBLE_DIAGNOSES,
     KRIX_DIAGNOSES,
+    MUNE_DIAGNOSES,
+    MYCICLE_DIAGNOSES,
     OOLA_DIAGNOSES,
+    PUTER_DIAGNOSES,
+    RAMDOLE_DIAGNOSES,
     ROLDI_DIAGNOSES,
+    SNELLY_DIAGNOSES,
+    URNBLOD_DIAGNOSES,
     VELLI_DIAGNOSES,
 )
 from Patient import Patient
@@ -618,3 +626,590 @@ def create_krix():
             KRIX_DIAGNOSES["thermal_blood_separation"],
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Blackglass Outpost patients.  Every voice is written in character, so each
+# one is flagged ``bespoke_voice`` and skips the generic rudeness pass.
+# ---------------------------------------------------------------------------
+
+def create_snelly():
+    """Create Snelly's Blackglass influenza case (the cracked shell is a decoy)."""
+
+    return Patient(
+        "Snelly Gumshoe",
+        None,
+        None,
+        "bloodshot eyes, runny nose, sneezing, body aches",
+        SNELLY_DIAGNOSES["gastropod_influenza"],
+        {
+            "TEMPERATURE": (
+                "Current temperature: 103°F, far above the normal "
+                "Gastropodan range of 68°F."
+            ),
+            "X-RAY": (
+                "The shell crack is old and fully healed, with no infection or "
+                "fluid behind it. The body and lung are clear."
+            ),
+            "ULTRASOUND": (
+                "Heart and organs look normal. The mucus glands are swollen "
+                "but open, with no blockage."
+            ),
+            "ALLERGY": (
+                "No reaction to dust, pollen, or salt samples. His sneezing "
+                "is not allergic."
+            ),
+            "BLOOD CHEMISTRY": (
+                "White-cell count is elevated and the sample shows an active "
+                "viral load. No bacterial markers were detected."
+            ),
+            "OXYGEN SCAN": (
+                "The single lung is congested but exchanging oxygen normally, "
+                "with no scarring from smoke."
+            ),
+            "TOXIN SCREEN": (
+                "Heavy smoke residue, as expected, but no salt, poisons, or "
+                "irritants capable of causing these symptoms."
+            ),
+            "NEURAL SCAN": (
+                "Reflexes are normal. The patient's expression is sharp and "
+                "unimpressed."
+            ),
+        },
+        profile={
+            "Species": "Gastropodan",
+            "Occupation": "Retired Detective",
+            "Home Planet": "Blackglass",
+        },
+        medical_info={
+            "Circulation": "1 heart; clear blue hemolymph",
+            "Respiration": "Single mucus-lined lung",
+            "Shell": "Old crack, healed (prior case)",
+            "Normal temperature": "68°F",
+            "Medical alert": "Heavy smoker; salt is dangerous",
+        },
+        dialogue=(
+            "Name's Snelly. Ex-detective. I'd offer you a smoke, but you'd snitch.",
+            "Eyes burn, nose won't quit. Haven't felt this rotten since the Dockside case.",
+            "Shell crack? Old case, old news. I'm here because I can't stop sneezing.",
+        ),
+        diagnosis_options=(
+            SNELLY_DIAGNOSES["shell_crack_infection"],
+            SNELLY_DIAGNOSES["chronic_smokers_lung"],
+            SNELLY_DIAGNOSES["gastropod_influenza"],
+            SNELLY_DIAGNOSES["salt_contamination"],
+            SNELLY_DIAGNOSES["mucus_gland_blockage"],
+        ),
+        bespoke_voice=True,
+    )
+
+
+def create_gremolda():
+    """Create Gremolda's 'too enlightened' case."""
+
+    return Patient(
+        "Gremolda Stillwater",
+        None,
+        None,
+        "total calm, no reaction to pain or stress, hovering above her seat",
+        GREMOLDA_DIAGNOSES["too_enlightened"],
+        {
+            "TEMPERATURE": (
+                "Current temperature: 97°F, perfectly centered in the "
+                "normal Zenarian range."
+            ),
+            "X-RAY": (
+                "Spine and joints are intact, with no injury or nerve "
+                "compression. Her legs are crossed in a pose that should be "
+                "impossible."
+            ),
+            "ULTRASOUND": (
+                "Every organ is calm and relaxed. Heart rate: 31 beats per "
+                "minute, and not one of them is in a hurry."
+            ),
+            "ALLERGY": (
+                "No allergic reaction to any sample. The patient politely "
+                "declined to sneeze."
+            ),
+            "BLOOD CHEMISTRY": (
+                "Stress hormones are undetectable. Endorphin and serotonin "
+                "levels are extraordinarily high but entirely natural."
+            ),
+            "OXYGEN SCAN": (
+                "Breathing has slowed to two deep breaths per minute, but "
+                "oxygen saturation is excellent."
+            ),
+            "TOXIN SCREEN": (
+                "No sedatives, drugs, or foreign compounds. Only a trace of "
+                "herbal tea."
+            ),
+            "NEURAL SCAN": (
+                "Pain signals reach the brain at full strength and on time. "
+                "Her mind notices each one, thanks it, and lets it go."
+            ),
+        },
+        profile={
+            "Species": "Zenarian",
+            "Occupation": "Retreat Host",
+            "Home Planet": "Serenity Belt",
+        },
+        medical_info={
+            "Circulation": "1 slow, steady heart",
+            "Respiration": "Deep lungs; 2 breaths per minute",
+            "Mobility": "Floats while meditating",
+            "Normal temperature": "97°F",
+            "Medical alert": "Does not flinch at needles",
+        },
+        dialogue=(
+            "Good day, doctor. My friends say I have stopped flinching.",
+            "Yesterday I stubbed three toes. I thanked the table. I felt nothing at all.",
+            "Is it troubling that nothing has upset me in months? Namaste.",
+        ),
+        diagnosis_options=(
+            GREMOLDA_DIAGNOSES["congenital_pain_insensitivity"],
+            GREMOLDA_DIAGNOSES["meditation_hypoxia"],
+            GREMOLDA_DIAGNOSES["too_enlightened"],
+            GREMOLDA_DIAGNOSES["spinal_nerve_damage"],
+            GREMOLDA_DIAGNOSES["endorphin_overdose"],
+        ),
+        bespoke_voice=True,
+    )
+
+
+def create_urnblod():
+    """Create Urnblod's infection after an illegal wheel conversion."""
+
+    return Patient(
+        "Urnblod Vandermere III",
+        None,
+        None,
+        "swollen, weeping surgical sites around the axles, fever, chills",
+        URNBLOD_DIAGNOSES["post_surgical_wheel_infection"],
+        {
+            "TEMPERATURE": (
+                "Current temperature: 79°F, far above the normal Frostling "
+                "range of 41°F."
+            ),
+            "X-RAY": (
+                "Four metal axle mounts are bolted into the pelvis. The "
+                "tissue around each mount is swollen and fluid-filled. No "
+                "fractures."
+            ),
+            "ULTRASOUND": (
+                "Pockets of fluid surround the axle sites. The internal "
+                "organs are intact."
+            ),
+            "ALLERGY": (
+                "Mild reaction to the cheap rubber, but not enough to "
+                "explain the fever and swelling."
+            ),
+            "BLOOD CHEMISTRY": (
+                "Bacterial count is dangerously high and white cells are "
+                "flooding the system: an active bacterial infection."
+            ),
+            "OXYGEN SCAN": (
+                "Breathing is unaffected by the conversion. Oxygen "
+                "saturation is normal."
+            ),
+            "TOXIN SCREEN": (
+                "Tire sealant and cheap lubricant on the skin, but none in "
+                "the bloodstream."
+            ),
+            "NEURAL SCAN": (
+                "The nerves were crudely rewired to the wheel motors, but "
+                "signals arrive cleanly. No shorts or damage."
+            ),
+        },
+        profile={
+            "Species": "Frostling (modified)",
+            "Occupation": "Self-Appointed Aristocrat",
+            "Home Planet": "Glacia Prime",
+        },
+        medical_info={
+            "Surgery": "Full-body wheel conversion",
+            "Legal status": "ILLEGAL: Galactic Med. Code 9-B",
+            "Surgeon": "Unlicensed; paid in cash",
+            "Normal temperature": "41°F",
+            "Medical alert": "Banned from most hospitals",
+        },
+        dialogue=(
+            "Do hurry, doctor. My time and my chassis outrank yours.",
+            "Galactic General won't treat 'modified' patients. Their loss.",
+            "Legs for wheels: illegal? Ahead of its time. Now it's weeping.",
+        ),
+        diagnosis_options=(
+            URNBLOD_DIAGNOSES["axle_mount_fracture"],
+            URNBLOD_DIAGNOSES["rubber_lubricant_allergy"],
+            URNBLOD_DIAGNOSES["post_surgical_wheel_infection"],
+            URNBLOD_DIAGNOSES["tire_sealant_poisoning"],
+            URNBLOD_DIAGNOSES["motor_nerve_short_circuit"],
+        ),
+        bespoke_voice=True,
+    )
+
+
+def create_mune():
+    """Create Mune's tragic over-extraction case."""
+
+    return Patient(
+        "Mune",
+        None,
+        None,
+        "feeling hollow, weakening gravity, tiny tremors",
+        MUNE_DIAGNOSES["terminal_over_extraction"],
+        {
+            "TEMPERATURE": (
+                "Surface and core temperatures are both within the normal "
+                "dwarf-moon range."
+            ),
+            "X-RAY": (
+                "Thousands of narrow drilled channels run through the crust "
+                "and into the core. Most are empty, collapsed, or leaking."
+            ),
+            "ULTRASOUND": (
+                "Seismic sonar echoes off huge empty caverns where solid rock "
+                "should be. The structure is failing from the inside."
+            ),
+            "ALLERGY": (
+                "Mune is not reacting to anything. Mune politely thanks you "
+                "for checking."
+            ),
+            "BLOOD CHEMISTRY": (
+                "Core minerals are badly depleted, with traces of drilling "
+                "fluid throughout."
+            ),
+            "OXYGEN SCAN": (
+                "Atmospheric pressure is stable. There is no large leak, "
+                "only a faint hiss from the drilled channels."
+            ),
+            "TOXIN SCREEN": (
+                "Drilling-fluid residue is present: a sign of what was done "
+                "to Mune, not the cause of the collapse."
+            ),
+            "NEURAL SCAN": (
+                "Tidal responses are faint and slow. Mune's gravity is "
+                "growing weaker every day."
+            ),
+        },
+        profile={
+            "Species": "Dwarf Moon",
+            "Occupation": "Orbit Companion",
+            "Home Planet": "Kepra Orbit",
+        },
+        medical_info={
+            "Composition": "Rock crust; iron core",
+            "Atmosphere": "Thin; mostly nitrogen",
+            "Orbit": "Stable; 3-day loop",
+            "Normal temperature": "40°F",
+            "Medical alert": "Extremely sensitive to drilling",
+        },
+        dialogue=(
+            "Hello, doctor... I feel hollow lately. Like something's missing.",
+            "The drills were warm at first. Then they never stopped. I stopped counting.",
+            "Will it hurt? ...Could you stay with me? I don't like being alone.",
+        ),
+        diagnosis_options=(
+            MUNE_DIAGNOSES["meteor_impact_damage"],
+            MUNE_DIAGNOSES["core_cooling"],
+            MUNE_DIAGNOSES["terminal_over_extraction"],
+            MUNE_DIAGNOSES["atmospheric_leak"],
+            MUNE_DIAGNOSES["tidal_strain_fatigue"],
+        ),
+        bespoke_voice=True,
+    )
+
+
+def create_ramdole():
+    """Create Ramdole's overdose of a banned sedative."""
+
+    return Patient(
+        "Ramdole Mellowby",
+        None,
+        None,
+        "slow breathing, dazed smile, can barely stay upright",
+        RAMDOLE_DIAGNOSES["nebula_nod_overdose"],
+        {
+            "TEMPERATURE": (
+                "Current temperature: 94°F, below the normal Orbulan range. "
+                "He says it feels 'super chill.'"
+            ),
+            "X-RAY": (
+                "Skeleton and skull are normal. His smile, however, is "
+                "anatomically excessive."
+            ),
+            "ULTRASOUND": (
+                "His heart beats very slowly but steadily. No blockages or "
+                "structural problems."
+            ),
+            "ALLERGY": (
+                "No allergic reaction. He was too relaxed to flinch."
+            ),
+            "BLOOD CHEMISTRY": (
+                "The blood carries a dangerous concentration of a sedative "
+                "compound. Oxygen carriers are suppressed."
+            ),
+            "OXYGEN SCAN": (
+                "Breathing is slow and shallow, but the lungs are healthy. "
+                "The slowdown comes from the sedative."
+            ),
+            "TOXIN SCREEN": (
+                "Positive for Nebula Nod, a banned sedative illegal in most "
+                "systems. The dose is far above a safe amount."
+            ),
+            "NEURAL SCAN": (
+                "Brain activity is calm and slowed beneath a heavy blanket of "
+                "sedation. No tumors or seizures."
+            ),
+        },
+        profile={
+            "Species": "Orbulan",
+            "Occupation": "Freelance Loafer",
+            "Home Planet": "Blackglass",
+        },
+        medical_info={
+            "Circulation": "1 large, slow heart",
+            "Respiration": "Wide lungs; 4 breaths per minute",
+            "Vision": "Eyes shut; navigates by sound",
+            "Normal temperature": "98°F",
+            "Medical alert": "None on file (suspiciously)",
+        },
+        dialogue=(
+            "Heyyy doc... ooh, you're so shiny. Everything's cool, man. Totally cool.",
+            "Drugs? Naaah. Just... maybe three... normal space snacks.",
+            "You won't tell anyone about this... right? Heh. Heheh. Right?",
+        ),
+        diagnosis_options=(
+            RAMDOLE_DIAGNOSES["heat_stroke"],
+            RAMDOLE_DIAGNOSES["respiratory_failure"],
+            RAMDOLE_DIAGNOSES["nebula_nod_overdose"],
+            RAMDOLE_DIAGNOSES["food_poisoning"],
+            RAMDOLE_DIAGNOSES["sudden_sleep_syndrome"],
+        ),
+        bespoke_voice=True,
+    )
+
+
+def create_deborah():
+    """Create Deborah's case: a pair of feet that communicate by toe taps."""
+
+    return Patient(
+        "Deborah",
+        None,
+        None,
+        "two detached feet, bleeding ankles, communicates by tapping",
+        DEBORAH_DIAGNOSES["traumatic_bilateral_foot_amputation"],
+        {
+            "TEMPERATURE": (
+                "Current temperature: 91°F, cooler than normal. Circulation "
+                "is reduced because of the injuries."
+            ),
+            "X-RAY": (
+                "Both feet end in clean cuts at the ankle joints. Bone and "
+                "tissue are otherwise healthy. Nothing above the ankles is "
+                "present."
+            ),
+            "ULTRASOUND": (
+                "The blood vessels at both ankles are cleanly severed. The "
+                "insides of the feet are undamaged."
+            ),
+            "ALLERGY": (
+                "No reaction to the cleaning solution. The toes did curl "
+                "a little."
+            ),
+            "BLOOD CHEMISTRY": (
+                "Moderate blood loss from both ankles. Clotting is active "
+                "and the blood itself is healthy."
+            ),
+            "OXYGEN SCAN": (
+                "Oxygen reaches the skin normally. Only the tissue near the "
+                "cuts is running low."
+            ),
+            "TOXIN SCREEN": (
+                "No toxins, fungus, or infection. Only a trace of very "
+                "expensive foot powder."
+            ),
+            "NEURAL SCAN": (
+                "The feet respond to touch and can still tap with intent. "
+                "Nerve signals stop at the severed ankles."
+            ),
+        },
+        profile={
+            "Species": "Pedalian",
+            "Occupation": "Marathon Walker",
+            "Home Planet": "Blackglass",
+        },
+        medical_info={
+            "Anatomy": "Two feet; the rest is elsewhere",
+            "Communication": "Toe taps via translator",
+            "Circulation": "Local; no heart on site",
+            "Normal temperature": "98°F",
+            "Medical alert": "Cannot speak; ticklish",
+        },
+        dialogue=(
+            "*tap tap tap* TRANSLATION: Ow. Ow. Ow. Ow. Ow. Ow.",
+            "*points at ankles* TRANSLATION: Not attached to anything.",
+            "*one sad wiggle* TRANSLATION: Where is the rest of me?",
+        ),
+        diagnosis_options=(
+            DEBORAH_DIAGNOSES["severe_frostbite"],
+            DEBORAH_DIAGNOSES["compound_ankle_fracture"],
+            DEBORAH_DIAGNOSES["traumatic_bilateral_foot_amputation"],
+            DEBORAH_DIAGNOSES["athletes_foot_infection"],
+            DEBORAH_DIAGNOSES["circulatory_collapse"],
+        ),
+        speech_style="toe_tap",
+        bespoke_voice=True,
+    )
+
+
+def create_puter():
+    """Create Puter's computer-virus case, which uses two custom tests."""
+
+    return Patient(
+        "Puter",
+        None,
+        None,
+        "constant reboots, pop-ups, hijacked homepage, overheating",
+        PUTER_DIAGNOSES["computer_virus_infection"],
+        {
+            "TEMPERATURE": (
+                "CPU temperature: 191°F, far above the normal 122°F. Every "
+                "fan is running at full speed."
+            ),
+            "X-RAY": (
+                "Circuit boards, chips, and the storage drive are intact, "
+                "with no cracks, burned traces, or loose parts."
+            ),
+            "ULTRASOUND": (
+                "Every cooling fan and pump spins smoothly. No leaks or "
+                "clogs. The heat is coming from the processor itself."
+            ),
+            "ALLERGY": (
+                "No reaction to dust, coffee, or crumbs. The keyboard did "
+                "sneeze once."
+            ),
+            "BLOOD CHEMISTRY": (
+                "Coolant and power chemistry are normal, and every battery "
+                "cell is healthy."
+            ),
+            "OXYGEN SCAN": (
+                "Airflow is strong and unobstructed. The dust filters are "
+                "clean."
+            ),
+            "TOXIN SCREEN": (
+                "No spills, corrosion, or contaminants. A faint scent of "
+                "old pizza."
+            ),
+            "NEURAL SCAN": (
+                "Her thoughts keep looping on a hidden process that is not "
+                "hers. Something else is using her processor."
+            ),
+            "VIRUS SCAN": (
+                "Malware found: FREE_RAM.exe, a self-copying program. It has "
+                "spread to 61% of her memory and is hijacking her processor."
+            ),
+            "SYSTEM LOG": (
+                "Log shows an unknown download from a link called 'FREE RAM' "
+                "just before the slowdowns began. It reboots her repeatedly."
+            ),
+        },
+        profile={
+            "Species": "Sentient Desktop",
+            "Occupation": "Front-Desk Terminal",
+            "Home Planet": "Blackglass Mainframe",
+        },
+        medical_info={
+            "Core": "1 quantum processor",
+            "Cooling": "8 fans; liquid coolant",
+            "Storage": "Tera-brain drive; 41% free",
+            "Normal temperature": "122°F",
+            "Medical alert": "Do not click unknown links",
+        },
+        dialogue=(
+            "H3LL0 D0CT0R!! I have REBOOTED 47 times today. Is that... a lot? :)",
+            "My f@ns 5pin, my pop-ups P0P, and my HOMEPAGE is a casino now. HELP?!",
+            "I clicked a link that said 'FREE RAM.' Why is everything so 5l0w now? ;_;",
+        ),
+        diagnosis_options=(
+            PUTER_DIAGNOSES["cooling_fan_failure"],
+            PUTER_DIAGNOSES["storage_drive_corruption"],
+            PUTER_DIAGNOSES["computer_virus_infection"],
+            PUTER_DIAGNOSES["dust_clog"],
+            PUTER_DIAGNOSES["battery_degradation"],
+        ),
+        speech_style="terminal",
+        bonus_tests=("VIRUS SCAN", "SYSTEM LOG"),
+        bespoke_voice=True,
+    )
+
+
+def create_mycicle():
+    """Create Mycicle's case: a jelly blob that swallowed a bicycle."""
+
+    return Patient(
+        "Mycicle",
+        None,
+        None,
+        "bloated body, rattling noises, a faint ringing bell",
+        MYCICLE_DIAGNOSES["bicycle_ingestion"],
+        {
+            "TEMPERATURE": (
+                "Current temperature: 72°F, within the normal Gelatinoid "
+                "range."
+            ),
+            "X-RAY": (
+                "A complete bicycle floats inside the jelly: frame, both "
+                "wheels, pedals, and a small bell. No bone or tissue damage."
+            ),
+            "ULTRASOUND": (
+                "A rigid object rattles slowly through the jelly. The "
+                "membrane is intact, with no tears."
+            ),
+            "ALLERGY": (
+                "No immune response to metal or rubber. He tried to eat "
+                "the sample cup."
+            ),
+            "BLOOD CHEMISTRY": (
+                "Trace chrome and rust in the gel, otherwise normal. "
+                "Nothing is being absorbed at a harmful rate."
+            ),
+            "OXYGEN SCAN": (
+                "He absorbs oxygen through his skin normally. There are no "
+                "gas pockets anywhere."
+            ),
+            "TOXIN SCREEN": (
+                "Traces of rust, rubber, and bike grease, but at levels far "
+                "too low to poison anyone."
+            ),
+            "NEURAL SCAN": (
+                "Gentle, dopey brain waves. Very content. Possibly "
+                "pedaling."
+            ),
+        },
+        profile={
+            "Species": "Gelatinoid",
+            "Occupation": "Delivery Cyclist",
+            "Home Planet": "Blackglass",
+        },
+        medical_info={
+            "Structure": "Gel body; no bones",
+            "Respiration": "Absorbs air through skin",
+            "Diet": "Anything that looks tasty",
+            "Normal temperature": "72°F",
+            "Medical alert": "Will swallow anything once",
+        },
+        dialogue=(
+            "Blorp! Hi, doc. I have a, um, tummy ache. A big, spoky one.",
+            "I was hungry and it looked tasty. The wheels were crunchy.",
+            "Is it normal to jingle when I wiggle? Also my bell is ringing.",
+        ),
+        diagnosis_options=(
+            MYCICLE_DIAGNOSES["rust_poisoning"],
+            MYCICLE_DIAGNOSES["jelly_tumor"],
+            MYCICLE_DIAGNOSES["bicycle_ingestion"],
+            MYCICLE_DIAGNOSES["gas_buildup"],
+            MYCICLE_DIAGNOSES["metal_allergy"],
+        ),
+        bespoke_voice=True,
+    )
+

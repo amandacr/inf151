@@ -67,6 +67,7 @@ DEVELOPER_SNAPSHOT_FIELDS = (
     "daily_card_shop_purchases",
     "daily_patients_lost",
     "daily_draw_expenses",
+    "daily_recycle_refunds",
     "daily_random_draw_count",
     "money_deduction_animation",
     "recycler_used",

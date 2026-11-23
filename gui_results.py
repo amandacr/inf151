@@ -6,7 +6,6 @@ import pygame
 
 from gui_theme import COLORS, TEST_SUBTITLES, WINDOW_SIZE
 from Player import (
-    WRONG_DIAGNOSIS_PENALTY,
     get_diagnosis_reward,
 )
 
@@ -290,6 +289,8 @@ class ResultsMixin:
             "OXYGEN SCAN": (82, 209, 235),
             "TOXIN SCREEN": (202, 226, 91),
             "NEURAL SCAN": (195, 132, 245),
+            "VIRUS SCAN": (118, 255, 172),
+            "SYSTEM LOG": (112, 220, 255),
         }
         return test_colors.get(test_name, COLORS["accent"])
 
@@ -1150,7 +1151,9 @@ class ResultsMixin:
         reward_text = (
             f"PENDING CASE PAY  +${case_reward}"
             if correct
-            else f"DIAGNOSIS FEE  -${WRONG_DIAGNOSIS_PENALTY}"
+            else f"DIAGNOSIS FEE  -${self.get_wrong_diagnosis_penalty()}"
+            if self.get_wrong_diagnosis_penalty() > 0
+            else "DIAGNOSIS FEE WAIVED AT BLACKGLASS"
         )
         reward = self.card_font.render(reward_text, True, status_color)
         payment_note = self.card_font.render(
@@ -1162,6 +1165,8 @@ class ResultsMixin:
                 else "NO-EVIDENCE RATE  •  PAID AT SHIFT END"
                 if correct
                 else "DEDUCTED FROM LIVE BALANCE"
+                if self.get_wrong_diagnosis_penalty() > 0
+                else "NOTHING DEDUCTED  •  TRY ANOTHER DIAGNOSIS"
             ),
             True,
             COLORS["muted"],

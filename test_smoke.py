@@ -60,7 +60,7 @@ from Tests.TemperatureTest import TemperatureTest
 from Tests.ToxinScreenTest import ToxinScreenTest
 from Tests.UltrasoundTest import UltrasoundTest
 from Tests.XrayTest import XrayTest
-from Tests.catalog import create_test_catalog
+from Tests.catalog import BONUS_TEST_TYPES, create_test_catalog
 from Test import TEST_COSTS_BY_RARITY, get_test_cost
 from gui_animations import AnimationMixin
 from gui_audio import AudioMixin
@@ -1982,7 +1982,11 @@ class GuiFlowSmokeTests(unittest.TestCase):
         """Every shop option needs guidance and every deck layer must remain clipped."""
 
         catalog_names = {test.name for test in self.game.card_shop_catalog}
-        self.assertEqual(set(CARD_SHOP_PURPOSES), catalog_names)
+        # Patient-specific tests (e.g. Puter's) are explained too, but they are
+        # only ever dealt for the patient that needs them.
+        self.assertEqual(
+            set(CARD_SHOP_PURPOSES), catalog_names | set(BONUS_TEST_TYPES)
+        )
 
         tray = self.game.get_draw_deck_tray().inflate(-3, -3)
         for remaining in (1, 5, 12, len(self.game.deck.contents)):
